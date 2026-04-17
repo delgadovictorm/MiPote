@@ -187,7 +187,6 @@ export default function FinanzasDashboard() {
     const valorMonto = parseFloat(monto);
     const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
     
-    // Nueva lógica para tomar "ahorro_meta" u "otro" dinámicamente
     let descFinal = descripcion;
     if (categoria === "ahorro_meta") {
       descFinal = "Ahorro Meta (Teléfono) 📱🎯";
@@ -227,10 +226,39 @@ export default function FinanzasDashboard() {
     fetchData();
   };
 
-  const toggleCashea = async (id: string, estadoActual: boolean) => {
-    await supabase.from("cashea").update({ pagado: !estadoActual }).eq("id", id);
+  // --- MODIFICACIÓN: LÓGICA DE CASHEA ACTUALIZADA ---
+  const toggleCashea = async (cuota: any) => {
+    const nuevoEstado = !cuota.pagado;
+    
+    // 1. Actualizamos el checkbox a pagado visualmente
+    await supabase.from("cashea").update({ pagado: nuevoEstado }).eq("id", cuota.id);
+    
+    // 2. Si se está marcando como pagado, preguntamos si registrar el gasto
+    if (nuevoEstado) {
+      if (confirm(`¿Descontar $${cuota.monto_cuota} del balance de ${cuota.usuario} por el pago de Cashea?`)) {
+        
+        // Creamos la transacción automática
+        await supabase.from("transacciones").insert([{
+          descripcion: `Pago Cashea: ${cuota.articulo}`,
+          monto_original: cuota.monto_cuota,
+          moneda_original: "usd",
+          monto_bs: cuota.monto_cuota * rates.bcv, // Convertido estimado
+          monto_usd_bcv: cuota.monto_cuota,
+          monto_usd_paralelo: cuota.monto_cuota,
+          categoria: "otro", // Lo asignamos a "otro" para no romper categorías
+          usuario: cuota.usuario,
+          tipo: "egreso",
+          created_at: new Date()
+        }]);
+      } else {
+        // Si el usuario cancela, devolvemos el checkbox a su estado original para no descuadrar
+        await supabase.from("cashea").update({ pagado: false }).eq("id", cuota.id);
+      }
+    }
+    
     fetchData();
   };
+  // ---------------------------------------------------
 
   const iniciarEdicionGasto = (gasto: any) => {
     setEditingGasto(gasto.id);
@@ -264,7 +292,6 @@ export default function FinanzasDashboard() {
       }, 0);
   };
 
-  // NUEVA LÓGICA: Calcula el progreso solo con los ingresos marcados como "Ahorro Meta"
   const totalAhorradoMeta = transactions
     .filter(tx => tx.categoria === "ahorro_meta" && tx.tipo === "ingreso")
     .reduce((acc, tx) => acc + (tx.monto_usd_bcv || 0), 0);
@@ -278,7 +305,7 @@ export default function FinanzasDashboard() {
     <div className="min-h-screen bg-[#0d0714] text-purple-50 p-3 md:p-8 font-sans pb-24 selection:bg-purple-500/30">
       <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
         
-        {/* HEADER TASAS (Compacto en móvil) */}
+        {/* HEADER TASAS */}
         <div className="flex items-center justify-between bg-[#1a0f2e] p-3 md:p-5 rounded-[2rem] md:rounded-3xl border border-purple-500/30 shadow-2xl">
           <div className="flex items-center gap-3 md:gap-4">
             <div className="bg-yellow-400 w-10 h-10 md:w-auto md:h-auto md:p-3 flex items-center justify-center rounded-2xl shadow-lg text-2xl md:text-3xl">🐥</div>
@@ -330,7 +357,7 @@ export default function FinanzasDashboard() {
           </div>
         </div>
 
-        {/* BALANCES (Grid de 2 columnas en móvil) */}
+        {/* BALANCES */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
           <div className="col-span-2 md:col-span-1">
             <CardBalance title="Total General" amount={totalGeneral} icon={<Wallet className="w-5 h-5"/>} color="from-purple-600/40" highlight />
@@ -355,6 +382,7 @@ export default function FinanzasDashboard() {
                     <option value="Ambos">Ambos</option>
                   </select>
                 </div>
+
                 {isAddingCat ? (
                   <div className="flex gap-2 w-full">
                     <input type="text" placeholder="Ej: Gimnasio 🏋️" value={newCatLabel} onChange={e => setNewCatLabel(e.target.value)} className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white outline-none" />
@@ -362,17 +390,34 @@ export default function FinanzasDashboard() {
                     <button type="button" onClick={() => setIsAddingCat(false)} className="bg-rose-500/20 text-rose-400 px-3 md:p-3 rounded-xl"><X className="w-4 h-4 md:w-5 md:h-5"/></button>
                   </div>
                 ) : (
-                  <div className="flex gap-2 w-full">
-                    <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white outline-none">
-                      {categoriasList.map(cat => (
-                        <option key={cat.id} value={cat.valor}>{cat.label}</option>
-                      ))}
-                      <option value="ahorro_meta">Ahorro Meta (Teléfono) 📱🎯</option>
-                      <option value="otro">Otro ✍️</option>
-                    </select>
-                    <button type="button" onClick={() => setIsAddingCat(true)} className="bg-purple-500/20 text-purple-400 px-3 md:p-3 rounded-xl border border-purple-500/30"><Plus className="w-4 h-4 md:w-5 md:h-5"/></button>
+                  <div className="flex flex-col gap-2 w-full">
+                    <div className="flex gap-2">
+                      <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white outline-none">
+                        {categoriasList.map(cat => (
+                          <option key={cat.id} value={cat.valor}>{cat.label}</option>
+                        ))}
+                        <option value="ahorro_meta">Ahorro Meta (Teléfono) 📱🎯</option>
+                        <option value="otro">Otro ✍️</option>
+                      </select>
+                      <button type="button" onClick={() => setIsAddingCat(true)} className="bg-purple-500/20 text-purple-400 px-3 md:p-3 rounded-xl border border-purple-500/30"><Plus className="w-4 h-4 md:w-5 md:h-5"/></button>
+                    </div>
+
+                    {/* MODIFICACIÓN: CAJA DE TEXTO CUANDO ES "OTRO" */}
+                    {categoria === "otro" && (
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="Especifica el motivo..." 
+                        value={descripcion} 
+                        onChange={(e) => setDescripcion(e.target.value)} 
+                        className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white outline-none focus:border-purple-400 transition-colors" 
+                      />
+                    )}
+                    {/* ------------------------------------------- */}
+
                   </div>
                 )}
+
                 <div className="flex gap-2 md:gap-3">
                   <input type="number" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Monto" className="flex-1 bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white font-mono outline-none" />
                   <select value={moneda} onChange={(e) => setMoneda(e.target.value)} className="w-20 md:w-24 bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white outline-none">
@@ -456,7 +501,9 @@ export default function FinanzasDashboard() {
                 <div className="space-y-2">
                   {cuotasCashea.map(cuota => (
                     <div key={cuota.id} className={`group flex items-center justify-between p-2.5 md:p-3 rounded-xl border ${cuota.pagado ? 'bg-emerald-900/20 border-emerald-500/30' : 'bg-black/40 border-fuchsia-500/20'}`}>
-                      <div className="flex items-center gap-2.5 md:gap-3 cursor-pointer" onClick={() => toggleCashea(cuota.id, cuota.pagado)}>
+                      
+                      {/* MODIFICACIÓN: AL HACER CLICK EN EL CHECKBOX AHORA ENVÍA EL OBJETO COMPLETO */}
+                      <div className="flex items-center gap-2.5 md:gap-3 cursor-pointer" onClick={() => toggleCashea(cuota)}>
                         {cuota.pagado ? <CheckSquare className="text-emerald-400 w-4 h-4 md:w-5 md:h-5"/> : <Square className="text-fuchsia-400 w-4 h-4 md:w-5 md:h-5"/>}
                         <div>
                           <p className="text-xs md:text-sm font-bold">
