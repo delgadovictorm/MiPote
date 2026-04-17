@@ -396,7 +396,7 @@ export default function FinanzasDashboard() {
                         {categoriasList.map(cat => (
                           <option key={cat.id} value={cat.valor}>{cat.label}</option>
                         ))}
-                        <option value="ahorro_meta">Ahorro Meta (Teléfono) 📱🎯</option>
+      
                         <option value="otro">Otro ✍️</option>
                       </select>
                       <button type="button" onClick={() => setIsAddingCat(true)} className="bg-purple-500/20 text-purple-400 px-3 md:p-3 rounded-xl border border-purple-500/30"><Plus className="w-4 h-4 md:w-5 md:h-5"/></button>
