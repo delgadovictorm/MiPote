@@ -424,7 +424,7 @@ export default function FinanzasDashboard() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-sm">${gasto.monto_estimado_usd}</span>
-                          <button onClick={() => iniciarEdicionGasto(gasto)} className="opacity-0 group-hover:opacity-100 text-purple-400"><Edit2 className="w-4 h-4" /></button>
+                          <button onClick={() => iniciarEdicionGasto(gasto)} className="p-2 md:p-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-purple-400 transition-opacity"><Edit2 className="w-4 h-4" /></button>
                         </div>
                       </div>
                     )}
@@ -468,15 +468,18 @@ export default function FinanzasDashboard() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-sm">${cuota.monto_cuota}</span>
-                        <button onClick={async (e) => {
-                            e.stopPropagation();
-                            if(confirm("¿Eliminar esta cuota de Cashea?")) {
-                              await supabase.from('cashea').delete().eq('id', cuota.id);
-                              fetchData();
-                            }
-                          }} className="opacity-0 group-hover:opacity-100 text-rose-500 transition-opacity">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <button 
+  onClick={async (e) => {
+    e.stopPropagation(); 
+    if(confirm("¿Eliminar esta cuota de Cashea?")) {
+      await supabase.from('cashea').delete().eq('id', cuota.id);
+      fetchData();
+    }
+  }} 
+  className="p-2 md:p-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-rose-500 transition-opacity"
+>
+  <Trash2 className="w-4 h-4" />
+</button>
                       </div>
                     </div>
                   ))}
@@ -506,7 +509,7 @@ export default function FinanzasDashboard() {
                         <p className={`text-base font-black ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>${tx.monto_usd_bcv?.toFixed(2)}</p>
                         <p className="text-[10px] text-purple-300/50">Bs. {tx.monto_bs?.toFixed(2)}</p>
                       </div>
-                      <button onClick={() => eliminarTransaccion(tx.id)} className="opacity-0 group-hover:opacity-100 text-rose-500 transition-opacity"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => eliminarTransaccion(tx.id)} className="p-2 md:p-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-rose-500 transition-opacity"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </div>
                 ))}
