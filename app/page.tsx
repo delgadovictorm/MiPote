@@ -17,13 +17,16 @@ export default function FinanzasDashboard() {
   const [syncing, setSyncing] = useState(false);
   const [mesActual, setMesActual] = useState(() => new Date().toISOString().slice(0, 7));
 
+  // Estados para Categorías
   const [categoriasList, setCategoriasList] = useState<any[]>([]);
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatLabel, setNewCatLabel] = useState("");
 
+  // Estados para Formulario Cashea
   const [isAddingCashea, setIsAddingCashea] = useState(false);
   const [casheaForm, setCasheaForm] = useState({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "Victor" });
 
+  // Estados para Motivación
   const [showToast, setShowToast] = useState(false);
   const [mensajeMotivacional, setMensajeMotivacional] = useState("");
 
@@ -87,9 +90,11 @@ export default function FinanzasDashboard() {
     setTimeout(() => setShowToast(false), 4000);
   };
 
+  // Estados para Edición de Gastos Fijos
   const [editingGasto, setEditingGasto] = useState<string | null>(null);
   const [gastoForm, setGastoForm] = useState({ nombre: "", monto_estimado_usd: "", fecha_limite: "" });
 
+  // Estados del Formulario
   const [monto, setMonto] = useState("");
   const [moneda, setMoneda] = useState("usd");
   const [tipo, setTipo] = useState("egreso");
@@ -182,6 +187,7 @@ export default function FinanzasDashboard() {
     const valorMonto = parseFloat(monto);
     const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
     
+    // Nueva lógica para tomar "ahorro_meta" u "otro" dinámicamente
     let descFinal = descripcion;
     if (categoria === "ahorro_meta") {
       descFinal = "Ahorro Meta (Teléfono) 📱🎯";
@@ -258,6 +264,7 @@ export default function FinanzasDashboard() {
       }, 0);
   };
 
+  // NUEVA LÓGICA: Calcula el progreso solo con los ingresos marcados como "Ahorro Meta"
   const totalAhorradoMeta = transactions
     .filter(tx => tx.categoria === "ahorro_meta" && tx.tipo === "ingreso")
     .reduce((acc, tx) => acc + (tx.monto_usd_bcv || 0), 0);
@@ -269,184 +276,208 @@ export default function FinanzasDashboard() {
 
   return (
     <div className="min-h-screen bg-[#0d0714] text-purple-50 p-3 md:p-8 font-sans pb-24 selection:bg-purple-500/30">
-      <div className="max-w-5xl mx-auto space-y-4">
+      <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
         
-        {/* HEADER COMPACTO TIPO APP */}
-        <div className="flex items-center justify-between bg-[#1a0f2e] p-3 md:p-4 rounded-[2rem] border border-purple-500/30 shadow-lg">
-          <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-yellow-300 to-yellow-500 w-10 h-10 flex items-center justify-center rounded-2xl shadow-lg text-2xl">🐥</div>
+        {/* HEADER TASAS (Compacto en móvil) */}
+        <div className="flex items-center justify-between bg-[#1a0f2e] p-3 md:p-5 rounded-[2rem] md:rounded-3xl border border-purple-500/30 shadow-2xl">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="bg-yellow-400 w-10 h-10 md:w-auto md:h-auto md:p-3 flex items-center justify-center rounded-2xl shadow-lg text-2xl md:text-3xl">🐥</div>
             <div>
-              <h1 className="text-base md:text-xl font-black text-white leading-tight">Pollitos Finanzas</h1>
-              <p className="text-purple-300 text-[10px] md:text-xs tracking-wide">Control Mari & Víctor</p>
+              <h1 className="text-base md:text-2xl font-black text-white tracking-wide leading-tight">Pollitos Finanzas</h1>
+              <p className="text-purple-300 text-[10px] md:text-sm">Control Mari & Víctor</p>
             </div>
           </div>
           
-          <div className="flex flex-col items-end gap-1">
-            <div className="flex items-center gap-2">
-              <div className="flex flex-col text-right">
-                <span className="text-[9px] uppercase text-purple-400 font-bold leading-none">BCV</span>
-                <span className="font-mono text-xs text-white">Bs.{rates.bcv.toFixed(2)}</span>
+          <div className="flex items-center gap-3 md:gap-6 bg-black/40 p-2 md:p-4 rounded-2xl border border-purple-500/20">
+            <div className="text-right md:text-center">
+              <p className="text-[8px] md:text-xs uppercase text-purple-400 font-bold mb-0.5 md:mb-1">Tasa BCV</p>
+              <p className="font-mono text-xs md:text-xl text-white">Bs. {rates.bcv.toFixed(2)}</p>
+            </div>
+            <div className="h-6 md:h-10 w-px bg-purple-500/30"></div>
+            <div className="text-left md:text-center">
+              <p className="text-[8px] md:text-xs uppercase text-purple-400 font-bold mb-0.5 md:mb-1">Tasa Paralelo</p>
+              <p className="font-mono text-xs md:text-xl text-white">Bs. {rates.usdt.toFixed(2)}</p>
+            </div>
+            <button onClick={fetchRates} disabled={syncing} className="ml-1 md:ml-2 bg-purple-600/20 hover:bg-purple-600 p-1.5 md:p-2 rounded-xl transition-all">
+              <RefreshCw className={`w-3.5 h-3.5 md:w-5 md:h-5 text-purple-300 ${syncing ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* PROGRESO DE META INTEGRADO */}
+        <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-[2rem] shadow-xl relative overflow-hidden">
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-6">
+            <div className="flex-1">
+              <div className="flex justify-between items-end mb-2">
+                <h2 className="text-sm md:text-xl font-black text-white flex items-center gap-2">
+                   Meta: Teléfono de Mari <span className="text-purple-400 text-[10px] md:text-xs font-normal bg-purple-500/10 px-2 py-0.5 rounded-lg">450 USDT</span>
+                </h2>
+                <span className="text-xs md:text-sm font-mono font-bold text-purple-300">
+                  {((totalAhorradoMeta / 450) * 100).toFixed(1)}%
+                </span>
               </div>
-              <button onClick={fetchRates} disabled={syncing} className="bg-purple-600/20 hover:bg-purple-600 p-1.5 rounded-xl transition-all">
-                <RefreshCw className={`w-3.5 h-3.5 text-purple-300 ${syncing ? 'animate-spin' : ''}`} />
-              </button>
+              <div className="h-2 md:h-4 w-full bg-black/50 rounded-full border border-purple-500/10 p-0.5 md:p-1">
+                <div 
+                  className="h-full bg-gradient-to-r from-purple-600 to-fuchsia-500 rounded-full transition-all duration-1000 ease-out"
+                  style={{ width: `${Math.min((totalAhorradoMeta / 450) * 100, 100)}%` }}
+                ></div>
+              </div>
+            </div>
+            <div className="text-left md:text-right md:border-l border-purple-500/10 md:pl-6">
+              <p className="text-[9px] md:text-[10px] text-purple-400 uppercase font-black tracking-widest">Faltan</p>
+              <p className="text-lg md:text-2xl font-black text-white">${Math.max(450 - totalAhorradoMeta, 0).toFixed(2)}</p>
             </div>
           </div>
         </div>
 
-        {/* BALANCES EN GRID (Mejor uso de espacio) */}
-        <div className="grid grid-cols-2 gap-3 md:gap-4">
-          <div className="col-span-2">
+        {/* BALANCES (Grid de 2 columnas en móvil) */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+          <div className="col-span-2 md:col-span-1">
             <CardBalance title="Total General" amount={totalGeneral} icon={<Wallet className="w-5 h-5"/>} color="from-purple-600/40" highlight />
           </div>
-          <CardBalance title="Víctor" amount={totalVictor} icon={<Users className="w-4 h-4"/>} color="from-indigo-600/30" small />
-          <CardBalance title="Mari" amount={totalMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
-        </div>
-
-        {/* META COMPACTA */}
-        <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 rounded-3xl shadow-lg relative overflow-hidden">
-          <div className="flex items-end justify-between mb-2">
-            <div>
-              <h2 className="text-sm font-black text-white flex items-center gap-2">
-                 Teléfono Mari <span className="text-purple-400 text-[9px] font-normal bg-purple-500/10 px-1.5 py-0.5 rounded-md">450 USDT</span>
-              </h2>
-              <p className="text-[10px] text-purple-400 mt-0.5">Faltan ${Math.max(450 - totalAhorradoMeta, 0).toFixed(2)}</p>
-            </div>
-            <span className="text-sm font-mono font-black text-white">{((totalAhorradoMeta / 450) * 100).toFixed(1)}%</span>
-          </div>
-          <div className="h-2 w-full bg-black/50 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-purple-600 to-fuchsia-500 rounded-full transition-all duration-1000 ease-out"
-              style={{ width: `${Math.min((totalAhorradoMeta / 450) * 100, 100)}%` }}
-            ></div>
-          </div>
+          <CardBalance title="Balance Víctor" amount={totalVictor} icon={<Users className="w-4 h-4"/>} color="from-indigo-600/30" small />
+          <CardBalance title="Balance Mari" amount={totalMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
-          {/* NUEVO REGISTRO */}
-          <div className="lg:col-span-5">
-            <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-5 rounded-3xl shadow-xl">
-              <h2 className="text-sm font-bold mb-3 flex items-center gap-2 text-white"><Plus className="w-4 h-4 text-purple-400" /> Registro Rápido</h2>
-              <form onSubmit={handleManualSubmit} className="space-y-3">
-                <div className="flex gap-2">
-                  <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={`flex-1 border rounded-xl p-2 text-xs font-black outline-none ${tipo === 'ingreso' ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/30 border-rose-500/50 text-rose-400'}`}>
+          <div className="lg:col-span-4 space-y-4 md:space-y-6">
+            <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl">
+              <h2 className="text-base md:text-lg font-bold mb-4 md:mb-5 flex items-center gap-2 text-white"><Plus className="w-4 h-4 md:w-5 md:h-5 text-purple-400" /> Nuevo Registro</h2>
+              <form onSubmit={handleManualSubmit} className="space-y-3 md:space-y-4">
+                <div className="flex gap-2 md:gap-3">
+                  <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={`flex-1 border rounded-xl p-2.5 md:p-3 text-xs md:text-sm font-black outline-none ${tipo === 'ingreso' ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/30 border-rose-500/50 text-rose-400'}`}>
                     <option value="egreso">GASTO 💸</option>
                     <option value="ingreso">INGRESO 💰</option>
                   </select>
-                  <select value={usuario} onChange={(e) => {setUsuario(e.target.value); localStorage.setItem("pf_usuario", e.target.value)}} className="flex-1 bg-black/50 border border-purple-500/30 rounded-xl p-2 text-xs text-white font-bold outline-none">
+                  <select value={usuario} onChange={(e) => {setUsuario(e.target.value); localStorage.setItem("pf_usuario", e.target.value)}} className="flex-1 bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white font-bold outline-none">
                     <option value="Victor">Víctor</option>
                     <option value="Mari">Mari</option>
                     <option value="Ambos">Ambos</option>
                   </select>
                 </div>
-                
                 {isAddingCat ? (
                   <div className="flex gap-2 w-full">
-                    <input type="text" placeholder="Categoría (Ej: Gasolina)" value={newCatLabel} onChange={e => setNewCatLabel(e.target.value)} className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-2 text-xs text-white outline-none" />
-                    <button type="button" onClick={agregarCategoria} className="bg-emerald-500/20 text-emerald-400 px-3 rounded-xl"><Check className="w-4 h-4"/></button>
-                    <button type="button" onClick={() => setIsAddingCat(false)} className="bg-rose-500/20 text-rose-400 px-3 rounded-xl"><X className="w-4 h-4"/></button>
+                    <input type="text" placeholder="Ej: Gimnasio 🏋️" value={newCatLabel} onChange={e => setNewCatLabel(e.target.value)} className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white outline-none" />
+                    <button type="button" onClick={agregarCategoria} className="bg-emerald-500/20 text-emerald-400 px-3 md:p-3 rounded-xl"><Check className="w-4 h-4 md:w-5 md:h-5"/></button>
+                    <button type="button" onClick={() => setIsAddingCat(false)} className="bg-rose-500/20 text-rose-400 px-3 md:p-3 rounded-xl"><X className="w-4 h-4 md:w-5 md:h-5"/></button>
                   </div>
                 ) : (
                   <div className="flex gap-2 w-full">
-                    <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-2 text-xs text-white outline-none">
+                    <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white outline-none">
                       {categoriasList.map(cat => (
                         <option key={cat.id} value={cat.valor}>{cat.label}</option>
                       ))}
                       <option value="ahorro_meta">Ahorro Meta (Teléfono) 📱🎯</option>
                       <option value="otro">Otro ✍️</option>
                     </select>
-                    <button type="button" onClick={() => setIsAddingCat(true)} className="bg-purple-500/20 text-purple-400 px-3 rounded-xl border border-purple-500/30"><Plus className="w-4 h-4"/></button>
+                    <button type="button" onClick={() => setIsAddingCat(true)} className="bg-purple-500/20 text-purple-400 px-3 md:p-3 rounded-xl border border-purple-500/30"><Plus className="w-4 h-4 md:w-5 md:h-5"/></button>
                   </div>
                 )}
-                
-                <div className="flex gap-2">
-                  <input type="number" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="0.00" className="flex-1 bg-black/50 border border-purple-500/30 rounded-xl p-2 text-sm text-white font-mono outline-none" />
-                  <select value={moneda} onChange={(e) => setMoneda(e.target.value)} className="w-20 bg-black/50 border border-purple-500/30 rounded-xl p-2 text-xs text-white outline-none font-bold">
+                <div className="flex gap-2 md:gap-3">
+                  <input type="number" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Monto" className="flex-1 bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white font-mono outline-none" />
+                  <select value={moneda} onChange={(e) => setMoneda(e.target.value)} className="w-20 md:w-24 bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white outline-none">
                     <option value="usd">USD</option>
                     <option value="bs">BS</option>
                     <option value="usdt">USDT</option>
                   </select>
                 </div>
-                
-                <button type="submit" className="w-full font-black py-3 rounded-xl transition-all bg-purple-600 hover:bg-purple-500 text-white shadow-lg active:scale-95 text-xs">GUARDAR REGISTRO</button>
+                {monto && rates.bcv > 0 && (
+                  <div className="flex items-center justify-between bg-black/40 p-3 md:p-4 rounded-xl border border-purple-500/20 w-full mb-2 text-center">
+                    <div className="flex-1">
+                      <p className="text-[9px] md:text-[10px] uppercase text-purple-400 font-bold mb-0.5 md:mb-1">BCV</p>
+                      <p className="font-mono text-white font-bold text-sm md:text-lg">${calcularMontos(parseFloat(monto), moneda).monto_usd_bcv.toFixed(2)}</p>
+                    </div>
+                    <div className="h-6 md:h-8 w-px bg-purple-500/30 mx-2"></div>
+                    <div className="flex-1">
+                      <p className="text-[9px] md:text-[10px] uppercase text-purple-400 font-bold mb-0.5 md:mb-1">Paralelo</p>
+                      <p className="font-mono text-white font-bold text-sm md:text-lg">${calcularMontos(parseFloat(monto), moneda).monto_usd_paralelo.toFixed(2)}</p>
+                    </div>
+                  </div>
+                )}
+                <button type="submit" className="w-full font-black py-3 md:py-4 rounded-xl transition-all bg-purple-600 hover:bg-purple-500 text-white shadow-lg active:scale-95 text-xs md:text-sm">GUARDAR</button>
               </form>
             </div>
           </div>
 
-          <div className="lg:col-span-7 space-y-4">
-            
-            {/* GASTOS FIJOS Y CASHEA (Tabs o Stack Compacto) */}
+          <div className="lg:col-span-8 space-y-4 md:space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 rounded-3xl space-y-2">
-                <h3 className="text-xs font-bold text-white mb-2 flex items-center gap-1.5"><CheckSquare className="w-3.5 h-3.5 text-purple-400"/> Fijos</h3>
-                <div className="space-y-1.5">
-                  {gastosFijos.map(gasto => (
-                    <div key={gasto.id}>
-                      {editingGasto === gasto.id ? (
-                        <div className="flex flex-col gap-1 p-2 rounded-xl border border-purple-500 bg-purple-900/20">
-                          <input type="text" value={gastoForm.nombre} onChange={e => setGastoForm({...gastoForm, nombre: e.target.value})} className="bg-black/50 p-1.5 rounded text-xs text-white outline-none" />
-                          <div className="flex gap-1">
-                            <input type="number" value={gastoForm.monto_estimado_usd} onChange={e => setGastoForm({...gastoForm, monto_estimado_usd: e.target.value})} className="w-1/2 bg-black/50 p-1.5 rounded text-xs text-white" />
-                            <input type="number" value={gastoForm.fecha_limite} onChange={e => setGastoForm({...gastoForm, fecha_limite: e.target.value})} className="w-1/2 bg-black/50 p-1.5 rounded text-xs text-white" />
-                          </div>
-                          <div className="flex justify-end gap-1 mt-1">
-                            <button onClick={cancelarEdicionGasto} className="text-rose-400 bg-rose-500/10 p-1 rounded"><X className="w-3 h-3" /></button>
-                            <button onClick={() => guardarEdicionGasto(gasto.id)} className="text-emerald-400 bg-emerald-500/10 p-1 rounded"><Check className="w-3 h-3" /></button>
-                          </div>
+              <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-5 rounded-3xl space-y-2">
+                <h3 className="text-xs md:text-sm font-bold text-white mb-3 md:mb-4 flex items-center gap-2"><CheckSquare className="w-3.5 h-3.5 md:w-4 md:h-4 text-purple-400"/> Gastos Fijos</h3>
+                {gastosFijos.map(gasto => (
+                  <div key={gasto.id}>
+                    {editingGasto === gasto.id ? (
+                      <div className="flex flex-col gap-2 md:gap-3 p-3 md:p-4 rounded-xl border border-purple-500 bg-purple-900/20">
+                        <input type="text" value={gastoForm.nombre} onChange={e => setGastoForm({...gastoForm, nombre: e.target.value})} className="bg-black/50 p-1.5 md:p-2 rounded text-xs md:text-sm text-white outline-none" />
+                        <div className="flex gap-2">
+                          <input type="number" value={gastoForm.monto_estimado_usd} onChange={e => setGastoForm({...gastoForm, monto_estimado_usd: e.target.value})} className="w-1/2 bg-black/50 p-1.5 md:p-2 rounded text-xs md:text-sm text-white" />
+                          <input type="number" value={gastoForm.fecha_limite} onChange={e => setGastoForm({...gastoForm, fecha_limite: e.target.value})} className="w-1/2 bg-black/50 p-1.5 md:p-2 rounded text-xs md:text-sm text-white" />
                         </div>
-                      ) : (
-                        <div className={`flex items-center justify-between p-2 rounded-xl border transition-all ${gasto.pagado ? 'bg-emerald-900/10 border-emerald-500/20 opacity-60' : 'bg-black/30 border-purple-500/10'}`}>
-                          <div className="flex items-center gap-2 cursor-pointer" onClick={() => toggleGastoFijo(gasto.id, gasto.pagado)}>
-                            {gasto.pagado ? <CheckSquare className="text-emerald-400 w-4 h-4"/> : <Square className="text-purple-400 w-4 h-4"/>}
-                            <div><p className="text-xs font-bold leading-tight">{gasto.nombre}</p><p className="text-[9px] text-purple-400/80">Día {gasto.fecha_limite}</p></div>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-xs font-bold">${gasto.monto_estimado_usd}</span>
-                            <button onClick={() => iniciarEdicionGasto(gasto)} className="p-1.5 text-purple-400/50 hover:text-purple-300"><Edit2 className="w-3 h-3" /></button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-[#1a0f2e] border border-fuchsia-500/30 p-4 rounded-3xl">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-xs font-bold text-white flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-fuchsia-400"/> Cashea</h3>
-                  <button onClick={() => setIsAddingCashea(!isAddingCashea)} className="p-1 bg-fuchsia-500/20 rounded text-fuchsia-400"><Plus className="w-3.5 h-3.5"/></button>
-                </div>
-                {isAddingCashea && (
-                  <form onSubmit={agregarCashea} className="flex flex-col gap-1.5 p-2 mb-2 rounded-xl border border-fuchsia-500/30 bg-fuchsia-900/10">
-                    <input type="text" placeholder="Artículo" value={casheaForm.articulo} onChange={e => setCasheaForm({...casheaForm, articulo: e.target.value})} className="bg-black/50 p-1.5 rounded text-xs text-white outline-none" required />
-                    <div className="flex gap-1.5">
-                      <input type="number" step="0.01" placeholder="$" value={casheaForm.monto_cuota} onChange={e => setCasheaForm({...casheaForm, monto_cuota: e.target.value})} className="w-1/2 bg-black/50 p-1.5 rounded text-xs text-white" required />
-                      <input type="date" value={casheaForm.fecha_pago} onChange={e => setCasheaForm({...casheaForm, fecha_pago: e.target.value})} className="w-1/2 bg-black/50 p-1.5 rounded text-xs text-white" required />
-                    </div>
-                    <select value={casheaForm.usuario} onChange={e => setCasheaForm({...casheaForm, usuario: e.target.value})} className="w-full bg-black/50 border border-fuchsia-500/30 rounded p-1.5 text-xs text-white outline-none">
-                      <option value="Victor">Víctor</option>
-                      <option value="Mari">Mari</option>
-                      <option value="Ambos">Ambos</option>
-                    </select>
-                    <button type="submit" className="bg-fuchsia-600 p-1.5 rounded font-bold text-[10px] uppercase tracking-wider mt-1">Añadir</button>
-                  </form>
-                )}
-                <div className="space-y-1.5">
-                  {cuotasCashea.map(cuota => (
-                    <div key={cuota.id} className={`flex items-center justify-between p-2 rounded-xl border ${cuota.pagado ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-black/30 border-fuchsia-500/10'}`}>
-                      <div className="flex items-center gap-2 cursor-pointer" onClick={() => toggleCashea(cuota.id, cuota.pagado)}>
-                        {cuota.pagado ? <CheckSquare className="text-emerald-400 w-4 h-4"/> : <Square className="text-fuchsia-400 w-4 h-4"/>}
-                        <div>
-                          <p className="text-xs font-bold leading-tight">
-                            {cuota.articulo} <span className="text-[8px] text-fuchsia-300 font-normal ml-1 bg-fuchsia-500/20 px-1 py-0.5 rounded">{cuota.usuario || 'Victor'}</span>
-                          </p>
-                          <p className="text-[9px] text-fuchsia-400/80">{cuota.fecha_pago}</p>
+                        <div className="flex justify-end gap-2 mt-1 md:mt-0">
+                          <button onClick={cancelarEdicionGasto} className="text-rose-400"><X className="w-4 h-4 md:w-5 md:h-5" /></button>
+                          <button onClick={() => guardarEdicionGasto(gasto.id)} className="text-emerald-400"><Check className="w-4 h-4 md:w-5 md:h-5" /></button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs font-bold">${cuota.monto_cuota}</span>
-                        <button onClick={async (e) => { e.stopPropagation(); if(confirm("¿Eliminar?")) { await supabase.from('cashea').delete().eq('id', cuota.id); fetchData(); } }} className="p-1.5 text-rose-500/50 hover:text-rose-400">
-                          <Trash2 className="w-3 h-3" />
+                    ) : (
+                      <div className={`group flex items-center justify-between p-2.5 md:p-3 rounded-xl border transition-all ${gasto.pagado ? 'bg-emerald-900/20 border-emerald-500/30 opacity-60' : 'bg-black/40 border-purple-500/20 hover:border-purple-500/50'}`}>
+                        <div className="flex items-center gap-2.5 md:gap-3 cursor-pointer" onClick={() => toggleGastoFijo(gasto.id, gasto.pagado)}>
+                          {gasto.pagado ? <CheckSquare className="text-emerald-400 w-4 h-4 md:w-5 md:h-5"/> : <Square className="text-purple-400 w-4 h-4 md:w-5 md:h-5"/>}
+                          <div><p className="text-xs md:text-sm font-bold">{gasto.nombre}</p><p className="text-[9px] md:text-[10px] text-purple-400">Día {gasto.fecha_limite}</p></div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs md:text-sm">${gasto.monto_estimado_usd}</span>
+                          <button onClick={() => iniciarEdicionGasto(gasto)} className="p-2 md:p-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-purple-400 transition-opacity"><Edit2 className="w-3.5 h-3.5 md:w-4 md:h-4" /></button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-[#1a0f2e] border border-fuchsia-500/30 p-4 md:p-5 rounded-3xl">
+                <div className="flex justify-between items-center mb-3 md:mb-4">
+                  <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2"><Calendar className="w-3.5 h-3.5 md:w-4 md:h-4 text-fuchsia-400"/> Cashea</h3>
+                  <button onClick={() => setIsAddingCashea(!isAddingCashea)} className="p-1 md:p-1.5 bg-fuchsia-500/20 rounded-md text-fuchsia-400"><Plus className="w-3.5 h-3.5 md:w-4 md:h-4"/></button>
+                </div>
+                {isAddingCashea && (
+                  <form onSubmit={agregarCashea} className="flex flex-col gap-2 md:gap-3 p-3 md:p-4 mb-3 md:mb-4 rounded-xl border border-fuchsia-500/50 bg-fuchsia-900/10">
+                    <input type="text" placeholder="Artículo" value={casheaForm.articulo} onChange={e => setCasheaForm({...casheaForm, articulo: e.target.value})} className="bg-black/50 p-1.5 md:p-2 rounded text-xs md:text-sm text-white" required />
+                    <div className="flex gap-2">
+                      <input type="number" step="0.01" placeholder="$" value={casheaForm.monto_cuota} onChange={e => setCasheaForm({...casheaForm, monto_cuota: e.target.value})} className="w-1/2 bg-black/50 p-1.5 md:p-2 rounded text-xs md:text-sm text-white" required />
+                      <input type="date" value={casheaForm.fecha_pago} onChange={e => setCasheaForm({...casheaForm, fecha_pago: e.target.value})} className="w-1/2 bg-black/50 p-1.5 md:p-2 rounded text-xs md:text-sm text-white" required />
+                    </div>
+                    <select value={casheaForm.usuario} onChange={e => setCasheaForm({...casheaForm, usuario: e.target.value})} className="w-full bg-black/50 border border-fuchsia-500/30 rounded-lg p-1.5 md:p-2 text-xs md:text-sm text-white outline-none">
+                      <option value="Victor">Paga: Víctor</option>
+                      <option value="Mari">Paga: Mari</option>
+                      <option value="Ambos">Pagan: Ambos (Mitad)</option>
+                    </select>
+                    <button type="submit" className="bg-fuchsia-600 p-1.5 md:p-2 rounded font-bold text-xs md:text-sm">Guardar</button>
+                  </form>
+                )}
+                <div className="space-y-2">
+                  {cuotasCashea.map(cuota => (
+                    <div key={cuota.id} className={`group flex items-center justify-between p-2.5 md:p-3 rounded-xl border ${cuota.pagado ? 'bg-emerald-900/20 border-emerald-500/30' : 'bg-black/40 border-fuchsia-500/20'}`}>
+                      <div className="flex items-center gap-2.5 md:gap-3 cursor-pointer" onClick={() => toggleCashea(cuota.id, cuota.pagado)}>
+                        {cuota.pagado ? <CheckSquare className="text-emerald-400 w-4 h-4 md:w-5 md:h-5"/> : <Square className="text-fuchsia-400 w-4 h-4 md:w-5 md:h-5"/>}
+                        <div>
+                          <p className="text-xs md:text-sm font-bold">
+                            {cuota.articulo} <span className="text-[8px] md:text-[10px] text-fuchsia-300 font-normal ml-1 bg-fuchsia-500/20 px-1 md:px-1.5 py-0.5 rounded-md">{cuota.usuario || 'Victor'}</span>
+                          </p>
+                          <p className="text-[9px] md:text-[10px] text-fuchsia-400">{cuota.fecha_pago}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs md:text-sm">${cuota.monto_cuota}</span>
+                        <button 
+                          onClick={async (e) => {
+                            e.stopPropagation(); 
+                            if(confirm("¿Eliminar esta cuota de Cashea?")) {
+                              await supabase.from('cashea').delete().eq('id', cuota.id);
+                              fetchData();
+                            }
+                          }} 
+                          className="p-2 md:p-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-rose-500 transition-opacity"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                         </button>
                       </div>
                     </div>
@@ -455,46 +486,48 @@ export default function FinanzasDashboard() {
               </div>
             </div>
 
-            {/* HISTORIAL COMPACTO */}
             <div className="bg-[#1a0f2e] border border-purple-500/30 rounded-3xl overflow-hidden shadow-xl">
-              <div className="p-3 border-b border-purple-500/10 flex justify-between items-center bg-black/20">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-purple-300">Actividad</span>
-                <input type="month" value={mesActual} onChange={(e) => setMesActual(e.target.value)} className="bg-purple-900/30 border border-purple-500/20 rounded p-1 text-white outline-none text-[10px] font-mono" />
+              <div className="p-3 md:p-4 border-b border-purple-500/20 flex justify-between items-center bg-black/20 text-xs md:text-sm font-bold uppercase text-purple-200">
+                <span>Historial</span>
+                <input type="month" value={mesActual} onChange={(e) => setMesActual(e.target.value)} className="bg-purple-900/40 border border-purple-500/30 rounded-lg p-1 text-white outline-none text-[10px] md:text-xs" />
               </div>
-              <div className="divide-y divide-purple-500/10 max-h-[300px] overflow-y-auto">
+              <div className="divide-y divide-purple-500/10 max-h-[350px] md:max-h-[400px] overflow-y-auto">
                 {transaccionesDelMes.map((tx) => (
-                  <div key={tx.id} className="p-3 flex items-center justify-between hover:bg-white/5 transition-colors">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <div className={`p-1.5 rounded-lg shrink-0 ${tx.tipo === 'ingreso' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                        {tx.tipo === 'ingreso' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
+                  <div key={tx.id} className="p-3 md:p-4 flex items-center justify-between hover:bg-white/5 transition-colors group">
+                    <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
+                      <div className={`p-1.5 md:p-2 rounded-xl shrink-0 ${tx.tipo === 'ingreso' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                        {tx.tipo === 'ingreso' ? <ArrowUpCircle className="w-4 h-4 md:w-5 md:h-5" /> : <ArrowDownCircle className="w-4 h-4 md:w-5 md:h-5" />}
                       </div>
                       <div className="truncate">
-                        <p className="text-xs font-bold text-white truncate">{tx.descripcion}</p>
-                        <p className="text-[9px] text-purple-400/60 uppercase truncate">{tx.usuario} • {new Date(tx.created_at).toLocaleDateString()}</p>
+                        <p className="text-xs md:text-sm font-bold text-white truncate">{tx.descripcion}</p>
+                        <p className="text-[8px] md:text-[10px] text-purple-400/80 uppercase truncate">{tx.usuario} • {new Date(tx.created_at).toLocaleDateString()}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2 md:gap-4 shrink-0">
                       <div className="text-right">
-                        <p className={`text-sm font-black ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>${tx.monto_usd_bcv?.toFixed(2)}</p>
+                        <p className={`text-sm md:text-base font-black ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>${tx.monto_usd_bcv?.toFixed(2)}</p>
+                        <p className="text-[8px] md:text-[10px] text-purple-300/50">Bs. {tx.monto_bs?.toFixed(2)}</p>
                       </div>
-                      <button onClick={() => eliminarTransaccion(tx.id)} className="p-1 text-rose-500/50 hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => eliminarTransaccion(tx.id)} className="p-2 md:p-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-rose-500 transition-opacity"><Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" /></button>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-            
           </div>
         </div>
       </div>
 
+      {/* TOAST MOTIVACIONAL CENTRADO Y GRANDE */}
       {showToast && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-[#1a0f2e] border border-purple-400/30 p-8 rounded-[2rem] shadow-2xl flex flex-col items-center gap-5 max-w-[300px] w-full animate-in zoom-in duration-300">
-            <div className="bg-gradient-to-br from-yellow-300 to-yellow-500 w-16 h-16 flex items-center justify-center rounded-3xl text-4xl shadow-xl">🐥</div>
-            <div className="text-center space-y-1">
-              <p className="text-white font-black text-lg leading-snug">"{mensajeMotivacional}"</p>
-              <p className="text-[9px] text-purple-400 font-bold uppercase tracking-[0.2em] pt-2">Pollitos Finanzas</p>
+          <div className="bg-[#1a0f2e] border-2 border-purple-400/50 p-8 md:p-12 rounded-[2.5rem] shadow-[0_0_50px_rgba(168,85,247,0.4)] flex flex-col items-center gap-5 md:gap-6 max-w-md w-full animate-in zoom-in duration-300">
+            <div className="bg-gradient-to-br from-yellow-300 to-yellow-500 w-16 h-16 md:w-auto md:h-auto md:p-5 flex items-center justify-center rounded-3xl text-4xl md:text-5xl shadow-2xl">🐥</div>
+            <div className="text-center space-y-2">
+              <p className="text-white font-black text-lg md:text-2xl italic leading-tight">
+                "{mensajeMotivacional}"
+              </p>
+              <p className="text-[9px] md:text-xs text-purple-400 font-bold uppercase tracking-[0.2em] pt-3 md:pt-4">Pollitos Finanzas</p>
             </div>
           </div>
         </div>
@@ -505,12 +538,12 @@ export default function FinanzasDashboard() {
 
 function CardBalance({ title, amount, icon, color, highlight = false, small = false }: any) {
   return (
-    <div className={`relative overflow-hidden bg-gradient-to-br ${color} to-[#1a0f2e] border ${highlight ? 'border-purple-400/50' : 'border-purple-500/10'} ${small ? 'p-3 rounded-2xl' : 'p-4 rounded-3xl'} shadow-lg flex flex-col justify-between h-full`}>
-      <div className="flex justify-between items-start mb-2">
-        <p className={`font-bold text-purple-200 uppercase tracking-widest ${small ? 'text-[9px]' : 'text-[10px]'}`}>{title}</p>
-        <div className="text-purple-300/50">{icon}</div>
+    <div className={`relative overflow-hidden bg-gradient-to-br ${color} to-[#1a0f2e] border ${highlight ? 'border-purple-400' : 'border-purple-500/20'} ${small ? 'p-4 rounded-2xl' : 'p-5 md:p-6 rounded-3xl'} shadow-xl flex flex-col justify-between h-full`}>
+      <div className="flex justify-between items-start mb-2 md:mb-4">
+        <p className={`${small ? 'text-[9px] md:text-[10px]' : 'text-[10px] md:text-xs'} font-bold text-purple-200 uppercase tracking-widest`}>{title}</p>
+        <div className={`${small ? 'w-4 h-4' : ''} text-purple-300/80`}>{icon}</div>
       </div>
-      <p className={`font-black ${amount < 0 ? 'text-rose-400' : 'text-white'} ${small ? 'text-xl' : 'text-3xl'}`}>
+      <p className={`${small ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl'} font-black ${amount < 0 ? 'text-rose-400' : 'text-white'}`}>
         ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </p>
     </div>
