@@ -4,10 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
   ArrowDownCircle, ArrowUpCircle, Wallet, 
-  Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, BarChart3
+  Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, BarChart3, Target
 } from "lucide-react";
 
-// NUEVAS IMPORTACIONES PARA LOS GRÁFICOS
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 export default function FinanzasDashboard() {
@@ -16,6 +15,7 @@ export default function FinanzasDashboard() {
   const [gastosFijos, setGastosFijos] = useState<any[]>([]);
   const [cuotasCashea, setCuotasCashea] = useState<any[]>([]);
   const [recordatorios, setRecordatorios] = useState<any[]>([]);
+  const [presupuestos, setPresupuestos] = useState<any[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -29,6 +29,9 @@ export default function FinanzasDashboard() {
   const [casheaForm, setCasheaForm] = useState({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "Victor" });
 
   const [nuevoRecordatorio, setNuevoRecordatorio] = useState("");
+  
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
+  const [budgetForm, setBudgetForm] = useState({ categoria: "", monto_limite: "" });
 
   const [showToast, setShowToast] = useState(false);
   const [mensajeMotivacional, setMensajeMotivacional] = useState("");
@@ -177,6 +180,9 @@ export default function FinanzasDashboard() {
       const { data: recData } = await supabase.from("recordatorios").select("*").order("created_at", { ascending: false });
       if (recData) setRecordatorios(recData);
 
+      const { data: presData } = await supabase.from("presupuestos").select("*");
+      if (presData) setPresupuestos(presData);
+
     } catch (err) {
       console.error("Error cargando BD:", err);
     } finally {
@@ -203,6 +209,28 @@ export default function FinanzasDashboard() {
     fetchRates();
     fetchData();
   }, [fetchData]);
+
+  // --- LÓGICA DE PRESUPUESTOS ---
+  const guardarPresupuesto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!budgetForm.categoria || !budgetForm.monto_limite) return;
+    
+    const existente = presupuestos.find(p => p.categoria === budgetForm.categoria);
+    if (existente) {
+      await supabase.from("presupuestos").update({ monto_limite: parseFloat(budgetForm.monto_limite) }).eq("id", existente.id);
+    } else {
+      await supabase.from("presupuestos").insert([{ categoria: budgetForm.categoria, monto_limite: parseFloat(budgetForm.monto_limite) }]);
+    }
+    setIsEditingBudget(false);
+    setBudgetForm({ categoria: "", monto_limite: "" });
+    fetchData();
+  };
+
+  const eliminarPresupuesto = async (id: string) => {
+    if(!confirm("¿Eliminar este tope presupuestario?")) return;
+    await supabase.from("presupuestos").delete().eq("id", id);
+    fetchData();
+  };
 
   const agregarRecordatorio = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -317,6 +345,7 @@ export default function FinanzasDashboard() {
         const costo_bs = cuota.monto_cuota * rates.bcv;
         const costo_real_usdt = rates.usdt > 0 ? costo_bs / rates.usdt : cuota.monto_cuota;
 
+        // CORRECCIÓN: Etiquetar como "cashea" en lugar de "otro"
         await supabase.from("transacciones").insert([{
           descripcion: `Pago Cashea: ${cuota.articulo}`,
           monto_original: cuota.monto_cuota,
@@ -324,7 +353,7 @@ export default function FinanzasDashboard() {
           monto_bs: costo_bs,
           monto_usd_bcv: cuota.monto_cuota,
           monto_usd_paralelo: costo_real_usdt,
-          categoria: "otro",
+          categoria: "cashea", 
           usuario: cuota.usuario,
           tipo: "egreso",
           created_at: new Date()
@@ -365,7 +394,12 @@ export default function FinanzasDashboard() {
       .reduce((acc, tx) => {
         const valorRealUSDT = tx.monto_usd_paralelo || 0;
         const modificador = (tx.usuario === 'Ambos' && user) ? 0.5 : 1; 
-        return tx.tipo === "ingreso" ? acc + (valorRealUSDT * modificador) : acc - (valorRealUSDT * modificador);
+        
+        if (tx.categoria === "ahorro_meta") {
+          return tx.tipo === "ingreso" ? acc - (valorRealUSDT * modificador) : acc + (valorRealUSDT * modificador);
+        } else {
+          return tx.tipo === "ingreso" ? acc + (valorRealUSDT * modificador) : acc - (valorRealUSDT * modificador);
+        }
       }, 0);
   };
 
@@ -382,34 +416,32 @@ export default function FinanzasDashboard() {
 
   const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
 
-  // ==========================================
-  // LÓGICA DE DATOS PARA LOS GRÁFICOS (NUEVO)
-  // ==========================================
-  
-  // 1. Datos para Gráfico de Torta (Gastos por Categoría)
   const gastosDelMes = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
+  
+  const gastosPorCategoriaValor = gastosDelMes.reduce((acc, tx) => {
+    acc[tx.categoria] = (acc[tx.categoria] || 0) + (tx.monto_usd_paralelo || 0);
+    return acc;
+  }, {} as Record<string, number>);
+
   const datosCategoriasMap = gastosDelMes.reduce((acc, tx) => {
-    // Si la categoría fue borrada o no tiene etiqueta, usa su ID/Valor crudo, o "Otro"
     const catName = categoriasList.find(c => c.valor === tx.categoria)?.label || tx.categoria;
     const finalCatName = catName === 'otro' ? 'Otros Gastos' : catName;
     acc[finalCatName] = (acc[finalCatName] || 0) + (tx.monto_usd_paralelo || 0);
     return acc;
-  }, {});
+  }, {} as Record<string, number>);
 
   const dataGraficoTorta = Object.keys(datosCategoriasMap)
     .map(key => ({ name: key, value: datosCategoriasMap[key] }))
-    .sort((a, b) => b.value - a.value); // Ordenar de mayor a menor gasto
+    .sort((a, b) => b.value - a.value);
 
   const COLORS = ['#8b5cf6', '#ec4899', '#f97316', '#eab308', '#10b981', '#0ea5e9', '#6366f1', '#d946ef'];
 
-  // 2. Datos para Gráfico de Barras (Flujo de Caja)
   const ingresosMesChart = transaccionesDelMes.filter(tx => tx.tipo === 'ingreso').reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
   const egresosMesChart = gastosDelMes.reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
   const dataFlujoCaja = [
     { name: 'Este Mes', Ingresos: ingresosMesChart, Egresos: egresosMesChart }
   ];
 
-  // Tooltip personalizado para formatear moneda en gráficos
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -524,12 +556,12 @@ export default function FinanzasDashboard() {
           </div>
         </div>
 
-        {/* BALANCES */}
+        {/* BALANCES DIVIDIDOS */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
           <div className="col-span-2 md:col-span-1">
             <div className="relative overflow-hidden bg-gradient-to-br from-purple-600/40 to-[#1a0f2e] border border-purple-400 p-5 md:p-6 rounded-3xl shadow-xl flex flex-col justify-between h-full">
               <div className="flex justify-between items-start mb-2 md:mb-4">
-                <p className="text-[10px] md:text-xs font-bold text-purple-200 uppercase tracking-widest">Total General (USDT)</p>
+                <p className="text-[10px] md:text-xs font-bold text-purple-200 uppercase tracking-widest">Disponible General (USDT)</p>
                 <div className="text-purple-300/80"><Wallet className="w-5 h-5"/></div>
               </div>
               <p className="text-2xl md:text-3xl font-black text-white">
@@ -548,17 +580,14 @@ export default function FinanzasDashboard() {
               </div>
             </div>
           </div>
-          <CardBalance title="Balance Víctor (USDT)" amount={totalVictor} icon={<Users className="w-4 h-4"/>} color="from-indigo-600/30" small />
-          <CardBalance title="Balance Mari (USDT)" amount={totalMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
+          <CardBalance title="Disponible Víctor (USDT)" amount={totalVictor} icon={<Users className="w-4 h-4"/>} color="from-indigo-600/30" small />
+          <CardBalance title="Disponible Mari (USDT)" amount={totalMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
         </div>
 
-        {/* ======================================================== */}
-        {/* NUEVA SECCIÓN: DASHBOARD ANALÍTICO (GRÁFICOS) */}
-        {/* ======================================================== */}
+        {/* DASHBOARD ANALÍTICO (GRÁFICOS) */}
         {transaccionesDelMes.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
             
-            {/* GRÁFICO 1: DISTRIBUCIÓN DE GASTOS */}
             <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl flex flex-col">
               <h3 className="text-xs md:text-sm font-bold text-white mb-4 flex items-center gap-2">
                 <PieChartIcon className="w-4 h-4 text-purple-400"/> Distribución de Egresos (Mes Actual)
@@ -595,7 +624,6 @@ export default function FinanzasDashboard() {
               </div>
             </div>
 
-            {/* GRÁFICO 2: FLUJO DE CAJA (BURN RATE) */}
             <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl flex flex-col">
               <h3 className="text-xs md:text-sm font-bold text-white mb-4 flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-emerald-400"/> Flujo de Caja (Ingresos vs Egresos)
@@ -616,7 +644,71 @@ export default function FinanzasDashboard() {
 
           </div>
         )}
-        {/* ======================================================== */}
+
+        {/* --- CONTROL PRESUPUESTARIO --- */}
+        <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2">
+              <Target className="w-4 h-4 text-rose-400"/> Control Presupuestario (Base Cero)
+            </h3>
+            <button onClick={() => setIsEditingBudget(!isEditingBudget)} className="p-1.5 bg-purple-500/20 hover:bg-purple-500/40 rounded-md text-purple-400 transition-colors">
+              {isEditingBudget ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {isEditingBudget && (
+            <form onSubmit={guardarPresupuesto} className="flex gap-2 mb-5 p-3 bg-black/40 rounded-xl border border-purple-500/20">
+              <select value={budgetForm.categoria} onChange={e => setBudgetForm({...budgetForm, categoria: e.target.value})} className="flex-1 bg-transparent text-xs md:text-sm text-white outline-none cursor-pointer" required>
+                <option value="" className="bg-[#1a0f2e]">Selecciona Categoría...</option>
+                {categoriasList.map(c => <option key={c.id} value={c.valor} className="bg-[#1a0f2e]">{c.label}</option>)}
+                <option value="cashea" className="bg-[#1a0f2e]">Cashea</option>
+                <option value="otro" className="bg-[#1a0f2e]">Otro</option>
+              </select>
+              <input type="number" step="0.01" placeholder="Límite $" value={budgetForm.monto_limite} onChange={e => setBudgetForm({...budgetForm, monto_limite: e.target.value})} className="w-20 md:w-28 bg-transparent text-xs md:text-sm text-white outline-none font-mono border-l border-purple-500/30 pl-2" required />
+              <button type="submit" className="text-emerald-400 p-1 hover:bg-emerald-500/20 rounded transition-colors"><Check className="w-4 h-4 md:w-5 md:h-5"/></button>
+            </form>
+          )}
+
+          <div className="space-y-4">
+            {presupuestos.length === 0 ? (
+              <p className="text-[10px] md:text-xs text-purple-400/50 italic">No hay topes definidos. Asigna límites mensuales para evitar fugas de capital.</p>
+            ) : (
+              presupuestos.map(p => {
+                const gastoActual = gastosPorCategoriaValor[p.categoria] || 0;
+                const porcentaje = Math.min((gastoActual / p.monto_limite) * 100, 100);
+                const isOver = gastoActual > p.monto_limite;
+                const barColor = isOver ? 'bg-rose-600' : porcentaje > 80 ? 'bg-rose-500' : porcentaje > 50 ? 'bg-amber-500' : 'bg-emerald-500';
+                
+                let catLabel = p.categoria;
+                if (p.categoria === 'cashea') catLabel = 'Cashea';
+                else if (p.categoria === 'otro') catLabel = 'Otro';
+                else {
+                  const found = categoriasList.find(c => c.valor === p.categoria);
+                  if (found) catLabel = found.label;
+                }
+
+                return (
+                  <div key={p.id} className="space-y-1.5 relative group">
+                    <div className="flex justify-between text-xs md:text-sm text-white">
+                      <span className="font-bold flex items-center gap-2">
+                        {catLabel} 
+                        <button onClick={() => eliminarPresupuesto(p.id)} className="text-rose-500/0 group-hover:text-rose-500/50 hover:text-rose-500 transition-colors"><Trash2 className="w-3 h-3 md:w-3.5 md:h-3.5" /></button>
+                      </span>
+                      <span className="font-mono">
+                        <span className={isOver ? 'text-rose-400 font-black' : ''}>${gastoActual.toFixed(2)}</span> 
+                        <span className="text-purple-400/50"> / ${p.monto_limite}</span>
+                      </span>
+                    </div>
+                    <div className="h-2 md:h-2.5 w-full bg-black/50 rounded-full overflow-hidden border border-purple-500/10">
+                      <div className={`h-full rounded-full transition-all duration-1000 ${barColor}`} style={{ width: `${porcentaje}%` }}></div>
+                    </div>
+                    {isOver && <p className="text-[8px] md:text-[9px] text-rose-400 text-right uppercase tracking-widest mt-0.5">Límite Excedido</p>}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
           <div className="lg:col-span-4 space-y-4 md:space-y-6">
