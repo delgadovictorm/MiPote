@@ -7,6 +7,7 @@ import {
   Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, BarChart3
 } from "lucide-react";
 
+// NUEVAS IMPORTACIONES PARA LOS GRÁFICOS
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 export default function FinanzasDashboard() {
@@ -358,20 +359,13 @@ export default function FinanzasDashboard() {
     fetchData();
   };
 
-  // --- LÓGICA CONTABLE CORREGIDA: SEPARACIÓN DE LIQUIDEZ Y ACTIVOS RESTRINGIDOS ---
   const getBalance = (user: string | null) => {
     return transactions
       .filter(tx => (!user || tx.usuario === user || tx.usuario === 'Ambos'))
       .reduce((acc, tx) => {
         const valorRealUSDT = tx.monto_usd_paralelo || 0;
         const modificador = (tx.usuario === 'Ambos' && user) ? 0.5 : 1; 
-        
-        // Si el dinero entra a la categoría de Ahorro Meta, contablemente SALE de la liquidez disponible.
-        if (tx.categoria === "ahorro_meta") {
-          return tx.tipo === "ingreso" ? acc - (valorRealUSDT * modificador) : acc + (valorRealUSDT * modificador);
-        } else {
-          return tx.tipo === "ingreso" ? acc + (valorRealUSDT * modificador) : acc - (valorRealUSDT * modificador);
-        }
+        return tx.tipo === "ingreso" ? acc + (valorRealUSDT * modificador) : acc - (valorRealUSDT * modificador);
       }, 0);
   };
 
@@ -388,8 +382,14 @@ export default function FinanzasDashboard() {
 
   const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
 
+  // ==========================================
+  // LÓGICA DE DATOS PARA LOS GRÁFICOS (NUEVO)
+  // ==========================================
+  
+  // 1. Datos para Gráfico de Torta (Gastos por Categoría)
   const gastosDelMes = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
   const datosCategoriasMap = gastosDelMes.reduce((acc, tx) => {
+    // Si la categoría fue borrada o no tiene etiqueta, usa su ID/Valor crudo, o "Otro"
     const catName = categoriasList.find(c => c.valor === tx.categoria)?.label || tx.categoria;
     const finalCatName = catName === 'otro' ? 'Otros Gastos' : catName;
     acc[finalCatName] = (acc[finalCatName] || 0) + (tx.monto_usd_paralelo || 0);
@@ -398,16 +398,18 @@ export default function FinanzasDashboard() {
 
   const dataGraficoTorta = Object.keys(datosCategoriasMap)
     .map(key => ({ name: key, value: datosCategoriasMap[key] }))
-    .sort((a, b) => b.value - a.value);
+    .sort((a, b) => b.value - a.value); // Ordenar de mayor a menor gasto
 
   const COLORS = ['#8b5cf6', '#ec4899', '#f97316', '#eab308', '#10b981', '#0ea5e9', '#6366f1', '#d946ef'];
 
-  const ingresosMesChart = transaccionesDelMes.filter(tx => tx.tipo === 'ingreso' && tx.categoria !== 'ahorro_meta').reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
+  // 2. Datos para Gráfico de Barras (Flujo de Caja)
+  const ingresosMesChart = transaccionesDelMes.filter(tx => tx.tipo === 'ingreso').reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
   const egresosMesChart = gastosDelMes.reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
   const dataFlujoCaja = [
     { name: 'Este Mes', Ingresos: ingresosMesChart, Egresos: egresosMesChart }
   ];
 
+  // Tooltip personalizado para formatear moneda en gráficos
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -522,12 +524,12 @@ export default function FinanzasDashboard() {
           </div>
         </div>
 
-        {/* BALANCES DIVIDIDOS (AHORA REFLEJAN SOLO LIQUIDEZ DISPONIBLE) */}
+        {/* BALANCES */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
           <div className="col-span-2 md:col-span-1">
             <div className="relative overflow-hidden bg-gradient-to-br from-purple-600/40 to-[#1a0f2e] border border-purple-400 p-5 md:p-6 rounded-3xl shadow-xl flex flex-col justify-between h-full">
               <div className="flex justify-between items-start mb-2 md:mb-4">
-                <p className="text-[10px] md:text-xs font-bold text-purple-200 uppercase tracking-widest">Disponible General (USDT)</p>
+                <p className="text-[10px] md:text-xs font-bold text-purple-200 uppercase tracking-widest">Total General (USDT)</p>
                 <div className="text-purple-300/80"><Wallet className="w-5 h-5"/></div>
               </div>
               <p className="text-2xl md:text-3xl font-black text-white">
@@ -546,13 +548,17 @@ export default function FinanzasDashboard() {
               </div>
             </div>
           </div>
-          <CardBalance title="Disponible Víctor (USDT)" amount={totalVictor} icon={<Users className="w-4 h-4"/>} color="from-indigo-600/30" small />
-          <CardBalance title="Disponible Mari (USDT)" amount={totalMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
+          <CardBalance title="Balance Víctor (USDT)" amount={totalVictor} icon={<Users className="w-4 h-4"/>} color="from-indigo-600/30" small />
+          <CardBalance title="Balance Mari (USDT)" amount={totalMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
         </div>
 
-        {/* DASHBOARD ANALÍTICO (GRÁFICOS) */}
+        {/* ======================================================== */}
+        {/* NUEVA SECCIÓN: DASHBOARD ANALÍTICO (GRÁFICOS) */}
+        {/* ======================================================== */}
         {transaccionesDelMes.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+            
+            {/* GRÁFICO 1: DISTRIBUCIÓN DE GASTOS */}
             <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl flex flex-col">
               <h3 className="text-xs md:text-sm font-bold text-white mb-4 flex items-center gap-2">
                 <PieChartIcon className="w-4 h-4 text-purple-400"/> Distribución de Egresos (Mes Actual)
@@ -589,9 +595,10 @@ export default function FinanzasDashboard() {
               </div>
             </div>
 
+            {/* GRÁFICO 2: FLUJO DE CAJA (BURN RATE) */}
             <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl flex flex-col">
               <h3 className="text-xs md:text-sm font-bold text-white mb-4 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-emerald-400"/> Flujo de Caja Libre (Ingresos vs Egresos)
+                <BarChart3 className="w-4 h-4 text-emerald-400"/> Flujo de Caja (Ingresos vs Egresos)
               </h3>
               <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -606,8 +613,10 @@ export default function FinanzasDashboard() {
                 </ResponsiveContainer>
               </div>
             </div>
+
           </div>
         )}
+        {/* ======================================================== */}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
           <div className="lg:col-span-4 space-y-4 md:space-y-6">
