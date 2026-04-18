@@ -210,7 +210,6 @@ export default function FinanzasDashboard() {
     fetchData();
   }, [fetchData]);
 
-  // --- LÓGICA DE PRESUPUESTOS ---
   const guardarPresupuesto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!budgetForm.categoria || !budgetForm.monto_limite) return;
@@ -298,7 +297,7 @@ export default function FinanzasDashboard() {
     const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
     
     let descFinal = descripcion;
-    if (categoria !== "otro") {
+    if (categoria !== "otro" && categoria !== "cashea") {
       descFinal = categoriasList.find(c => c.valor === categoria)?.label || "";
     }
 
@@ -345,7 +344,6 @@ export default function FinanzasDashboard() {
         const costo_bs = cuota.monto_cuota * rates.bcv;
         const costo_real_usdt = rates.usdt > 0 ? costo_bs / rates.usdt : cuota.monto_cuota;
 
-        // CORRECCIÓN: Etiquetar como "cashea" en lugar de "otro"
         await supabase.from("transacciones").insert([{
           descripcion: `Pago Cashea: ${cuota.articulo}`,
           monto_original: cuota.monto_cuota,
@@ -388,13 +386,24 @@ export default function FinanzasDashboard() {
     fetchData();
   };
 
-  const getBalance = (user: string | null) => {
+  // --- LÓGICA CONTABLE CORREGIDA ---
+  // Calcula EL TOTAL BRUTO (Todo lo que ha entrado y salido, sin restar el ahorro meta)
+  const getPatrimonioBruto = () => {
+    return transactions.reduce((acc, tx) => {
+      const valorRealUSDT = tx.monto_usd_paralelo || 0;
+      return tx.tipo === "ingreso" ? acc + valorRealUSDT : acc - valorRealUSDT;
+    }, 0);
+  };
+
+  // Calcula SOLO LO DISPONIBLE PARA GASTAR (Resta el ahorro meta)
+  const getDisponible = (user: string | null) => {
     return transactions
       .filter(tx => (!user || tx.usuario === user || tx.usuario === 'Ambos'))
       .reduce((acc, tx) => {
         const valorRealUSDT = tx.monto_usd_paralelo || 0;
         const modificador = (tx.usuario === 'Ambos' && user) ? 0.5 : 1; 
         
+        // Si es ahorro meta, actúa como un egreso de tu cuenta "disponible"
         if (tx.categoria === "ahorro_meta") {
           return tx.tipo === "ingreso" ? acc - (valorRealUSDT * modificador) : acc + (valorRealUSDT * modificador);
         } else {
@@ -407,11 +416,11 @@ export default function FinanzasDashboard() {
     .filter(tx => tx.categoria === "ahorro_meta" && tx.tipo === "ingreso")
     .reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
 
-  const totalVictor = getBalance("Victor");
-  const totalMari = getBalance("Mari");
-  const totalGeneralUSDT = totalVictor + totalMari;
+  const patrimonioBrutoUSDT = getPatrimonioBruto();
+  const disponibleVictor = getDisponible("Victor");
+  const disponibleMari = getDisponible("Mari");
   
-  const equivalenciaBS = totalGeneralUSDT * rates.usdt;
+  const equivalenciaBS = patrimonioBrutoUSDT * rates.usdt;
   const equivalenciaUSD_BCV = rates.bcv > 0 ? equivalenciaBS / rates.bcv : 0;
 
   const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
@@ -424,9 +433,15 @@ export default function FinanzasDashboard() {
   }, {} as Record<string, number>);
 
   const datosCategoriasMap = gastosDelMes.reduce((acc, tx) => {
-    const catName = categoriasList.find(c => c.valor === tx.categoria)?.label || tx.categoria;
-    const finalCatName = catName === 'otro' ? 'Otros Gastos' : catName;
-    acc[finalCatName] = (acc[finalCatName] || 0) + (tx.monto_usd_paralelo || 0);
+    let catName = tx.categoria;
+    if (tx.categoria === 'cashea') catName = 'Cashea';
+    else if (tx.categoria === 'otro') catName = 'Otros Gastos';
+    else {
+      const found = categoriasList.find(c => c.valor === tx.categoria);
+      if (found) catName = found.label;
+    }
+    
+    acc[catName] = (acc[catName] || 0) + (tx.monto_usd_paralelo || 0);
     return acc;
   }, {} as Record<string, number>);
 
@@ -436,7 +451,7 @@ export default function FinanzasDashboard() {
 
   const COLORS = ['#8b5cf6', '#ec4899', '#f97316', '#eab308', '#10b981', '#0ea5e9', '#6366f1', '#d946ef'];
 
-  const ingresosMesChart = transaccionesDelMes.filter(tx => tx.tipo === 'ingreso').reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
+  const ingresosMesChart = transaccionesDelMes.filter(tx => tx.tipo === 'ingreso' && tx.categoria !== 'ahorro_meta').reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
   const egresosMesChart = gastosDelMes.reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
   const dataFlujoCaja = [
     { name: 'Este Mes', Ingresos: ingresosMesChart, Egresos: egresosMesChart }
@@ -556,16 +571,16 @@ export default function FinanzasDashboard() {
           </div>
         </div>
 
-        {/* BALANCES DIVIDIDOS */}
+        {/* BALANCES PRINCIPALES */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
           <div className="col-span-2 md:col-span-1">
             <div className="relative overflow-hidden bg-gradient-to-br from-purple-600/40 to-[#1a0f2e] border border-purple-400 p-5 md:p-6 rounded-3xl shadow-xl flex flex-col justify-between h-full">
               <div className="flex justify-between items-start mb-2 md:mb-4">
-                <p className="text-[10px] md:text-xs font-bold text-purple-200 uppercase tracking-widest">Disponible General (USDT)</p>
+                <p className="text-[10px] md:text-xs font-bold text-purple-200 uppercase tracking-widest">Patrimonio Total (USDT)</p>
                 <div className="text-purple-300/80"><Wallet className="w-5 h-5"/></div>
               </div>
               <p className="text-2xl md:text-3xl font-black text-white">
-                ${totalGeneralUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${patrimonioBrutoUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <div className="mt-3 flex items-center justify-between border-t border-purple-500/30 pt-3">
                 <div className="flex flex-col">
@@ -580,14 +595,13 @@ export default function FinanzasDashboard() {
               </div>
             </div>
           </div>
-          <CardBalance title="Disponible Víctor (USDT)" amount={totalVictor} icon={<Users className="w-4 h-4"/>} color="from-indigo-600/30" small />
-          <CardBalance title="Disponible Mari (USDT)" amount={totalMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
+          <CardBalance title="Disponible Víctor" amount={disponibleVictor} icon={<Users className="w-4 h-4"/>} color="from-indigo-600/30" small />
+          <CardBalance title="Disponible Mari" amount={disponibleMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
         </div>
 
         {/* DASHBOARD ANALÍTICO (GRÁFICOS) */}
         {transaccionesDelMes.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-            
             <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl flex flex-col">
               <h3 className="text-xs md:text-sm font-bold text-white mb-4 flex items-center gap-2">
                 <PieChartIcon className="w-4 h-4 text-purple-400"/> Distribución de Egresos (Mes Actual)
@@ -626,7 +640,7 @@ export default function FinanzasDashboard() {
 
             <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl flex flex-col">
               <h3 className="text-xs md:text-sm font-bold text-white mb-4 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-emerald-400"/> Flujo de Caja (Ingresos vs Egresos)
+                <BarChart3 className="w-4 h-4 text-emerald-400"/> Flujo de Caja Libre (Ingresos vs Egresos)
               </h3>
               <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -641,7 +655,6 @@ export default function FinanzasDashboard() {
                 </ResponsiveContainer>
               </div>
             </div>
-
           </div>
         )}
 
@@ -740,6 +753,7 @@ export default function FinanzasDashboard() {
                         {categoriasList.map(cat => (
                           <option key={cat.id} value={cat.valor}>{cat.label}</option>
                         ))}
+                        <option value="cashea">Cashea</option>
                         <option value="otro">Otro ✍️</option>
                       </select>
                       <button type="button" onClick={() => setIsAddingCat(true)} className="bg-purple-500/20 text-purple-400 px-3 md:p-3 rounded-xl border border-purple-500/30"><Plus className="w-4 h-4 md:w-5 md:h-5"/></button>
