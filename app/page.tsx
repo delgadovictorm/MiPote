@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
   ArrowDownCircle, ArrowUpCircle, Wallet, 
-  Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X
+  Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send
 } from "lucide-react";
 
 export default function FinanzasDashboard() {
@@ -12,25 +12,26 @@ export default function FinanzasDashboard() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [gastosFijos, setGastosFijos] = useState<any[]>([]);
   const [cuotasCashea, setCuotasCashea] = useState<any[]>([]);
+  const [recordatorios, setRecordatorios] = useState<any[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [mesActual, setMesActual] = useState(() => new Date().toISOString().slice(0, 7));
 
-  // Estados para Categorías
   const [categoriasList, setCategoriasList] = useState<any[]>([]);
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatLabel, setNewCatLabel] = useState("");
 
-  // Estados para Formulario Cashea
   const [isAddingCashea, setIsAddingCashea] = useState(false);
   const [casheaForm, setCasheaForm] = useState({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "Victor" });
 
-  // Estados para Motivación
+  const [nuevoRecordatorio, setNuevoRecordatorio] = useState("");
+
   const [showToast, setShowToast] = useState(false);
   const [mensajeMotivacional, setMensajeMotivacional] = useState("");
+  const [toastType, setToastType] = useState("ingreso");
 
-  const MENSAJES = [
+  const MENSAJES_INGRESOS = [
     "¡Pío, pío! Ese nido se está llenando de billetes. 🐥💰",
     "¡Un pollito ahorrador vale por dos! 🐥✨",
     "Pluma a pluma, el pollito llena el nido. 🪶",
@@ -83,18 +84,71 @@ export default function FinanzasDashboard() {
     "¡Objetivo fijado, dinero guardado! 🎯"
   ];
 
-  const triggerToast = () => {
-    const randomMsg = MENSAJES[Math.floor(Math.random() * MENSAJES.length)];
+  const MENSAJES_EGRESOS = [
+    "¿Realmente necesitabas esto o fue un impulso? Evalúa tu costo de oportunidad. 📉",
+    "Un dólar gastado hoy es un dólar menos produciendo rendimiento mañana. 💸",
+    "Recuerda que la inflación no perdona, pero tus gastos hormiga tampoco. 🐜",
+    "¿Este gasto te acerca al teléfono de Mari o te aleja? Piensa estratégicamente. 📱📉",
+    "El flujo de caja negativo quema liquidez. Controla los egresos. ⚠️",
+    "Mía te está juzgando con la mirada por este gasto. 🐶🤨",
+    "Cashea es deuda, no dinero extra. Cuidado con el apalancamiento. 💳",
+    "Registrado. Pero pregúntate: ¿podrías haberlo conseguido a mejor precio? 🔍",
+    "El arbitraje cambiario te salva a veces, pero no justifica el consumismo. ⚖️",
+    "Si este gasto no genera valor o bienestar real, es solo pérdida neta. 🗑️",
+    "Revisa tu presupuesto mensual, este gasto acaba de reducir tu margen. 📊",
+    "Gastar es fácil, generar liquidez es lo difícil. Respeta tu esfuerzo. 💼",
+    "¿Esto era un 'deseo' o una 'necesidad'? Las finanzas no admiten autoengaños. 🧠",
+    "Cada salida de capital retrasa tus objetivos de inversión. 🐢",
+    "La disciplina duele hoy, pero la falta de liquidez dolerá mañana. 📉",
+    "Un buen economista sabe cuándo cerrar la billetera. 🎓",
+    "¿Vale la pena descapitalizarse por esto? 📉",
+    "Tu 'yo' del futuro acaba de perder un poco de libertad financiera. 🕰️",
+    "Cuidado, los pequeños gastos son las grandes fugas del patrimonio. 💧",
+    "El consumismo es el enemigo silencioso de la acumulación de capital. 🛍️",
+    "El mercado castiga a los que no cuiden su liquidez. 📉",
+    "¿Pasaste esto por el filtro de prioridad o solo pasaste la tarjeta? 💳",
+    "Si sigues así, ni el interés compuesto te va a rescatar. 📉",
+    "Gasto registrado. Que este número te sirva de reflexión. 📝",
+    "Recuerda: El objetivo no es solo ganar más, sino retener más. 🛡️",
+    "Tu balance de USDT acaba de sufrir un golpe. ¿Valió la pena? 🥊",
+    "Estás gastando dinero presente a costa de tu seguridad futura. 📉",
+    "Menos compras innecesarias, más ahorro duro. 🧱",
+    "La regla de oro: si no lo necesitas, es caro a cualquier precio. 🏷️",
+    "Mía espera sus croquetas, no dejes el presupuesto en cero. 🦴",
+    "El teléfono de Mari no se va a comprar solo con intenciones. 📱",
+    "Un presupuesto sin disciplina es solo un papel con números. 🧾",
+    "La riqueza se mide en lo que no gastas, no en lo que compras. 💎",
+    "Cuidado con la trampa del estilo de vida inflado. 🎈",
+    "¿Calculaste las horas de trabajo que te costó este gasto? ⏳",
+    "El dinero se va más rápido de lo que se deprecia el bolívar. 🏃‍♂️",
+    "Si pagas intereses por cosas que se deprecian, estás retrocediendo. 📉",
+    "El ahorro exige sacrificio. El gasto solo exige debilidad. 📉",
+    "Optimiza tus recursos. Todo gasto tiene un impacto. ⚙️",
+    "No permitas que las emociones decidan tus estados financieros. 🎭",
+    "Este egreso afecta tu liquidez inmediata. Administra el riesgo. ⚠️",
+    "¿Gasto recurrente o eventual? Vigila las fugas sistémicas. 🚰",
+    "El capital es munición. No la desperdicies en objetivos menores. 🎯",
+    "Ser estricto con el gasto es la única vía para acumular patrimonio. 🛣️",
+    "Si cada gasto requiere una justificación, estás en el camino correcto. ¿Lo hiciste? ⚖️",
+    "Ahorro no es lo que sobra después de gastar. Gasto es lo que sobra después de ahorrar. 🧠",
+    "Las matemáticas no mienten, y este registro resta. ➖",
+    "Cuidado con comprometer flujos de caja futuros. 📉",
+    "Gasto procesado. Ahora, vuelve al plan. 🗺️",
+    "Toda salida de efectivo es una decisión de asignación de recursos. 📊"
+  ];
+
+  const triggerToast = (tipoTransaccion: string) => {
+    const lista = tipoTransaccion === "ingreso" ? MENSAJES_INGRESOS : MENSAJES_EGRESOS;
+    const randomMsg = lista[Math.floor(Math.random() * lista.length)];
     setMensajeMotivacional(randomMsg);
+    setToastType(tipoTransaccion);
     setShowToast(true);
-    setTimeout(() => setShowToast(false), 4000);
+    setTimeout(() => setShowToast(false), 4500);
   };
 
-  // Estados para Edición de Gastos Fijos
   const [editingGasto, setEditingGasto] = useState<string | null>(null);
   const [gastoForm, setGastoForm] = useState({ nombre: "", monto_estimado_usd: "", fecha_limite: "" });
 
-  // Estados del Formulario
   const [monto, setMonto] = useState("");
   const [moneda, setMoneda] = useState("usd");
   const [tipo, setTipo] = useState("egreso");
@@ -107,12 +161,19 @@ export default function FinanzasDashboard() {
     try {
       const { data: txData } = await supabase.from("transacciones").select("*").order("created_at", { ascending: false });
       if (txData) setTransactions(txData);
+      
       const { data: fijosData } = await supabase.from("gastos_fijos").select("*").order("fecha_limite", { ascending: true });
       if (fijosData) setGastosFijos(fijosData);
+      
       const { data: casheaData } = await supabase.from("cashea").select("*").order("fecha_pago", { ascending: true });
       if (casheaData) setCuotasCashea(casheaData);
+      
       const { data: catData } = await supabase.from("categorias").select("*");
       if (catData) setCategoriasList(catData);
+
+      const { data: recData } = await supabase.from("recordatorios").select("*").order("created_at", { ascending: false });
+      if (recData) setRecordatorios(recData);
+
     } catch (err) {
       console.error("Error cargando BD:", err);
     } finally {
@@ -139,6 +200,24 @@ export default function FinanzasDashboard() {
     fetchRates();
     fetchData();
   }, [fetchData]);
+
+  const agregarRecordatorio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevoRecordatorio.trim()) return;
+    await supabase.from("recordatorios").insert([{ texto: nuevoRecordatorio, usuario: usuario }]);
+    setNuevoRecordatorio("");
+    fetchData();
+  };
+
+  const eliminarRecordatorio = async (id: string) => {
+    await supabase.from("recordatorios").delete().eq("id", id);
+    fetchData();
+  };
+
+  const toggleRecordatorio = async (id: string, estado: boolean) => {
+    await supabase.from("recordatorios").update({ completado: !estado }).eq("id", id);
+    fetchData();
+  };
 
   const agregarCategoria = async () => {
     if (!newCatLabel) return;
@@ -168,8 +247,8 @@ export default function FinanzasDashboard() {
     let monto_bs = 0, monto_usd_bcv = 0, monto_usd_paralelo = 0;
     if (monedaInput === 'bs') {
       monto_bs = montoInput;
-      monto_usd_bcv = rates.bcv ? montoInput / rates.bcv : 0;
-      monto_usd_paralelo = rates.usdt ? montoInput / rates.usdt : 0;
+      monto_usd_bcv = rates.bcv > 0 ? montoInput / rates.bcv : 0;
+      monto_usd_paralelo = rates.usdt > 0 ? montoInput / rates.usdt : 0;
     } else if (monedaInput === 'usd') {
       monto_usd_bcv = montoInput;
       monto_usd_paralelo = montoInput;
@@ -188,9 +267,7 @@ export default function FinanzasDashboard() {
     const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
     
     let descFinal = descripcion;
-    if (categoria === "ahorro_meta") {
-      descFinal = "Ahorro Meta (Teléfono) 📱🎯";
-    } else if (categoria !== "otro") {
+    if (categoria !== "otro") {
       descFinal = categoriasList.find(c => c.valor === categoria)?.label || "";
     }
 
@@ -211,7 +288,7 @@ export default function FinanzasDashboard() {
       setMonto("");
       setDescripcion("");
       fetchData();
-      if (tipo === "ingreso" || categoria === "ahorro_meta") triggerToast();
+      triggerToast(tipo);
     }
   };
 
@@ -226,39 +303,36 @@ export default function FinanzasDashboard() {
     fetchData();
   };
 
-  // --- MODIFICACIÓN: LÓGICA DE CASHEA ACTUALIZADA ---
   const toggleCashea = async (cuota: any) => {
     const nuevoEstado = !cuota.pagado;
     
-    // 1. Actualizamos el checkbox a pagado visualmente
     await supabase.from("cashea").update({ pagado: nuevoEstado }).eq("id", cuota.id);
     
-    // 2. Si se está marcando como pagado, preguntamos si registrar el gasto
     if (nuevoEstado) {
-      if (confirm(`¿Descontar $${cuota.monto_cuota} del balance de ${cuota.usuario} por el pago de Cashea?`)) {
+      if (confirm(`¿Descontar $${cuota.monto_cuota} (Deuda Nominal) del balance de ${cuota.usuario} por el pago de Cashea?\n\nNota: Se calculará el descuento real en USDT aplicando el arbitraje de tasas (Deuda BCV / Paralelo).`)) {
         
-        // Creamos la transacción automática
+        const costo_bs = cuota.monto_cuota * rates.bcv;
+        const costo_real_usdt = rates.usdt > 0 ? costo_bs / rates.usdt : cuota.monto_cuota;
+
         await supabase.from("transacciones").insert([{
           descripcion: `Pago Cashea: ${cuota.articulo}`,
           monto_original: cuota.monto_cuota,
           moneda_original: "usd",
-          monto_bs: cuota.monto_cuota * rates.bcv, // Convertido estimado
+          monto_bs: costo_bs,
           monto_usd_bcv: cuota.monto_cuota,
-          monto_usd_paralelo: cuota.monto_cuota,
-          categoria: "otro", // Lo asignamos a "otro" para no romper categorías
+          monto_usd_paralelo: costo_real_usdt,
+          categoria: "otro",
           usuario: cuota.usuario,
           tipo: "egreso",
           created_at: new Date()
         }]);
+        triggerToast("egreso");
       } else {
-        // Si el usuario cancela, devolvemos el checkbox a su estado original para no descuadrar
         await supabase.from("cashea").update({ pagado: false }).eq("id", cuota.id);
       }
     }
-    
     fetchData();
   };
-  // ---------------------------------------------------
 
   const iniciarEdicionGasto = (gasto: any) => {
     setEditingGasto(gasto.id);
@@ -286,19 +360,23 @@ export default function FinanzasDashboard() {
     return transactions
       .filter(tx => (!user || tx.usuario === user || tx.usuario === 'Ambos'))
       .reduce((acc, tx) => {
-        const valorUSD = tx.monto_usd_bcv || 0;
+        const valorRealUSDT = tx.monto_usd_paralelo || 0;
         const modificador = (tx.usuario === 'Ambos' && user) ? 0.5 : 1; 
-        return tx.tipo === "ingreso" ? acc + (valorUSD * modificador) : acc - (valorUSD * modificador);
+        return tx.tipo === "ingreso" ? acc + (valorRealUSDT * modificador) : acc - (valorRealUSDT * modificador);
       }, 0);
   };
 
   const totalAhorradoMeta = transactions
     .filter(tx => tx.categoria === "ahorro_meta" && tx.tipo === "ingreso")
-    .reduce((acc, tx) => acc + (tx.monto_usd_bcv || 0), 0);
+    .reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
 
   const totalVictor = getBalance("Victor");
   const totalMari = getBalance("Mari");
-  const totalGeneral = totalVictor + totalMari;
+  const totalGeneralUSDT = totalVictor + totalMari;
+  
+  const equivalenciaBS = totalGeneralUSDT * rates.usdt;
+  const equivalenciaUSD_BCV = rates.bcv > 0 ? equivalenciaBS / rates.bcv : 0;
+
   const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
 
   return (
@@ -331,7 +409,50 @@ export default function FinanzasDashboard() {
           </div>
         </div>
 
-        {/* PROGRESO DE META INTEGRADO */}
+        {/* --- NUEVA SECCIÓN: NOTIFICACIONES / RECORDATORIOS --- */}
+        <div className="bg-[#1a0f2e] border border-amber-500/30 p-4 md:p-6 rounded-[2rem] shadow-xl overflow-hidden">
+          <div className="flex items-center justify-between mb-3 md:mb-4">
+            <h2 className="text-sm md:text-lg font-black text-white flex items-center gap-2">
+               <Bell className="w-4 h-4 md:w-5 md:h-5 text-amber-400 animate-bounce" /> Avisos de los Pollitos
+            </h2>
+          </div>
+          
+          <form onSubmit={agregarRecordatorio} className="flex gap-2 mb-4">
+            <input 
+              type="text" 
+              placeholder="Ej: Mañana hacer mercado..." 
+              value={nuevoRecordatorio}
+              onChange={(e) => setNuevoRecordatorio(e.target.value)}
+              className="flex-1 bg-black/40 border border-purple-500/20 rounded-xl px-4 py-2 text-xs md:text-sm text-white outline-none focus:border-amber-500/50"
+            />
+            <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-black p-2 md:px-4 rounded-xl transition-colors font-bold flex items-center gap-2">
+              <Send className="w-4 h-4 md:w-5 md:h-5" /> <span className="hidden md:inline text-sm">Enviar</span>
+            </button>
+          </form>
+
+          <div className="space-y-2 max-h-[150px] md:max-h-[200px] overflow-y-auto pr-2">
+            {recordatorios.length === 0 ? (
+              <p className="text-[10px] md:text-xs text-purple-400/50 italic">No hay avisos pendientes 🐾</p>
+            ) : (
+              recordatorios.map(rec => (
+                <div key={rec.id} className={`flex items-center justify-between p-2 md:p-3 rounded-xl border ${rec.completado ? 'bg-emerald-900/10 border-emerald-500/20 opacity-50' : 'bg-black/30 border-amber-500/20'}`}>
+                  <div className="flex items-center gap-3 cursor-pointer" onClick={() => toggleRecordatorio(rec.id, rec.completado)}>
+                    {rec.completado ? <CheckSquare className="w-4 h-4 md:w-5 md:h-5 text-emerald-400" /> : <Square className="w-4 h-4 md:w-5 md:h-5 text-amber-400" />}
+                    <p className={`text-xs md:text-sm ${rec.completado ? 'line-through text-emerald-200' : 'text-white font-medium'}`}>
+                      {rec.texto} <span className="text-[8px] md:text-[10px] text-amber-400/80 uppercase ml-1 md:ml-2">-{rec.usuario}</span>
+                    </p>
+                  </div>
+                  <button onClick={() => eliminarRecordatorio(rec.id)} className="text-rose-400/50 hover:text-rose-400 p-1">
+                    <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        {/* --------------------------------------------------- */}
+
+        {/* PROGRESO DE META */}
         <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-[2rem] shadow-xl relative overflow-hidden">
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-6">
             <div className="flex-1">
@@ -357,13 +478,33 @@ export default function FinanzasDashboard() {
           </div>
         </div>
 
-        {/* BALANCES */}
+        {/* BALANCES DIVIDIDOS EN USDT CON EQUIVALENCIAS */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
           <div className="col-span-2 md:col-span-1">
-            <CardBalance title="Total General" amount={totalGeneral} icon={<Wallet className="w-5 h-5"/>} color="from-purple-600/40" highlight />
+            <div className="relative overflow-hidden bg-gradient-to-br from-purple-600/40 to-[#1a0f2e] border border-purple-400 p-5 md:p-6 rounded-3xl shadow-xl flex flex-col justify-between h-full">
+              <div className="flex justify-between items-start mb-2 md:mb-4">
+                <p className="text-[10px] md:text-xs font-bold text-purple-200 uppercase tracking-widest">Total General (USDT)</p>
+                <div className="text-purple-300/80"><Wallet className="w-5 h-5"/></div>
+              </div>
+              <p className="text-2xl md:text-3xl font-black text-white">
+                ${totalGeneralUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              {/* Equivalencias contables */}
+              <div className="mt-3 flex items-center justify-between border-t border-purple-500/30 pt-3">
+                <div className="flex flex-col">
+                  <span className="text-[8px] text-purple-400 uppercase font-bold tracking-wider">Equiv. BS</span>
+                  <span className="text-xs font-mono text-purple-100">Bs. {equivalenciaBS.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="h-5 w-px bg-purple-500/30"></div>
+                <div className="flex flex-col text-right">
+                  <span className="text-[8px] text-purple-400 uppercase font-bold tracking-wider">Equiv. BCV</span>
+                  <span className="text-xs font-mono text-purple-100">${equivalenciaUSD_BCV.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <CardBalance title="Balance Víctor" amount={totalVictor} icon={<Users className="w-4 h-4"/>} color="from-indigo-600/30" small />
-          <CardBalance title="Balance Mari" amount={totalMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
+          <CardBalance title="Balance Víctor (USDT)" amount={totalVictor} icon={<Users className="w-4 h-4"/>} color="from-indigo-600/30" small />
+          <CardBalance title="Balance Mari (USDT)" amount={totalMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
@@ -396,13 +537,11 @@ export default function FinanzasDashboard() {
                         {categoriasList.map(cat => (
                           <option key={cat.id} value={cat.valor}>{cat.label}</option>
                         ))}
-      
                         <option value="otro">Otro ✍️</option>
                       </select>
                       <button type="button" onClick={() => setIsAddingCat(true)} className="bg-purple-500/20 text-purple-400 px-3 md:p-3 rounded-xl border border-purple-500/30"><Plus className="w-4 h-4 md:w-5 md:h-5"/></button>
                     </div>
 
-                    {/* MODIFICACIÓN: CAJA DE TEXTO CUANDO ES "OTRO" */}
                     {categoria === "otro" && (
                       <input 
                         type="text" 
@@ -413,8 +552,6 @@ export default function FinanzasDashboard() {
                         className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white outline-none focus:border-purple-400 transition-colors" 
                       />
                     )}
-                    {/* ------------------------------------------- */}
-
                   </div>
                 )}
 
@@ -501,8 +638,6 @@ export default function FinanzasDashboard() {
                 <div className="space-y-2">
                   {cuotasCashea.map(cuota => (
                     <div key={cuota.id} className={`group flex items-center justify-between p-2.5 md:p-3 rounded-xl border ${cuota.pagado ? 'bg-emerald-900/20 border-emerald-500/30' : 'bg-black/40 border-fuchsia-500/20'}`}>
-                      
-                      {/* MODIFICACIÓN: AL HACER CLICK EN EL CHECKBOX AHORA ENVÍA EL OBJETO COMPLETO */}
                       <div className="flex items-center gap-2.5 md:gap-3 cursor-pointer" onClick={() => toggleCashea(cuota)}>
                         {cuota.pagado ? <CheckSquare className="text-emerald-400 w-4 h-4 md:w-5 md:h-5"/> : <Square className="text-fuchsia-400 w-4 h-4 md:w-5 md:h-5"/>}
                         <div>
@@ -552,7 +687,7 @@ export default function FinanzasDashboard() {
                     </div>
                     <div className="flex items-center gap-2 md:gap-4 shrink-0">
                       <div className="text-right">
-                        <p className={`text-sm md:text-base font-black ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>${tx.monto_usd_bcv?.toFixed(2)}</p>
+                        <p className={`text-sm md:text-base font-black ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>${tx.monto_usd_paralelo?.toFixed(2)} USDT</p>
                         <p className="text-[8px] md:text-[10px] text-purple-300/50">Bs. {tx.monto_bs?.toFixed(2)}</p>
                       </div>
                       <button onClick={() => eliminarTransaccion(tx.id)} className="p-2 md:p-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-rose-500 transition-opacity"><Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" /></button>
@@ -565,11 +700,12 @@ export default function FinanzasDashboard() {
         </div>
       </div>
 
-      {/* TOAST MOTIVACIONAL CENTRADO Y GRANDE */}
       {showToast && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-[#1a0f2e] border-2 border-purple-400/50 p-8 md:p-12 rounded-[2.5rem] shadow-[0_0_50px_rgba(168,85,247,0.4)] flex flex-col items-center gap-5 md:gap-6 max-w-md w-full animate-in zoom-in duration-300">
-            <div className="bg-gradient-to-br from-yellow-300 to-yellow-500 w-16 h-16 md:w-auto md:h-auto md:p-5 flex items-center justify-center rounded-3xl text-4xl md:text-5xl shadow-2xl">🐥</div>
+            <div className={`w-16 h-16 md:w-auto md:h-auto md:p-5 flex items-center justify-center rounded-3xl text-4xl md:text-5xl shadow-2xl ${toastType === 'ingreso' ? 'bg-gradient-to-br from-yellow-300 to-yellow-500' : 'bg-gradient-to-br from-rose-500 to-rose-700'}`}>
+              {toastType === 'ingreso' ? '🐥' : '📉'}
+            </div>
             <div className="text-center space-y-2">
               <p className="text-white font-black text-lg md:text-2xl italic leading-tight">
                 "{mensajeMotivacional}"
@@ -583,9 +719,9 @@ export default function FinanzasDashboard() {
   );
 }
 
-function CardBalance({ title, amount, icon, color, highlight = false, small = false }: any) {
+function CardBalance({ title, amount, icon, color, small = false }: any) {
   return (
-    <div className={`relative overflow-hidden bg-gradient-to-br ${color} to-[#1a0f2e] border ${highlight ? 'border-purple-400' : 'border-purple-500/20'} ${small ? 'p-4 rounded-2xl' : 'p-5 md:p-6 rounded-3xl'} shadow-xl flex flex-col justify-between h-full`}>
+    <div className={`relative overflow-hidden bg-gradient-to-br ${color} to-[#1a0f2e] border border-purple-500/20 ${small ? 'p-4 rounded-2xl' : 'p-5 md:p-6 rounded-3xl'} shadow-xl flex flex-col justify-between h-full`}>
       <div className="flex justify-between items-start mb-2 md:mb-4">
         <p className={`${small ? 'text-[9px] md:text-[10px]' : 'text-[10px] md:text-xs'} font-bold text-purple-200 uppercase tracking-widest`}>{title}</p>
         <div className={`${small ? 'w-4 h-4' : ''} text-purple-300/80`}>{icon}</div>
