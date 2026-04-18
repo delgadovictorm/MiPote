@@ -351,7 +351,7 @@ export default function FinanzasDashboard() {
           monto_bs: costo_bs,
           monto_usd_bcv: cuota.monto_cuota,
           monto_usd_paralelo: costo_real_usdt,
-          categoria: "cashea", 
+          categoria: "cashea",
           usuario: cuota.usuario,
           tipo: "egreso",
           created_at: new Date()
@@ -386,8 +386,9 @@ export default function FinanzasDashboard() {
     fetchData();
   };
 
-  // --- LÓGICA CONTABLE CORREGIDA ---
-  // Calcula EL TOTAL BRUTO (Todo lo que ha entrado y salido, sin restar el ahorro meta)
+  // --- SOLUCIÓN DE LÓGICA MATEMÁTICA ---
+  
+  // 1. Patrimonio Bruto (Todo el dinero que ha entrado, menos todo lo que ha salido, incluyendo el dinero de la meta)
   const getPatrimonioBruto = () => {
     return transactions.reduce((acc, tx) => {
       const valorRealUSDT = tx.monto_usd_paralelo || 0;
@@ -395,7 +396,7 @@ export default function FinanzasDashboard() {
     }, 0);
   };
 
-  // Calcula SOLO LO DISPONIBLE PARA GASTAR (Resta el ahorro meta)
+  // 2. Dinero Disponible (El fondo de la meta NO SE RESTA si entró como ingreso, simplemente SE IGNORA para no afectar el balance de la billetera).
   const getDisponible = (user: string | null) => {
     return transactions
       .filter(tx => (!user || tx.usuario === user || tx.usuario === 'Ambos'))
@@ -403,12 +404,14 @@ export default function FinanzasDashboard() {
         const valorRealUSDT = tx.monto_usd_paralelo || 0;
         const modificador = (tx.usuario === 'Ambos' && user) ? 0.5 : 1; 
         
-        // Si es ahorro meta, actúa como un egreso de tu cuenta "disponible"
+        // CORRECCIÓN: El ahorro de la meta es invisible para el disponible.
         if (tx.categoria === "ahorro_meta") {
-          return tx.tipo === "ingreso" ? acc - (valorRealUSDT * modificador) : acc + (valorRealUSDT * modificador);
-        } else {
-          return tx.tipo === "ingreso" ? acc + (valorRealUSDT * modificador) : acc - (valorRealUSDT * modificador);
+          return acc; 
         }
+        
+        return tx.tipo === "ingreso" 
+          ? acc + (valorRealUSDT * modificador) 
+          : acc - (valorRealUSDT * modificador);
       }, 0);
   };
 
@@ -571,7 +574,7 @@ export default function FinanzasDashboard() {
           </div>
         </div>
 
-        {/* BALANCES PRINCIPALES */}
+        {/* BALANCES DIVIDIDOS */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
           <div className="col-span-2 md:col-span-1">
             <div className="relative overflow-hidden bg-gradient-to-br from-purple-600/40 to-[#1a0f2e] border border-purple-400 p-5 md:p-6 rounded-3xl shadow-xl flex flex-col justify-between h-full">
