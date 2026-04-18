@@ -4,8 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
   ArrowDownCircle, ArrowUpCircle, Wallet, 
-  Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send
+  Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, BarChart3
 } from "lucide-react";
+
+// NUEVAS IMPORTACIONES PARA LOS GRÁFICOS
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 export default function FinanzasDashboard() {
   const [rates, setRates] = useState({ bcv: 0, usdt: 0 });
@@ -379,6 +382,50 @@ export default function FinanzasDashboard() {
 
   const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
 
+  // ==========================================
+  // LÓGICA DE DATOS PARA LOS GRÁFICOS (NUEVO)
+  // ==========================================
+  
+  // 1. Datos para Gráfico de Torta (Gastos por Categoría)
+  const gastosDelMes = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
+  const datosCategoriasMap = gastosDelMes.reduce((acc, tx) => {
+    // Si la categoría fue borrada o no tiene etiqueta, usa su ID/Valor crudo, o "Otro"
+    const catName = categoriasList.find(c => c.valor === tx.categoria)?.label || tx.categoria;
+    const finalCatName = catName === 'otro' ? 'Otros Gastos' : catName;
+    acc[finalCatName] = (acc[finalCatName] || 0) + (tx.monto_usd_paralelo || 0);
+    return acc;
+  }, {});
+
+  const dataGraficoTorta = Object.keys(datosCategoriasMap)
+    .map(key => ({ name: key, value: datosCategoriasMap[key] }))
+    .sort((a, b) => b.value - a.value); // Ordenar de mayor a menor gasto
+
+  const COLORS = ['#8b5cf6', '#ec4899', '#f97316', '#eab308', '#10b981', '#0ea5e9', '#6366f1', '#d946ef'];
+
+  // 2. Datos para Gráfico de Barras (Flujo de Caja)
+  const ingresosMesChart = transaccionesDelMes.filter(tx => tx.tipo === 'ingreso').reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
+  const egresosMesChart = gastosDelMes.reduce((acc, tx) => acc + (tx.monto_usd_paralelo || 0), 0);
+  const dataFlujoCaja = [
+    { name: 'Este Mes', Ingresos: ingresosMesChart, Egresos: egresosMesChart }
+  ];
+
+  // Tooltip personalizado para formatear moneda en gráficos
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-[#1a0f2e] border border-purple-500/30 p-3 rounded-xl shadow-xl">
+          <p className="text-white font-bold text-xs mb-1">{payload[0].name || payload[0].payload.name}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} className="text-xs font-mono" style={{ color: entry.color }}>
+              {entry.dataKey}: ${entry.value.toFixed(2)} USDT
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="min-h-screen bg-[#0d0714] text-purple-50 p-3 md:p-8 font-sans pb-24 selection:bg-purple-500/30">
       <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
@@ -409,7 +456,7 @@ export default function FinanzasDashboard() {
           </div>
         </div>
 
-        {/* --- NUEVA SECCIÓN: NOTIFICACIONES / RECORDATORIOS --- */}
+        {/* NOTIFICACIONES / RECORDATORIOS */}
         <div className="bg-[#1a0f2e] border border-amber-500/30 p-4 md:p-6 rounded-[2rem] shadow-xl overflow-hidden">
           <div className="flex items-center justify-between mb-3 md:mb-4">
             <h2 className="text-sm md:text-lg font-black text-white flex items-center gap-2">
@@ -450,7 +497,6 @@ export default function FinanzasDashboard() {
             )}
           </div>
         </div>
-        {/* --------------------------------------------------- */}
 
         {/* PROGRESO DE META */}
         <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-[2rem] shadow-xl relative overflow-hidden">
@@ -478,7 +524,7 @@ export default function FinanzasDashboard() {
           </div>
         </div>
 
-        {/* BALANCES DIVIDIDOS EN USDT CON EQUIVALENCIAS */}
+        {/* BALANCES */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
           <div className="col-span-2 md:col-span-1">
             <div className="relative overflow-hidden bg-gradient-to-br from-purple-600/40 to-[#1a0f2e] border border-purple-400 p-5 md:p-6 rounded-3xl shadow-xl flex flex-col justify-between h-full">
@@ -489,7 +535,6 @@ export default function FinanzasDashboard() {
               <p className="text-2xl md:text-3xl font-black text-white">
                 ${totalGeneralUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
-              {/* Equivalencias contables */}
               <div className="mt-3 flex items-center justify-between border-t border-purple-500/30 pt-3">
                 <div className="flex flex-col">
                   <span className="text-[8px] text-purple-400 uppercase font-bold tracking-wider">Equiv. BS</span>
@@ -506,6 +551,72 @@ export default function FinanzasDashboard() {
           <CardBalance title="Balance Víctor (USDT)" amount={totalVictor} icon={<Users className="w-4 h-4"/>} color="from-indigo-600/30" small />
           <CardBalance title="Balance Mari (USDT)" amount={totalMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
         </div>
+
+        {/* ======================================================== */}
+        {/* NUEVA SECCIÓN: DASHBOARD ANALÍTICO (GRÁFICOS) */}
+        {/* ======================================================== */}
+        {transaccionesDelMes.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+            
+            {/* GRÁFICO 1: DISTRIBUCIÓN DE GASTOS */}
+            <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl flex flex-col">
+              <h3 className="text-xs md:text-sm font-bold text-white mb-4 flex items-center gap-2">
+                <PieChartIcon className="w-4 h-4 text-purple-400"/> Distribución de Egresos (Mes Actual)
+              </h3>
+              <div className="h-[250px] w-full">
+                {dataGraficoTorta.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie 
+                        data={dataGraficoTorta} 
+                        cx="50%" cy="50%" 
+                        innerRadius={60} outerRadius={80} 
+                        paddingAngle={5} 
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {dataGraficoTorta.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend 
+                        verticalAlign="bottom" height={36} 
+                        iconType="circle" 
+                        wrapperStyle={{ fontSize: '10px', color: '#c084fc' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-[10px] text-purple-400/50 italic">
+                    No hay gastos registrados este mes.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* GRÁFICO 2: FLUJO DE CAJA (BURN RATE) */}
+            <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl flex flex-col">
+              <h3 className="text-xs md:text-sm font-bold text-white mb-4 flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-emerald-400"/> Flujo de Caja (Ingresos vs Egresos)
+              </h3>
+              <div className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dataFlujoCaja} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="name" stroke="#6b21a8" fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#6b21a8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
+                    <Tooltip content={<CustomTooltip />} cursor={{fill: '#2e1065', opacity: 0.4}} />
+                    <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
+                    <Bar dataKey="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                    <Bar dataKey="Egresos" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+          </div>
+        )}
+        {/* ======================================================== */}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
           <div className="lg:col-span-4 space-y-4 md:space-y-6">
