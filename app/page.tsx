@@ -10,7 +10,6 @@ import {
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 export default function FinanzasDashboard() {
-  // ESTADOS DE NAVEGACIÓN (NUEVO)
   const [activeTab, setActiveTab] = useState("inicio");
   const [filtroHistorial, setFiltroHistorial] = useState("Todos");
 
@@ -309,11 +308,9 @@ export default function FinanzasDashboard() {
     const valorMonto = parseFloat(monto);
     const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
     
-    // Ahora el usuario SIEMPRE provee la descripción
     let descFinal = descripcion; 
     let labelCategoria = categoriasList.find(c => c.valor === categoria)?.label || categoria;
     
-    // Anexamos la etiqueta de categoría a la descripción para contexto
     if (categoria !== "otro" && categoria !== "cashea" && categoria !== "ahorro_meta") {
        descFinal = `${labelCategoria} - ${descripcion}`;
     }
@@ -403,7 +400,6 @@ export default function FinanzasDashboard() {
     fetchData();
   };
 
-  // --- LÓGICA CONTABLE ---
   const getPatrimonioBruto = () => {
     return transactions.reduce((acc, tx) => {
       const valorRealUSDT = tx.monto_usd_paralelo || 0;
@@ -438,7 +434,6 @@ export default function FinanzasDashboard() {
 
   const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
 
-  // FILTRO DEL HISTORIAL
   const transaccionesFiltradas = transaccionesDelMes.filter(tx => {
     if (filtroHistorial === "Todos") return true;
     return tx.usuario === filtroHistorial;
@@ -492,13 +487,12 @@ export default function FinanzasDashboard() {
     return null;
   };
 
-  // RENDERIZADO CONDICIONAL DE PESTAÑAS
+  // RENDERIZADOR DE PESTAÑAS (MODULARIZACIÓN)
   const renderTabContent = () => {
     switch (activeTab) {
       case "inicio":
         return (
           <>
-            {/* PROGRESO DE META */}
             <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-[2rem] shadow-xl relative overflow-hidden">
               <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-6">
                 <div className="flex-1">
@@ -524,7 +518,6 @@ export default function FinanzasDashboard() {
               </div>
             </div>
 
-            {/* BALANCES DIVIDIDOS */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
               <div className="col-span-2 md:col-span-1">
                 <div className="relative overflow-hidden bg-gradient-to-br from-purple-600/40 to-[#1a0f2e] border border-purple-400 p-5 md:p-6 rounded-3xl shadow-xl flex flex-col justify-between h-full">
@@ -552,7 +545,6 @@ export default function FinanzasDashboard() {
               <CardBalance title="Disponible Mari" amount={disponibleMari} icon={<Users className="w-4 h-4"/>} color="from-fuchsia-600/30" small />
             </div>
 
-            {/* DASHBOARD ANALÍTICO (GRÁFICOS) */}
             {transaccionesDelMes.length > 0 && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
                 <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl flex flex-col">
@@ -597,7 +589,6 @@ export default function FinanzasDashboard() {
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
-              {/* FORMULARIO DE REGISTRO */}
               <div className="lg:col-span-5 space-y-4 md:space-y-6">
                 <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl">
                   <h2 className="text-base md:text-lg font-bold mb-4 md:mb-5 flex items-center gap-2 text-white"><Plus className="w-4 h-4 md:w-5 md:h-5 text-purple-400" /> Nuevo Registro</h2>
@@ -626,11 +617,11 @@ export default function FinanzasDashboard() {
                           <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white outline-none">
                             {categoriasList.map(cat => <option key={cat.id} value={cat.valor}>{cat.label}</option>)}
                             <option value="cashea">Cashea</option>
+                            <option value="ahorro_meta">Ahorro Meta (Teléfono) 📱🎯</option>
                             <option value="otro">Otro ✍️</option>
                           </select>
                           <button type="button" onClick={() => setIsAddingCat(true)} className="bg-purple-500/20 text-purple-400 px-3 md:p-3 rounded-xl border border-purple-500/30"><Plus className="w-4 h-4 md:w-5 md:h-5"/></button>
                         </div>
-                        {/* INPUT DE DESCRIPCIÓN AHORA ES SIEMPRE VISIBLE Y OBLIGATORIO */}
                         <input 
                           type="text" required placeholder="Especifica el detalle (Ej: Zapatos Zara, Delivery KFC)" 
                           value={descripcion} onChange={(e) => setDescripcion(e.target.value)} 
@@ -665,7 +656,6 @@ export default function FinanzasDashboard() {
                 </div>
               </div>
 
-              {/* HISTORIAL CON FILTROS */}
               <div className="lg:col-span-7 space-y-4 md:space-y-6">
                 <div className="bg-[#1a0f2e] border border-purple-500/30 rounded-3xl overflow-hidden shadow-xl">
                   <div className="p-3 md:p-4 border-b border-purple-500/20 flex flex-col gap-3 bg-black/20">
@@ -673,7 +663,6 @@ export default function FinanzasDashboard() {
                       <span>Historial Dinámico</span>
                       <input type="month" value={mesActual} onChange={(e) => setMesActual(e.target.value)} className="bg-purple-900/40 border border-purple-500/30 rounded-lg p-1 text-white outline-none text-[10px] md:text-xs" />
                     </div>
-                    {/* BOTONES DE FILTRO */}
                     <div className="flex gap-2 p-1 bg-black/50 rounded-xl">
                       {["Todos", "Victor", "Mari", "Ambos"].map(filtro => (
                         <button 
@@ -721,7 +710,6 @@ export default function FinanzasDashboard() {
       case "pagos":
         return (
           <div className="space-y-4 md:space-y-6">
-             {/* --- CONTROL PRESUPUESTARIO --- */}
             <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-6 rounded-3xl shadow-xl">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2">
@@ -780,7 +768,6 @@ export default function FinanzasDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              {/* GASTOS FIJOS */}
               <div className="bg-[#1a0f2e] border border-purple-500/30 p-4 md:p-5 rounded-3xl space-y-2">
                 <h3 className="text-xs md:text-sm font-bold text-white mb-3 md:mb-4 flex items-center gap-2"><CheckSquare className="w-3.5 h-3.5 md:w-4 md:h-4 text-purple-400"/> Gastos Fijos</h3>
                 {gastosFijos.map(gasto => (
@@ -813,7 +800,6 @@ export default function FinanzasDashboard() {
                 ))}
               </div>
 
-              {/* CASHEA */}
               <div className="bg-[#1a0f2e] border border-fuchsia-500/30 p-4 md:p-5 rounded-3xl">
                 <div className="flex justify-between items-center mb-3 md:mb-4">
                   <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2"><Calendar className="w-3.5 h-3.5 md:w-4 md:h-4 text-fuchsia-400"/> Cashea</h3>
@@ -911,36 +897,54 @@ export default function FinanzasDashboard() {
 
             <div className="space-y-6">
               <div className="bg-black/40 p-4 rounded-2xl border border-purple-500/20">
-                <label className="text-[10px] uppercase text-purple-400 font-bold tracking-widest block mb-2">Ingresa el Monto</label>
+                <label className="text-[10px] uppercase text-purple-400 font-bold tracking-widest block mb-2">Ingresa el Monto a pagar</label>
                 <div className="flex gap-3">
                   <input 
                     type="number" step="0.01" placeholder="0.00" value={calcMonto} onChange={(e) => setCalcMonto(e.target.value)}
-                    className="flex-1 bg-transparent text-3xl font-black text-white outline-none font-mono"
+                    className="flex-1 bg-transparent text-3xl font-black text-white outline-none font-mono w-full"
                   />
                   <select 
                     value={calcMoneda} onChange={(e) => setCalcMoneda(e.target.value)}
                     className="bg-[#1a0f2e] border border-purple-500/50 rounded-xl px-3 text-sm text-white font-bold outline-none"
                   >
-                    <option value="bs">BS</option>
-                    <option value="usd">USD (BCV)</option>
-                    <option value="usdt">USDT (Paralelo)</option>
+                    <option value="bs">Bolívares (BS)</option>
+                    <option value="usd">Dólares ($)</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-purple-900/20 p-4 rounded-2xl border border-purple-500/10 text-center">
-                  <p className="text-[10px] uppercase text-purple-400 font-bold mb-1">Equivalencia BCV</p>
-                  <p className="text-xl font-black text-white font-mono">
-                    {calcMoneda === 'usd' ? `Bs. ${(parseFloat(calcMonto || "0") * rates.bcv).toFixed(2)}` : `$ ${calcularMontos(parseFloat(calcMonto || "0"), calcMoneda).monto_usd_bcv.toFixed(2)}`}
-                  </p>
-                </div>
-                <div className="bg-purple-900/20 p-4 rounded-2xl border border-purple-500/10 text-center">
-                  <p className="text-[10px] uppercase text-purple-400 font-bold mb-1">Equivalencia USDT</p>
-                  <p className="text-xl font-black text-white font-mono">
-                    {calcMoneda === 'usdt' ? `Bs. ${(parseFloat(calcMonto || "0") * rates.usdt).toFixed(2)}` : `$ ${calcularMontos(parseFloat(calcMonto || "0"), calcMoneda).monto_usd_paralelo.toFixed(2)}`}
-                  </p>
-                </div>
+                {calcMoneda === 'bs' ? (
+                  <>
+                    <div className="bg-purple-900/20 p-4 rounded-2xl border border-purple-500/10 text-center">
+                      <p className="text-[10px] uppercase text-purple-400 font-bold mb-1">Tasa BCV</p>
+                      <p className="text-xl font-black text-white font-mono">
+                        $ {(rates.bcv > 0 ? parseFloat(calcMonto || "0") / rates.bcv : 0).toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="bg-purple-900/20 p-4 rounded-2xl border border-purple-500/10 text-center">
+                      <p className="text-[10px] uppercase text-purple-400 font-bold mb-1">Tasa Paralelo</p>
+                      <p className="text-xl font-black text-white font-mono">
+                        $ {(rates.usdt > 0 ? parseFloat(calcMonto || "0") / rates.usdt : 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="bg-purple-900/20 p-4 rounded-2xl border border-purple-500/10 text-center">
+                      <p className="text-[10px] uppercase text-purple-400 font-bold mb-1">Pagar a Tasa BCV</p>
+                      <p className="text-xl font-black text-white font-mono">
+                        Bs. {(parseFloat(calcMonto || "0") * rates.bcv).toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="bg-purple-900/20 p-4 rounded-2xl border border-purple-500/10 text-center">
+                      <p className="text-[10px] uppercase text-purple-400 font-bold mb-1">Pagar a Paralelo</p>
+                      <p className="text-xl font-black text-white font-mono">
+                        Bs. {(parseFloat(calcMonto || "0") * rates.usdt).toFixed(2)}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
