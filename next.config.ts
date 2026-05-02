@@ -1,29 +1,20 @@
 const withPWA = require("@ducanh2912/next-pwa").default({
   dest: "public",
+  cacheOnFrontEndNav: true,
+  aggressiveFrontEndNavCaching: true,
+  reloadOnOnline: true,
+  swcMinify: true,
   disable: process.env.NODE_ENV === "development",
-  register: true,
-  setupExitHandlers: true,
-  skipWaiting: true,
+  workboxOptions: {
+    disableDevLogs: true,
+  },
 });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // 🛡️ Obligamos a Next.js a no abrir hilos extra que consuman RAM
-  experimental: {
-    workerThreads: false,
-    cpus: 1
-  },
-  // 🛡️ Desactivamos los procesos que más memoria consumen en el build
-  eslint: { ignoreDuringBuilds: true },
+  // Ya no necesitamos limitar los CPUs porque esta librería es eficiente
   typescript: { ignoreBuildErrors: true },
-  swcMinify: false, 
-  
-  // 🛡️ Truco maestro: forzamos a Webpack a no fragmentar tanto el código
-  webpack: (config) => {
-    config.optimization.splitChunks = false;
-    config.optimization.minimize = false; // Desactivamos la minificación pesada
-    return config;
-  },
+  eslint: { ignoreDuringBuilds: true },
 };
 
 module.exports = withPWA(nextConfig);
