@@ -6,6 +6,7 @@ import {
   ArrowDownCircle, ArrowUpCircle, Wallet, Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, BarChart3, Target, Home, CreditCard, StickyNote, Calculator, Lock, Mail, LogIn, UserPlus, Sparkles, ArrowLeft, Shield, Key, Copy, UploadCloud, Phone, QrCode
 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { TransactionDrawer } from "@/components/TransactionDrawer";
 
 export default function MiPoteApp() {
   const [session, setSession] = useState<any>(null);
@@ -1167,7 +1168,11 @@ function FinanzasDashboardContent({
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-6">
             <div className={`lg:col-span-5 bg-[#1a0f2e] border ${theme.border} p-4 rounded-3xl shadow-xl`}>
-              <h2 className={`text-base font-bold mb-4 flex items-center gap-2 text-white`}><Plus className={`w-4 h-4 ${theme.text}`} /> Movimiento de Emergencia</h2>
+              <TransactionDrawer>
+    <button type="button" className={`w-full font-black py-4 mb-6 rounded-2xl ${theme.primary} text-white text-sm shadow-[0_0_20px_rgba(0,0,0,0.3)] active:scale-95 transition-all flex items-center justify-center gap-2`}>
+      <Plus className="w-5 h-5" /> ABRIR NUEVO REGISTRO
+    </button>
+  </TransactionDrawer>
               <form onSubmit={handleEmergenciaSubmit} className="space-y-3">
                 <div className="flex gap-2">
                   <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={`flex-1 border rounded-xl p-2.5 text-xs font-black outline-none ${tipo === 'ingreso' ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/30 border-rose-500/50 text-rose-400'}`}>

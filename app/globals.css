@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/* app/globals.css */
+body {
+  background-color: #000000;
+  color: #ffffff;
+  /* Esto elimina el rebote blanco en iOS */
+  overscroll-behavior-y: none; 
+}
+
+/* Para asegurarnos de que el contenedor principal ocupe toda la pantalla y permita scroll interno */
+main {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

@@ -19,6 +19,15 @@ export const metadata: Metadata = {
   manifest: "/manifest.json", // <--- Conector PWA
 };
 
+// app/layout.tsx o app/layout.jsx
+export const viewport = {
+  themeColor: '#000000',
+  colorScheme: 'dark',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1, // Evita que la pantalla se haga zoom por error
+};
+
 // (Opcional pero recomendado para PWA) Define el color de la barra de estado del teléfono
 export const viewport: Viewport = {
   themeColor: "#0d0714",
