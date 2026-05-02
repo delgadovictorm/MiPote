@@ -8,10 +8,22 @@ const withPWA = require("@ducanh2912/next-pwa").default({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false,
-  swcMinify: false, // Seguimos con esto apagado para asegurar el build
+  // 🛡️ Obligamos a Next.js a no abrir hilos extra que consuman RAM
+  experimental: {
+    workerThreads: false,
+    cpus: 1
+  },
+  // 🛡️ Desactivamos los procesos que más memoria consumen en el build
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
+  swcMinify: false, 
+  
+  // 🛡️ Truco maestro: forzamos a Webpack a no fragmentar tanto el código
+  webpack: (config) => {
+    config.optimization.splitChunks = false;
+    config.optimization.minimize = false; // Desactivamos la minificación pesada
+    return config;
+  },
 };
 
 module.exports = withPWA(nextConfig);
