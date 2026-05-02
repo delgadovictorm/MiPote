@@ -7,19 +7,17 @@ const withPWA = require('next-pwa')({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  // 1. Saltamos errores estrictos para que el build no se detenga por tonterías
-  typescript: {
-    ignoreBuildErrors: true,
+  reactStrictMode: false, // Desactivamos esto para aliviar el build
+  swcMinify: false, // 🛠️ PASO CLAVE: Desactivamos el minificador SWC que causa el WorkerError
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
+  experimental: {
+    // Forzamos a que no use demasiados hilos de CPU
+    workerThreads: false,
+    cpus: 1
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  // 2. Optimizamos el uso de memoria de Webpack para evitar el WorkerError
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.optimization.splitChunks = false;
-    }
+  webpack: (config) => {
+    config.optimization.minimize = true;
     return config;
   },
 };
