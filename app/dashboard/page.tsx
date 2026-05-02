@@ -925,17 +925,25 @@ function FinanzasDashboardContent({
     setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" });
   };
 
-  const calcularMontos = (montoInput: number, monedaInput: string) => {
-    let monto_bs = 0, monto_usd_bcv = 0, monto_usd_paralelo = 0;
-    if (monedaInput === 'bs') {
-      monto_bs = montoInput; monto_usd_bcv = rates.bcv > 0 ? montoInput / rates.bcv : 0; monto_usd_paralelo = rates.usdt > 0 ? montoInput / rates.usdt : 0;
-    } else if (monedaInput === 'usd') {
-      monto_usd_bcv = montoInput; monto_usd_paralelo = montoInput; monto_bs = montoInput * rates.bcv;
-    } else if (monedaInput === 'usdt') {
-      monto_usd_paralelo = montoInput; monto_usd_bcv = montoInput; monto_bs = montoInput * rates.usdt;
-    }
-    return { monto_bs, monto_usd_bcv, monto_usd_paralelo };
-  };
+ const calcularMontos = (montoInput, monedaInput) => {
+  let monto_bs = 0, monto_usd_bcv = 0, monto_usd_paralelo = 0;
+  
+  if (monedaInput === 'bs') {
+    monto_bs = montoInput; 
+    monto_usd_bcv = rates.bcv > 0 ? montoInput / rates.bcv : 0; 
+    monto_usd_paralelo = rates.usdt > 0 ? montoInput / rates.usdt : 0;
+  } else if (monedaInput === 'usdt') {
+    monto_usd_paralelo = montoInput; 
+    monto_usd_bcv = montoInput; // El USDT suele ser la base 1:1 para el sistema
+    monto_bs = montoInput * rates.usdt;
+  } else if (monedaInput === 'cash') {
+    // EL CASH NO SE TOCA: Es valor nominal puro
+    monto_usd_paralelo = montoInput; 
+    monto_usd_bcv = montoInput; 
+    monto_bs = montoInput * rates.bcv; // Solo como referencia interna
+  }
+  return { monto_bs, monto_usd_bcv, monto_usd_paralelo };
+};
 
   const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.filter(tx => tx.categoria === `pote_${poteId}`).reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
 
@@ -1133,9 +1141,13 @@ function FinanzasDashboardContent({
               <label className={`text-[10px] uppercase ${theme.text} font-bold tracking-widest block mb-2`}>Ingresa el Monto</label>
               <div className="flex gap-3">
                 <input type="number" step="0.01" placeholder="0.00" value={calcMonto} onChange={(e) => setCalcMonto(e.target.value)} className="flex-1 bg-transparent text-3xl font-black text-white outline-none font-mono w-full" />
-                <select value={calcMoneda} onChange={(e) => setCalcMoneda(e.target.value)} className={`bg-[#1a0f2e] border ${theme.border} rounded-xl px-3 text-sm text-white font-bold outline-none`}>
-                  <option value="bs">BS</option><option value="usd">USD</option>
-                </select>
+                <select 
+  value={moneda} onChange={(e) => setMoneda(e.target.value)}
+  className="bg-[#121212] border border-[#333] rounded-xl px-3 text-sm text-white font-bold outline-none cursor-pointer">
+  <option value="cash">CASH</option>
+  <option value="bs">BS</option>
+  <option value="usdt">USDT</option>
+</select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1168,11 +1180,7 @@ function FinanzasDashboardContent({
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-6">
             <div className={`lg:col-span-5 bg-[#1a0f2e] border ${theme.border} p-4 rounded-3xl shadow-xl`}>
-              <TransactionDrawer>
-    <button type="button" className={`w-full font-black py-4 mb-6 rounded-2xl ${theme.primary} text-white text-sm shadow-[0_0_20px_rgba(0,0,0,0.3)] active:scale-95 transition-all flex items-center justify-center gap-2`}>
-      <Plus className="w-5 h-5" /> ABRIR NUEVO REGISTRO
-    </button>
-  </TransactionDrawer>
+              <h2 className={`text-base font-bold mb-4 flex items-center gap-2 text-white`}><Plus className={`w-4 h-4 ${theme.text}`} /> Movimiento de Emergencia</h2>
               <form onSubmit={handleEmergenciaSubmit} className="space-y-3">
                 <div className="flex gap-2">
                   <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={`flex-1 border rounded-xl p-2.5 text-xs font-black outline-none ${tipo === 'ingreso' ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/30 border-rose-500/50 text-rose-400'}`}>
@@ -1473,15 +1481,20 @@ function FinanzasDashboardContent({
               )
             })}
           </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mt-6">
-            <div className={`col-span-2 md:col-span-1 h-full`}>
-              <CardBalance title="Patrimonio Total" amount={patrimonioBrutoUSDT} rates={rates} border={theme.border} />
+<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mt-6">
+            {/* 1. PATRIMONIO DIGITAL (BS/USDT) */}
+            <div className="h-full">
+              <CardBalance title="Patrimonio (Digital)" amount={patrimonioBrutoUSDT} rates={rates} border={theme.border} />
             </div>
             
+            {/* 2. LIQUIDEZ POR USUARIO (DIGITAL) */}
             {espacioActivo?.tipo === 'individual' ? (
               <div className="h-full">
-                <CardBalance title="Liquidez Disponible" amount={getDisponiblePorUsuario((perfil?.nombre || (perfil?.nombre || (perfil?.nombre || (perfil?.nombre || (perfil?.nombre || (perfil?.nombre || (perfil?.nombre || session?.user?.email?.split('@')[0]))))))) || "Invitado")} rates={rates} border={theme.border} small />
+                <CardBalance 
+                  title="Liquidez (Digital)" 
+                  amount={getDisponiblePorUsuario((perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado")} 
+                  rates={rates} border={theme.border} small 
+                />
               </div>
             ) : (
               nombresParticipantes.map((u, i) => (
@@ -1490,6 +1503,16 @@ function FinanzasDashboardContent({
                 </div>
               ))
             )}
+
+            {/* 3. NUEVA TARJETA: EFECTIVO EN MANO (CASH NOMINAL) */}
+            <div className="h-full">
+              <CardBalanceCash 
+                title="Cash" 
+                transactions={transactions} 
+                border={theme.border} 
+                theme={theme}
+              />
+            </div>
           </div>
 
           {transaccionesDelMes.length > 0 && (
@@ -1534,122 +1557,29 @@ function FinanzasDashboardContent({
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-6">
-            <div className={`lg:col-span-5 bg-[#1a0f2e] border ${theme.border} p-4 rounded-3xl shadow-xl`}>
-              <h2 className={`text-base font-bold mb-4 flex items-center gap-2 text-white`}><Plus className={`w-4 h-4 ${theme.text}`} /> Nuevo Registro</h2>
-              <form onSubmit={handleManualSubmit} className="space-y-3">
-                
-                <div className="flex gap-2">
-                  <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={`flex-1 border rounded-xl p-2.5 text-xs font-black outline-none ${tipo === 'ingreso' ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/30 border-rose-500/50 text-rose-400'}`}>
-                    <option value="egreso">GASTO 💸</option><option value="ingreso">INGRESO 💰</option>
-                  </select>
-                  
-                  {espacioActivo?.tipo === 'individual' ? (
-                    <div className={`flex-1 bg-black/50 border ${theme.border} rounded-xl p-2.5 text-xs text-white/50 font-bold flex items-center cursor-not-allowed`}>
-                      👤 {(perfil?.nombre || (perfil?.nombre || (perfil?.nombre || (perfil?.nombre || (perfil?.nombre || (perfil?.nombre || (perfil?.nombre || session?.user?.email?.split('@')[0]))))))) || "Invitado"}
-                    </div>
-                  ) : (
-                    <div className="flex-1 flex gap-2">
-                      {isAddingPart ? (
-                        <div className="flex flex-col w-full gap-2">
-                          <div className="flex w-full">
-                            <input 
-                              type="text" 
-                              placeholder="Ej: Pedro" 
-                              value={nuevoPart} 
-                              onChange={e => setNuevoPart(e.target.value)} 
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  agregarParticipante();
-                                }
-                              }}
-                              className={`w-full bg-black/50 border ${theme.border} rounded-l-xl p-2.5 text-xs text-white outline-none focus:border-white/50`} 
-                            />
-                            <button type="button" onClick={agregarParticipante} className={`bg-emerald-500/20 text-emerald-400 px-3 rounded-r-xl border border-l-0 ${theme.border} hover:bg-emerald-500/40 transition-colors`}><Check className="w-4 h-4"/></button>
-                          </div>
-                          
-                          {/* 🛡️ LISTA PARA ELIMINAR PARTICIPANTES */}
-                          {participantes.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                              {participantes.map(p => (
-                                <span key={p.id} className="bg-black/40 border border-white/10 text-[9px] px-2 py-1 rounded-lg flex items-center gap-1.5 text-white/70">
-                                  {p.nombre} 
-                                  <X className="w-3 h-3 cursor-pointer text-rose-400 hover:text-rose-500" onClick={() => eliminarParticipante(p.id, p.nombre)} />
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          <button type="button" onClick={() => setIsAddingPart(false)} className="text-[9px] text-white/30 text-right uppercase tracking-widest hover:text-white/50 mt-1">Cerrar edición</button>
-                        </div>
-                      ) : (
-                        <>
-                          <select required value={usuario} onChange={(e) => setUsuario(e.target.value)} className={`w-full bg-black/50 border ${theme.border} rounded-xl p-2.5 text-xs text-white outline-none`}>
-                            <option value="">¿Quién pagó?</option>
-                            {nombresParticipantes.map(u => <option key={u} value={u}>{u}</option>)}
-                            {nombresParticipantes.length > 0 && <option value={espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos (Div)'}>{espacioActivo?.tipo === 'pote' ? 'Ambos (Mitad)' : 'Todos (División igual)'}</option>}
-                          </select>
-                          <button type="button" onClick={() => setIsAddingPart(true)} className={`bg-white/5 text-white/50 px-2 rounded-xl border ${theme.border} hover:text-white transition-colors`} title="Añadir Participante"><Plus className="w-4 h-4"/></button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex flex-col gap-2">
-                  <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className={`w-full bg-black/50 border ${theme.border} rounded-xl p-2.5 text-xs text-white outline-none`}>
-                    <optgroup label="Categorías Generales">
-                      {categoriasList.map(cat => <option key={cat.id || cat.valor} value={cat.valor}>{cat.label}</option>)}
-                    </optgroup>
-                    {potes.length > 0 && (
-                      <optgroup label="Mis Potes (Ahorro/Extracción)">
-                        {potes.map(p => <option key={`opt_${p.id}`} value={`pote_${p.id}`}>Pote: {p.nombre}</option>)}
-                      </optgroup>
-                    )}
-                  </select>
-                  <input type="text" required placeholder="Detalle (Ej: Almuerzo)" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={`w-full bg-black/50 border ${theme.border} rounded-xl p-2.5 text-xs text-white outline-none`} />
-                </div>
-
-                <div className="flex gap-2">
-                  <input type="number" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Monto" className={`flex-1 bg-black/50 border ${theme.border} rounded-xl p-2.5 text-xs text-white font-mono outline-none`} />
-                  <select value={moneda} onChange={(e) => setMoneda(e.target.value)} className={`w-20 bg-black/50 border ${theme.border} rounded-xl p-2.5 text-xs text-white outline-none`}>
-                    <option value="usd">USD</option><option value="bs">BS</option>
-                  </select>
-                </div>
-                
-                {monto && rates.bcv > 0 && (
-                  <div className="flex items-center justify-between bg-black/40 p-3 md:p-4 rounded-xl border border-white/5 w-full mb-2 text-center">
-                    {moneda === 'bs' ? (
-                      <>
-                        <div className="flex-1">
-                          <p className={`text-[9px] md:text-[10px] uppercase ${theme.text} font-bold mb-0.5 md:mb-1`}>Equiv. BCV</p>
-                          <p className="font-mono text-white font-bold text-sm md:text-lg">${(parseFloat(monto) / rates.bcv).toFixed(2)}</p>
-                        </div>
-                        <div className={`h-6 md:h-8 w-px bg-white/10 mx-2`}></div>
-                        <div className="flex-1">
-                          <p className={`text-[9px] md:text-[10px] uppercase ${theme.text} font-bold mb-0.5 md:mb-1`}>Equiv. Paralelo</p>
-                          <p className="font-mono text-white font-bold text-sm md:text-lg">${(parseFloat(monto) / rates.usdt).toFixed(2)}</p>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex-1">
-                          <p className={`text-[9px] md:text-[10px] uppercase ${theme.text} font-bold mb-0.5 md:mb-1`}>En Tasa BCV</p>
-                          <p className="font-mono text-white font-bold text-sm md:text-lg">Bs. {(parseFloat(monto) * rates.bcv).toFixed(2)}</p>
-                        </div>
-                        <div className={`h-6 md:h-8 w-px bg-white/10 mx-2`}></div>
-                        <div className="flex-1">
-                          <p className={`text-[9px] md:text-[10px] uppercase ${theme.text} font-bold mb-0.5 md:mb-1`}>En Paralelo</p>
-                          <p className="font-mono text-white font-bold text-sm md:text-lg">Bs. {(parseFloat(monto) * rates.usdt).toFixed(2)}</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                <button type="submit" className={`w-full font-black py-3 rounded-xl ${theme.primary} text-white text-xs shadow-lg active:scale-95 transition-transform`}>GUARDAR</button>
-              </form>
+            
+            {/* ESTA ES LA SECCIÓN QUE SE ARREGLÓ. EL DRAWER ESTÁ AQUÍ Y EL FORM VIEJO SE FUE */}
+            <div className={`lg:col-span-5 bg-[#1a0f2e] border ${theme.border} p-6 md:p-10 rounded-3xl shadow-xl flex flex-col justify-center items-center text-center min-h-[300px]`}>
+              
+              <TransactionDrawer
+                tipo={tipo} setTipo={setTipo}
+                categoria={categoria} setCategoria={setCategoria}
+                monto={monto} setMonto={setMonto}
+                moneda={moneda} setMoneda={setMoneda}
+                descripcion={descripcion} setDescripcion={setDescripcion}
+                rates={rates} theme={theme} onSubmit={handleManualSubmit}
+                espacioActivo={espacioActivo} participantes={participantes}
+                usuario={usuario} setUsuario={setUsuario}
+              >
+                <button type="button" className={`w-24 h-24 rounded-3xl flex items-center justify-center mb-6 border ${theme.border} bg-[#1a1a1a] hover:bg-black/60 shadow-[0_0_30px_rgba(168,85,247,0.2)] hover:scale-105 active:scale-95 transition-all cursor-pointer`}>
+                  <Plus className={`w-12 h-12 ${theme.text}`} />
+                </button>
+              </TransactionDrawer>
+              
+              <h2 className="text-xl font-black text-white mb-2">Registrar Movimiento</h2>
+              <p className="text-sm text-white/50 max-w-xs">Toca el botón superior para abrir el panel y registrar un ingreso o gasto.</p>
+              
             </div>
-
             <div className={`lg:col-span-7 bg-[#1a0f2e] border ${theme.border} rounded-3xl overflow-hidden shadow-xl`}>
               <div className={`p-3 border-b border-white/5 bg-black/20 flex flex-col gap-3`}>
                 <div className={`flex justify-between items-center text-xs font-bold uppercase text-white/70`}>
@@ -1887,7 +1817,7 @@ function FinanzasDashboardContent({
                  <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4"><Check className="w-10 h-10 text-emerald-400" /></div>
                  <h3 className="text-2xl font-black text-white mb-2">¡Pago Enviado!</h3>
                  <p className="text-emerald-200 text-sm mb-6">Estamos verificando tu pago. Te daremos acceso pro en los próximos minutos.</p>
-                 <button onClick={() => {setShowPaywall(false); setCheckoutPaso(1);}} className="w-full bg-white/10 text-white font-bold py-3 rounded-xl hover:bg-white/20 transition-all">Entendido</button>
+                 <button onClick={()=>{setShowPaywall(false); setCheckoutPaso(1);}} className="w-full bg-white/10 text-white font-bold py-3 rounded-xl hover:bg-white/20 transition-all">Entendido</button>
                </div>
             )}
           </div>
@@ -1972,6 +1902,21 @@ function CardBalance({ title, amount, icon, color, border, small = false, rates 
         <button onClick={() => setCurrency('bs')} className={`px-3 py-1.5 text-[9px] font-black rounded-lg transition-all ${currency === 'bs' ? 'bg-blue-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}>BS</button>
         <button onClick={() => setCurrency('usdt')} className={`px-3 py-1.5 text-[9px] font-black rounded-lg transition-all ${currency === 'usdt' ? 'bg-emerald-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}>USDT</button>
       </div>
+    </div>
+  );
+}
+
+function CardBalanceCash({ title, transactions, border }) {
+  // Filtramos solo las transacciones que fueron marcadas como 'cash'
+  const cashTotal = transactions
+    .filter(tx => tx.moneda_original === 'cash')
+    .reduce((acc, tx) => tx.tipo === "ingreso" ? acc + tx.monto_original : acc - tx.monto_original, 0);
+
+  return (
+    <div className={`bg-[#1a1a1a] border ${border} p-5 rounded-3xl shadow-xl`}>
+      <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-2">{title}</p>
+      <p className="text-3xl font-black text-white">${cashTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+      <p className="text-[10px] text-white/40 mt-1 font-bold">Monto Nominal Exacto</p>
     </div>
   );
 }

@@ -28,10 +28,6 @@ export const viewport = {
   maximumScale: 1, // Evita que la pantalla se haga zoom por error
 };
 
-// (Opcional pero recomendado para PWA) Define el color de la barra de estado del teléfono
-export const viewport: Viewport = {
-  themeColor: "#0d0714",
-};
 
 export default function RootLayout({
   children,
