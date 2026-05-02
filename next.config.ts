@@ -1,25 +1,17 @@
-const withPWA = require('next-pwa')({
-  dest: 'public',
-  disable: process.env.NODE_ENV === 'development',
+const withPWA = require("@ducanh2912/next-pwa").default({
+  dest: "public",
+  disable: process.env.NODE_ENV === "development",
   register: true,
+  setupExitHandlers: true,
   skipWaiting: true,
 });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false, // Desactivamos esto para aliviar el build
-  swcMinify: false, // 🛠️ PASO CLAVE: Desactivamos el minificador SWC que causa el WorkerError
-  typescript: { ignoreBuildErrors: true },
+  reactStrictMode: false,
+  swcMinify: false, // Seguimos con esto apagado para asegurar el build
   eslint: { ignoreDuringBuilds: true },
-  experimental: {
-    // Forzamos a que no use demasiados hilos de CPU
-    workerThreads: false,
-    cpus: 1
-  },
-  webpack: (config) => {
-    config.optimization.minimize = true;
-    return config;
-  },
+  typescript: { ignoreBuildErrors: true },
 };
 
 module.exports = withPWA(nextConfig);
