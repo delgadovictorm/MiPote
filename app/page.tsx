@@ -2,21 +2,25 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import { 
   Wallet, Users, ArrowRight, CheckCircle2, 
-  Sparkles, Zap, Star, ChevronDown, 
-  Bell, Plus, Target, Calculator
+  Sparkles, Star, ChevronDown, 
+  Bell, Plus, Target, Calculator, ArrowDownCircle, Lock
 } from "lucide-react";
 
 export default function LandingPage() {
+  const router = useRouter();
   const [faqOpen, setFaqOpen] = useState<number | null>(0);
   const [mensajeActual, setMensajeActual] = useState(0);
   const [verboActual, setVerboActual] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Estados para la Calculadora en la Landing
   const [rates, setRates] = useState({ bcv: 0, usdt: 0 });
-  const [calcMonto, setCalcMonto] = useState("");
-  const [calcMoneda, setCalcMoneda] = useState("usd");
+  const [calcUsd, setCalcUsd] = useState("");
+  const [calcBs, setCalcBs] = useState("");
 
   const verbosAnimados = ["ORGANIZA", "CUIDA", "ADMINISTRA", "ESTIRA"];
 
@@ -27,8 +31,23 @@ export default function LandingPage() {
     { tx: "egreso", texto: "Mosca con la tarjeta, que nos descuadramos. 💳" }
   ];
 
+  // 🚀 REDIRECCIÓN AUTOMÁTICA SI YA ESTÁ LOGUEADO
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.push('/dashboard');
+      } else {
+        setIsLoading(false);
+      }
+    };
+    checkSession();
+  }, [router]);
+
   // Carrusel para Mensajes y Verbos
   useEffect(() => {
+    if (isLoading) return;
+    
     const intervaloMensajes = setInterval(() => {
       setMensajeActual((prev) => (prev + 1) % mensajesMuestra.length);
     }, 3500);
@@ -41,9 +60,9 @@ export default function LandingPage() {
       clearInterval(intervaloMensajes);
       clearInterval(intervaloVerbos);
     };
-  }, []);
+  }, [isLoading, mensajesMuestra.length, verbosAnimados.length]);
 
-  // 🚀 CONEXIÓN API: Traer tasas reales para el mockup y la calculadora
+  // CONEXIÓN API: Traer tasas reales para el mockup y la calculadora
   useEffect(() => {
     const fetchTasa = async () => {
       try {
@@ -58,6 +77,21 @@ export default function LandingPage() {
     };
     fetchTasa();
   }, []);
+
+  // LOGICA BIDIRECCIONAL CALCULADORA
+  const handleCalcUsd = (val: string) => {
+    setCalcUsd(val);
+    const num = parseFloat(val) || 0;
+    setCalcBs((num * rates.usdt).toFixed(2));
+  };
+
+  const handleCalcBs = (val: string) => {
+    setCalcBs(val);
+    const num = parseFloat(val) || 0;
+    setCalcUsd(rates.usdt > 0 ? (num / rates.usdt).toFixed(2) : "0.00");
+  };
+
+  if (isLoading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div></div>;
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white font-sans selection:bg-purple-500/30 overflow-x-hidden relative">
@@ -88,24 +122,18 @@ export default function LandingPage() {
       {/* 🚀 HERO SECTION */}
       <section className="relative z-10 pt-48 pb-20 px-6">
         <div className="max-w-6xl mx-auto text-center flex flex-col items-center">
-          <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-5 py-2.5 rounded-full mb-8 backdrop-blur-md">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-500"></span>
-            </span>
-            <span className="text-xs font-black uppercase tracking-widest text-white/80">Lanzamiento Oficial: $2.99 / mes</span>
+          <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-5 py-2.5 rounded-full mb-8 backdrop-blur-md">
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-emerald-400">Durante nuestro periodo de desarrollo las funciones PRO serán gratis</span>
           </div>
           
-          {/* TÍTULO CON VERBO DINÁMICO (Ancho arreglado) Y DEGRADADO INVERTIDO */}
+          {/* TÍTULO CON VERBO DINÁMICO */}
           <h1 className="text-[2.5rem] md:text-7xl lg:text-[6.5rem] font-black italic uppercase tracking-tighter mb-8 leading-[1.1] text-white flex flex-col items-center">
             <span className="mb-2">El pana que te</span>
             <div className="flex flex-wrap justify-center items-center gap-x-3 md:gap-x-6 w-full">
               
-              {/* Contenedor Inteligente del verbo dinámico */}
               <div className="relative inline-flex justify-center items-center">
-                {/* 🛡️ TRUCO NINJA: La palabra más larga invisible para dar el ancho perfecto y evitar superposiciones */}
                 <span className="invisible py-2 pr-2">ADMINISTRA</span>
-                
                 {verbosAnimados.map((verbo, index) => (
                   <span
                     key={verbo}
@@ -126,12 +154,12 @@ export default function LandingPage() {
           </h1>
           
           <p className="text-lg md:text-xl text-white/60 max-w-3xl mx-auto mb-10 font-medium leading-relaxed">
-            Mi Pote no es una App aburrida de finanzad, es la app diseñada para la locura multimoneda de Venezuela. Organiza tu dinero, tus potes en pareja y las vacas con tus panas.
+            Mi Pote no es una App aburrida de finanzas, es la app diseñada para la locura multimoneda de Venezuela. Organiza tu dinero, tus potes en pareja y las vacas con tus panas.
           </p>
           
           <div className="flex flex-col md:flex-row items-center justify-center gap-6 mb-16">
             <div className="flex items-center gap-2 text-sm font-bold text-emerald-400"><CheckCircle2 size={18}/> Tasas BCV y Paralelo</div>
-            <div className="flex items-center gap-2 text-sm font-bold text-emerald-400"><CheckCircle2 size={18}/> Modo Individual Gratis</div>
+            <div className="flex items-center gap-2 text-sm font-bold text-emerald-400"><CheckCircle2 size={18}/> 100% Gratis en fase Beta</div>
           </div>
 
           <Link href="/dashboard" className="w-full md:w-auto bg-purple-600 hover:bg-purple-500 text-black px-12 py-5 rounded-full font-black text-lg uppercase italic shadow-[0_0_40px_rgba(147,51,234,0.4)] transition-all hover:scale-105 flex items-center justify-center gap-3">
@@ -151,25 +179,25 @@ export default function LandingPage() {
             <p className="text-white/50 text-lg mb-8">Visualiza tu dinero en dólares, bolívares y USDT al instante. Nosotros hacemos el arbitraje por ti.</p>
             
             <div className="space-y-4">
-              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex gap-4 items-start backdrop-blur-sm">
+              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex gap-4 items-start backdrop-blur-sm hover:bg-white/10 transition-colors">
+                <Wallet className="text-purple-400 shrink-0 mt-1" />
+                <div>
+                  <h4 className="font-black uppercase text-sm mb-1">Mi Billetera</h4>
+                  <p className="text-white/40 text-xs leading-relaxed">Tu espacio personal de control. Registra ingresos y gastos en cualquier moneda y observa cómo se actualiza tu patrimonio neto al instante.</p>
+                </div>
+              </div>
+              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex gap-4 items-start backdrop-blur-sm hover:bg-white/10 transition-colors">
+                <Target className="text-emerald-400 shrink-0 mt-1" />
+                <div>
+                  <h4 className="font-black uppercase text-sm mb-1">Mi Pote</h4>
+                  <p className="text-white/40 text-xs leading-relaxed">El espacio para metas compartidas. Ideal para parejas. Comparte un código y ambos podrán registrar aportes para "la nave", "el viaje" o los gastos de la casa.</p>
+                </div>
+              </div>
+              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex gap-4 items-start backdrop-blur-sm hover:bg-white/10 transition-colors opacity-60">
                 <Users className="text-amber-400 shrink-0 mt-1" />
                 <div>
-                  <h4 className="font-black uppercase text-sm mb-1">Cuentas claras conservan amistades</h4>
-                  <p className="text-white/40 text-xs leading-relaxed">Comparte cuentas con tu pareja o arma "Vacas" con tus panas. Todos ven los aportes y gastos en tiempo real.</p>
-                </div>
-              </div>
-              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex gap-4 items-start backdrop-blur-sm">
-                <Target className="text-fuchsia-400 shrink-0 mt-1" />
-                <div>
-                  <h4 className="font-black uppercase text-sm mb-1">Establece tus Metas (Potes)</h4>
-                  <p className="text-white/40 text-xs leading-relaxed">Ponte metas claras para cumplir lo que te propongas: la nave, el viaje, o la rumba. Nosotros te mostramos el progreso.</p>
-                </div>
-              </div>
-              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex gap-4 items-start backdrop-blur-sm">
-                <Wallet className="text-emerald-400 shrink-0 mt-1" />
-                <div>
-                  <h4 className="font-black uppercase text-sm mb-1">La Realidad Multimoneda</h4>
-                  <p className="text-white/40 text-xs leading-relaxed">Registra un gasto en bolívares y observa cómo se debita el equivalente exacto de tu patrimonio en dólares.</p>
+                  <h4 className="font-black uppercase text-sm mb-1">La Vaca (Próximamente)</h4>
+                  <p className="text-white/40 text-xs leading-relaxed">Reúne a todo el grupo. Divide la cuenta de la rumba o el viaje de fin de semana con múltiples amigos sin enredarte con quién pagó qué.</p>
                 </div>
               </div>
             </div>
@@ -204,11 +232,10 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <div className="bg-[#1a0f2e] border border-fuchsia-500/30 p-4 rounded-3xl mt-2 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 bg-amber-500 text-black px-2 py-1 text-[8px] font-black rounded-bl-xl">PRO</div>
-                  <p className="text-xs font-black text-white flex items-center gap-1"><Star size={12} className="text-fuchsia-400"/> El Viaje</p>
+                <div className="bg-[#1a0f2e] border border-emerald-500/30 p-4 rounded-3xl mt-2 relative overflow-hidden">
+                  <p className="text-xs font-black text-white flex items-center gap-1"><Star size={12} className="text-emerald-400"/> El Viaje</p>
                   <div className="flex justify-between mt-2 text-[10px]"><span className="text-white/50">Ahorrado:</span><span className="text-emerald-400 font-bold">85%</span></div>
-                  <div className="w-full bg-black/50 h-1.5 rounded-full mt-1"><div className="w-[85%] bg-fuchsia-500 h-full rounded-full"></div></div>
+                  <div className="w-full bg-black/50 h-1.5 rounded-full mt-1"><div className="w-[85%] bg-emerald-500 h-full rounded-full"></div></div>
                 </div>
 
                 {/* Falso Floating Btn */}
@@ -223,7 +250,7 @@ export default function LandingPage() {
                <div className="w-8 h-8 bg-emerald-500/20 rounded-full flex items-center justify-center"><CheckCircle2 className="text-emerald-400" size={16}/></div>
                <div>
                  <p className="text-[10px] text-white/50 uppercase font-bold">Tasa BCV</p>
-                 <p className="text-sm font-black text-white font-mono">
+                 <p className="text-sm font-black text-white font-sans tabular-nums tracking-tight">
                    Bs. {rates.bcv > 0 ? rates.bcv.toFixed(2) : "..."}
                  </p>
                </div>
@@ -255,27 +282,50 @@ export default function LandingPage() {
           </div>
 
           <div className="flex-1 w-full max-w-md">
-            <div className={`bg-[#1a0f2e] border border-blue-500/30 p-8 rounded-[2.5rem] shadow-[0_0_50px_rgba(59,130,246,0.15)] w-full mx-auto`}>
+            <div className={`bg-[#1a0f2e] border border-blue-500/30 p-8 rounded-[2rem] shadow-[0_0_50px_rgba(59,130,246,0.15)] w-full mx-auto`}>
               <h3 className="text-xl font-black text-white flex items-center justify-center gap-3 mb-8"><Calculator className={`w-6 h-6 text-blue-400`} /> Calculadora Libre</h3>
               <div className="space-y-6">
-                <div className={`bg-black/40 p-5 rounded-2xl border border-white/5`}>
-                  <label className={`text-[10px] uppercase text-blue-400 font-bold tracking-widest block mb-3`}>Ingresa el Monto a convertir</label>
-                  <div className="flex gap-4">
-                    <input suppressHydrationWarning type="number" step="0.01" placeholder="0.00" value={calcMonto} onChange={(e) => setCalcMonto(e.target.value)} className="flex-1 bg-transparent text-4xl font-black text-white outline-none font-mono w-full" />
-                    <select suppressHydrationWarning value={calcMoneda} onChange={(e) => setCalcMoneda(e.target.value)} className={`bg-[#1a0f2e] border border-white/10 rounded-xl px-4 text-sm text-white font-bold outline-none cursor-pointer`}>
-                      <option value="usd">USD</option>
-                      <option value="bs">BS</option>
-                    </select>
+                
+                <div className={`bg-black/40 p-5 rounded-3xl border border-white/5 shadow-inner`}>
+                  <label className={`text-[10px] uppercase text-white/50 font-bold tracking-widest block mb-2`}>Monto en Dólares ($)</label>
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-black text-white/30">$</span>
+                    <input 
+                      type="number" step="0.01" placeholder="0.00" 
+                      value={calcUsd} 
+                      onChange={(e) => handleCalcUsd(e.target.value)} 
+                      className="flex-1 bg-transparent text-4xl font-black text-white outline-none tabular-nums tracking-tight font-sans w-full" 
+                    />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className={`bg-black/30 p-5 rounded-2xl border border-white/5 text-center`}>
-                    <p className={`text-[10px] uppercase text-blue-400 font-bold mb-2`}>{calcMoneda === 'bs' ? 'Equivale a (BCV)' : 'Pagar a Tasa BCV'}</p>
-                    <p className="text-xl font-black text-white font-mono">{calcMoneda === 'bs' ? `$ ${(rates.bcv > 0 ? parseFloat(calcMonto||"0")/rates.bcv : 0).toFixed(2)}` : `Bs. ${(parseFloat(calcMonto||"0")*rates.bcv).toFixed(2)}`}</p>
+                
+                <div className="flex justify-center -my-3 relative z-10">
+                   <div className={`bg-[#1a0f2e] p-2 rounded-full border border-blue-500/30`}>
+                      <ArrowDownCircle className={`w-6 h-6 text-blue-400 opacity-50`} />
+                   </div>
+                </div>
+
+                <div className={`bg-black/40 p-5 rounded-3xl border border-white/5 shadow-inner`}>
+                  <label className={`text-[10px] uppercase text-white/50 font-bold tracking-widest block mb-2`}>Monto en Bolívares (Bs)</label>
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-black text-white/30">Bs.</span>
+                    <input 
+                      type="number" step="0.01" placeholder="0.00" 
+                      value={calcBs} 
+                      onChange={(e) => handleCalcBs(e.target.value)} 
+                      className="flex-1 bg-transparent text-4xl font-black text-white outline-none tabular-nums tracking-tight font-sans w-full" 
+                    />
                   </div>
-                  <div className={`bg-black/30 p-5 rounded-2xl border border-white/5 text-center`}>
-                    <p className={`text-[10px] uppercase text-blue-400 font-bold mb-2`}>{calcMoneda === 'bs' ? 'Equivale a (Paralelo)' : 'Pagar a Paralelo'}</p>
-                    <p className="text-xl font-black text-white font-mono">{calcMoneda === 'bs' ? `$ ${(rates.usdt > 0 ? parseFloat(calcMonto||"0")/rates.usdt : 0).toFixed(2)}` : `Bs. ${(parseFloat(calcMonto||"0")*rates.usdt).toFixed(2)}`}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
+                  <div className="text-center">
+                    <p className="text-[10px] uppercase text-white/30 font-bold mb-1">Tasa BCV</p>
+                    <p className="text-sm font-black text-white font-sans tabular-nums tracking-tight">Bs. {rates.bcv.toFixed(2)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] uppercase text-white/30 font-bold mb-1">Tasa Paralelo</p>
+                    <p className="text-sm font-black text-white font-sans tabular-nums tracking-tight">Bs. {rates.usdt.toFixed(2)}</p>
                   </div>
                 </div>
               </div>
@@ -284,7 +334,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 🗣️ MENSAJES VENEZOLANOS (Personalidad de la App) */}
+      {/* 🗣️ MENSAJES VENEZOLANOS */}
       <section className="py-20 px-6 relative z-10">
         <div className="max-w-5xl mx-auto text-center">
           <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter mb-4">Te cantamos las <span className="text-amber-400">verdades</span></h2>
@@ -318,13 +368,13 @@ export default function LandingPage() {
             {/* TIER GRATIS */}
             <div className="bg-[#151518] p-10 rounded-[3rem] border border-white/5 flex flex-col justify-between hover:bg-white/[0.02] transition-colors">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Modo Individual</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Modo Base</span>
                 <p className="text-5xl font-black italic mt-4 mb-8 text-white">GRATIS</p>
                 <ul className="space-y-4 mb-10">
-                  <li className="flex items-center gap-3 text-sm text-white/60"><Zap size={16} className="text-white/30"/> Control de Billetera Personal</li>
-                  <li className="flex items-center gap-3 text-sm text-white/60"><Zap size={16} className="text-white/30"/> Calculadora Multimoneda</li>
-                  <li className="flex items-center gap-3 text-sm text-white/60"><Zap size={16} className="text-white/30"/> Hasta 5 registros</li>
-                  <li className="flex items-center gap-3 text-sm text-white/60"><Zap size={16} className="text-white/30"/> Límites Mensuales (Base Cero)</li>
+                  <li className="flex items-center gap-3 text-sm text-white/60"><CheckCircle2 size={16} className="text-white/30"/> Control de Billetera Personal y en Pareja</li>
+                  <li className="flex items-center gap-3 text-sm text-white/60"><CheckCircle2 size={16} className="text-white/30"/> Sin límite de registros</li>
+                  <li className="flex items-center gap-3 text-sm text-white/60"><CheckCircle2 size={16} className="text-white/30"/> Calculadora Multimoneda</li>
+                  <li className="flex items-center gap-3 text-sm text-white/60"><CheckCircle2 size={16} className="text-white/30"/> Control Presupuestario Base Cero</li>
                 </ul>
               </div>
               <Link href="/dashboard" className="text-center py-4 rounded-2xl border border-white/10 font-bold uppercase tracking-widest text-xs hover:bg-white/5 transition-all text-white">
@@ -332,28 +382,27 @@ export default function LandingPage() {
               </Link>
             </div>
 
-            {/* TIER PRO */}
-            <div className="bg-[#1a0f2e] p-10 rounded-[3rem] border-2 border-purple-500 relative shadow-[0_0_50px_rgba(168,85,247,0.15)] flex flex-col justify-between transform md:-translate-y-4">
-              <div className="absolute -top-4 right-8 bg-purple-500 text-black text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-lg">
-                Oferta Lanzamiento
+            {/* TIER PRO BLURREADO */}
+            <div className="bg-[#1a0f2e] p-10 rounded-[3rem] border border-white/10 relative shadow-xl flex flex-col justify-between transform md:-translate-y-4 overflow-hidden">
+              
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-md z-10 flex flex-col items-center justify-center p-6 text-center">
+                <Lock className="w-12 h-12 text-white/30 mb-4" />
+                <h3 className="text-2xl font-black text-white italic uppercase tracking-widest mb-2">Próximamente</h3>
+                <p className="text-white/50 text-sm">Pronto liberaremos "La Vaca" para manejar grupos grandes y más funciones exclusivas.</p>
               </div>
-              <div>
+
+              <div className="opacity-30 blur-sm pointer-events-none">
                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-400">Modo Premium</span>
                 <div className="flex items-baseline gap-2 mt-4 mb-8">
                   <p className="text-5xl font-black italic text-white">$2.99</p>
-                  <p className="text-white/30 font-bold line-through text-lg">$4.99</p>
                   <p className="text-white/40 text-xs">/mes</p>
                 </div>
                 <ul className="space-y-4 mb-10">
                   <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-purple-400" size={16} /> Todo lo del plan Gratis</li>
-                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-purple-400" size={16} /> Espacio "Nuestro Pote" (Parejas)</li>
-                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-purple-400" size={16} /> Espacio "La Vaca" (Múltiples panas)</li>
-                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-purple-400" size={16} /> Pago móvil a Tasa BCV/Paralelo</li>
+                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-purple-400" size={16} /> Espacio "La Vaca" (Ilimitado)</li>
+                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-purple-400" size={16} /> Sincronización Avanzada</li>
                 </ul>
               </div>
-              <Link href="/dashboard" className="block text-center py-4 rounded-2xl bg-purple-600 text-black font-black uppercase tracking-widest text-xs shadow-lg hover:bg-purple-500 transition-all hover:scale-105">
-                Desbloquear PRO
-              </Link>
             </div>
 
           </div>
@@ -371,9 +420,9 @@ export default function LandingPage() {
           <div className="space-y-3">
             {[
               { q: "¿Qué es Mi Pote?", a: "Es una app financiera adaptada a Venezuela. Te permite registrar gastos en bolívares, pero visualizar tu patrimonio real en dólares usando las tasas BCV y Paralelo actualizadas. Además, te permite compartir cuentas con tu pareja o amigos." },
-              { q: "¿Cómo funcionan las Vacas y los Potes?", a: "Si te suscribes al plan PRO, puedes crear un espacio y darle un código a tu pareja o panas. Ellos ingresan el código gratis y pueden ver o registrar transacciones en el mismo tablero en tiempo real." },
+              { q: "¿Cómo funcionan los Potes compartidos?", a: "Es sencillo. Un usuario crea el Pote y la aplicación genera un código único de 6 dígitos. La otra persona simplemente ingresa ese código al registrarse y ¡listo!, ambos verán el mismo balance en tiempo real." },
               { q: "¿Se conecta directamente a mi cuenta bancaria?", a: "No. Por seguridad y privacidad, Mi Pote funciona como un registro manual (pero inteligente). Tú anotas lo que gastas y nosotros hacemos toda la matemática compleja por ti." },
-              { q: "¿El modo Gratis tiene límite de tiempo?", a: "No, el modo individual 'Mi Billetera' es 100% gratis de por vida. Solo pagas si necesitas las funciones colaborativas (Potes y Vacas) para incluir a otras personas." }
+              { q: "¿Es realmente gratis?", a: "Sí, durante nuestro periodo de Beta y desarrollo activo, todas las funciones de 'Mi Billetera' y 'Mi Pote' (para parejas) están abiertas al público sin costo." }
             ].map((faq, idx) => (
               <div key={idx} className={`border ${faqOpen === idx ? 'border-purple-500 bg-[#1a0f2e]' : 'border-white/5 bg-[#151518] hover:bg-white/5'} rounded-2xl transition-all overflow-hidden`}>
                 <button 

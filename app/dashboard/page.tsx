@@ -3,12 +3,210 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
-  ArrowDownCircle, ArrowUpCircle, Wallet, Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, Target, Home, CreditCard, StickyNote, Calculator, Lock, Mail, LogIn, UserPlus, Sparkles, ArrowLeft, Shield, Key, Copy, UploadCloud, Phone, QrCode, Menu, LogOut
+  ArrowDownCircle, ArrowUpCircle, Wallet, Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, Target, Home, CreditCard, Calculator, Lock, Mail, LogIn, UserPlus, Sparkles, ArrowLeft, Shield, Key, Copy, UploadCloud, Phone, Menu, LogOut, Globe, ChevronRight, Loader2,
+  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { TransactionDrawer } from "@/components/TransactionDrawer";
 import { Drawer } from "vaul";
 
+// ============================================================================
+// COMPONENTE DRAWER DE TRANSACCIONES (CORREGIDO)
+// ============================================================================
+export function TransactionDrawer({ 
+  children,
+  tipo, setTipo,
+  categoria, setCategoria,
+  monto, setMonto,
+  moneda, setMoneda,
+  descripcion, setDescripcion,
+  rates,
+  theme,
+  onSubmit,
+  espacioActivo,
+  participantes,
+  usuario, setUsuario
+}: any) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      const timer = setTimeout(() => {
+        setMonto("");
+        setDescripcion("");
+        setCategoria("");
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, setMonto, setDescripcion, setCategoria]);
+
+  const categories = {
+    ingreso: [
+      { id: "salario", label: "Sueldo", icon: <DollarSign size={18} /> },
+      { id: "inversiones", label: "Inversiones", icon: <TrendingUp size={18} /> },
+      { id: "ventas", label: "Ventas", icon: <ShoppingCart size={18} /> },
+      { id: "tigritos", label: "Tigritos", icon: <Rocket size={18} /> },
+      { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
+    ],
+    egreso: [
+      { id: "comida", label: "Comida", icon: <ShoppingCart size={18} /> },
+      { id: "cashea", label: "Cashea", icon: <DollarSign size={18} /> },
+      { id: "internet", label: "Internet", icon: <Wifi size={18} /> },
+      { id: "mascotas", label: "Mascotas", icon: <Dog size={18} /> },
+      { id: "condominio", label: "Condominio", icon: <Home size={18} /> },
+      { id: "regalos", label: "Regalos", icon: <Gift size={18} /> },
+      { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
+    ]
+  };
+
+  const handleLocalSubmit = (e: any) => {
+    const isValidDesc = tipo === 'ingreso' ? true : descripcion.trim() !== "";
+    const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
+    
+    if (monto && categoria && isValidDesc && isValidUser) {
+      onSubmit(e);
+      setIsOpen(false);
+    } else {
+      onSubmit(e); 
+    }
+  };
+
+  return (
+    <Drawer.Root open={isOpen} onOpenChange={setIsOpen}>
+      <Drawer.Trigger asChild>{children}</Drawer.Trigger>
+      <Drawer.Portal>
+        <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
+        <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[92vh] fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 shadow-2xl">
+          <Drawer.Title className="sr-only">Registrar Movimiento</Drawer.Title>
+          <div className="p-4 md:p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+            <div className="mx-auto w-12 h-1.5 rounded-full bg-white/10 mb-6" />
+            
+            <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6">
+              <button onClick={() => {setTipo("ingreso"); setCategoria("");}} className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40'}`}>INGRESO</button>
+              <button onClick={() => {setTipo("egreso"); setCategoria("");}} className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40'}`}>GASTO</button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-6">
+              {categories[tipo as keyof typeof categories].map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    setCategoria(cat.id);
+                    setDescripcion(cat.id === 'otro' ? '' : cat.label);
+                  }}
+                  className={`p-3 rounded-2xl border transition-all flex flex-col items-center gap-2 ${
+                    categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40'
+                  }`}
+                >
+                  {cat.icon}
+                  <span className="text-[10px] font-bold uppercase">{cat.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-4">
+              {espacioActivo?.tipo !== 'individual' && (
+                <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5">
+                  <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest">¿Quién realizó el movimiento?</label>
+                  <select 
+                    value={usuario} 
+                    onChange={(e) => setUsuario(e.target.value)}
+                    data-vaul-no-drag
+                    className="w-full bg-transparent text-white font-bold outline-none cursor-pointer appearance-none"
+                    required
+                  >
+                    <option value="" className="bg-[#1a1a1a]">Seleccionar integrante...</option>
+                    {participantes?.map((p: any) => <option key={p.id} value={p.nombre} className="bg-[#1a1a1a]">{p.nombre}</option>)}
+                    <option value="Ambos" className="bg-[#1a1a1a]">Ambos (Mitad y mitad)</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <label className="text-[9px] uppercase font-black text-white/30 block mb-1 tracking-widest">Monto</label>
+                    <input 
+                      type="number" step="0.01" placeholder="0.00"
+                      value={monto} onChange={(e) => setMonto(e.target.value)}
+                      data-vaul-no-drag
+                      className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums tracking-tight font-sans"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex bg-black/40 p-1 rounded-xl w-full border border-white/5 shadow-inner">
+                  <button type="button" onClick={() => setMoneda('usdt')} className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}>USDT</button>
+                  <button type="button" onClick={() => setMoneda('bs')} className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}>BS</button>
+                  <button type="button" onClick={() => setMoneda('cash')} className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}>CASH</button>
+                </div>
+
+                {monto && rates.bcv > 0 && moneda !== 'cash' && (
+                  <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 w-full text-center">
+                    {moneda === 'bs' ? (
+                      <>
+                        <div className="flex-1"><p className={`text-[9px] uppercase text-purple-400 font-bold mb-0.5`}>Equiv. BCV</p><p className="font-sans tabular-nums tracking-tight text-white font-bold text-sm">${(parseFloat(monto) / rates.bcv).toFixed(2)}</p></div>
+                        <div className={`h-6 w-px bg-white/10 mx-2`}></div>
+                        <div className="flex-1"><p className={`text-[9px] uppercase text-purple-400 font-bold mb-0.5`}>Equiv. Paralelo</p><p className="font-sans tabular-nums tracking-tight text-white font-bold text-sm">${(parseFloat(monto) / rates.usdt).toFixed(2)}</p></div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex-1"><p className={`text-[9px] uppercase text-purple-400 font-bold mb-0.5`}>En Tasa BCV</p><p className="font-sans tabular-nums tracking-tight text-white font-bold text-sm">Bs. {(parseFloat(monto) * rates.bcv).toFixed(2)}</p></div>
+                        <div className={`h-6 w-px bg-white/10 mx-2`}></div>
+                        <div className="flex-1"><p className={`text-[9px] uppercase text-purple-400 font-bold mb-0.5`}>En Paralelo</p><p className="font-sans tabular-nums tracking-tight text-white font-bold text-sm">Bs. {(parseFloat(monto) * rates.usdt).toFixed(2)}</p></div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {categoria === 'cashea' && (
+                <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-2xl animate-in zoom-in-95 min-h-[100px]">
+                  <p className="text-[10px] font-black text-purple-400 uppercase mb-3 text-center">¿En cuántas cuotas?</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[3, 6, 9].map(n => (
+                      <button 
+                        key={n} 
+                        type="button"
+                        onClick={() => (window as any).numCuotasCashea = n}
+                        className="py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-all focus:ring-2 ring-purple-400 tabular-nums"
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {tipo === 'egreso' && (
+                <div className="min-h-[64px]">
+                  <input 
+                    type="text" placeholder="¿En qué se fue la plata? (Ej: Pizza)"
+                    value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
+                    data-vaul-no-drag
+                    className="w-full bg-[#1a1a1a] border border-white/5 p-5 rounded-2xl text-sm font-bold text-white outline-none focus:border-purple-500 transition-all"
+                  />
+                </div>
+              )}
+            </div>
+
+            <button 
+              onClick={handleLocalSubmit}
+              className="w-full bg-purple-600 text-white font-black py-5 rounded-3xl mt-8 shadow-xl active:scale-95 transition-all text-sm uppercase tracking-widest"
+            >
+              Confirmar Registro
+            </button>
+          </div>
+        </Drawer.Content>
+      </Drawer.Portal>
+    </Drawer.Root>
+  );
+}
+
+function TrendingUp(props: any) { return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinelinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>; }
+
+// ============================================================================
+// APP PRINCIPAL
+// ============================================================================
 export default function MiPoteApp() {
   const [session, setSession] = useState<any>(null);
   const [perfil, setPerfil] = useState<any>(null); 
@@ -16,11 +214,12 @@ export default function MiPoteApp() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [currentView, setCurrentView] = useState('auth'); 
   
-  // ESTADOS DE AUTENTICACIÓN
+  // ESTADOS DE AUTENTICACIÓN DINÁMICA
+  const [authStage, setAuthStage] = useState<'welcome'|'login'|'reg1'|'reg2'|'loading'>('welcome');
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [telefono, setTelefono] = useState(""); 
-  const [isLoginView, setIsLoginView] = useState(true);
+  const [regNombre, setRegNombre] = useState("");
   const [authError, setAuthError] = useState("");
 
   const [espacios, setEspacios] = useState<any[]>([]);
@@ -95,9 +294,12 @@ export default function MiPoteApp() {
       }));
       setEspacios(espaciosCorregidos);
       
-      const individualSpace = espaciosCorregidos.find(e => e.tipo === 'individual');
-      if (individualSpace) setEspacioActivo(individualSpace);
-      else setEspacioActivo(espaciosCorregidos[0]);
+      const lastSpaceId = localStorage.getItem('mipote_last_space');
+      let spaceToSet = espaciosCorregidos.find(e => e.id === lastSpaceId);
+      if (!spaceToSet) spaceToSet = espaciosCorregidos.find(e => e.tipo === 'individual');
+      if (!spaceToSet) spaceToSet = espaciosCorregidos[0];
+      
+      setEspacioActivo(spaceToSet);
     } else {
       setEspacios([]);
     }
@@ -107,38 +309,48 @@ export default function MiPoteApp() {
 
   const generarCodigo = () => Math.random().toString(36).substring(2, 8).toUpperCase();
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleLoginUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
     setLoadingAuth(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { setAuthError(error.message); setLoadingAuth(false); }
+  };
 
-    if (isLoginView) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setAuthError(error.message);
-    } else {
-      if (!telefono) { setAuthError("El número de WhatsApp es obligatorio"); setLoadingAuth(false); return; }
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) setAuthError(error.message);
-      else if (data.user) {
-        await supabase.from('perfiles').insert([{ id: data.user.id, email: data.user.email, telefono: telefono, is_pro: false, estado_pago: 'gratis' }]);
-        const { data: newSpace } = await supabase.from('espacios').insert([{ nombre: 'Mi Billetera', tipo: 'individual', creador_id: data.user.id }]).select().single();
-        if (newSpace) await supabase.from('espacio_miembros').insert([{ espacio_id: newSpace.id, usuario_id: data.user.id, rol: 'admin' }]);
-        
-        alert("Cuenta creada exitosamente. Ya puedes iniciar sesión.");
-        setIsLoginView(true);
-      }
+  const handleRegisterUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    if (!telefono || !regNombre) { setAuthError("Completa todos los campos"); return; }
+    
+    setAuthStage('loading');
+    
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) { 
+      setAuthError(error.message); 
+      setAuthStage('reg2'); 
+      return; 
     }
-    setLoadingAuth(false);
+    
+    if (data.user) {
+      await supabase.from('perfiles').insert([{ id: data.user.id, email: data.user.email, telefono: telefono, nombre: regNombre, is_pro: false, estado_pago: 'gratis' }]);
+      const { data: newSpace } = await supabase.from('espacios').insert([{ nombre: 'Mi Billetera', tipo: 'individual', creador_id: data.user.id }]).select().single();
+      if (newSpace) await supabase.from('espacio_miembros').insert([{ espacio_id: newSpace.id, usuario_id: data.user.id, rol: 'admin' }]);
+      
+      setTimeout(() => {
+         setCurrentView('dashboard');
+      }, 2000);
+    }
   };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    localStorage.clear(); // Limpiamos todo rastro de invitado
+    localStorage.clear(); 
     setEspacioActivo(null); 
     setEspacios([]); 
     setIsGuest(false); 
     setIsPro(false); 
     setPerfil(null); 
+    setAuthStage('welcome');
     setCurrentView('auth');
   };
 
@@ -186,8 +398,7 @@ export default function MiPoteApp() {
   const unirseConCodigo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!joinCode.trim()) return;
-    if (!isPro) { setShowJoinModal(false); setShowPaywall(true); return; }
-
+    
     setLoadingAuth(true);
     const { data: spaceFound } = await supabase.from('espacios').select('*').eq('codigo_invitacion', joinCode.trim().toUpperCase()).single();
     
@@ -201,7 +412,7 @@ export default function MiPoteApp() {
         const { count } = await supabase.from('espacio_miembros').select('*', { count: 'exact', head: true }).eq('espacio_id', spaceFound.id);
         
         if (spaceFound.tipo === 'pote' && count !== null && count >= 2) {
-          alert("❌ Este Pote ya está lleno (Máximo 2 personas permitidas en modo pareja).");
+          alert("❌ Este Pote ya está lleno (Máximo 2 personas permitidas).");
           setLoadingAuth(false);
           return;
         }
@@ -211,6 +422,7 @@ export default function MiPoteApp() {
         
         setEspacios([...espacios, spaceFound]);
         setEspacioActivo(spaceFound);
+        localStorage.setItem('mipote_last_space', spaceFound.id);
         setShowJoinModal(false);
         setJoinCode("");
         setCurrentView('dashboard');
@@ -220,27 +432,25 @@ export default function MiPoteApp() {
     setLoadingAuth(false);
   };
 
-  const seleccionarModulo = async (tipoModulo: string) => {
+  const seleccionarModulo = async (tipoModulo: string, eId?: string) => {
     if (!session) {
       if (tipoModulo === 'individual') { setIsGuest(true); setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' }); setCurrentView('dashboard'); } 
       else { setShowPaywall(true); }
       return;
     }
 
-    let esCuentaPro = isPro;
-    const { data: perfilData } = await supabase.from('perfiles').select('is_pro').eq('id', session.user.id).single();
-    if (perfilData) {
-      esCuentaPro = perfilData.is_pro;
-      setIsPro(perfilData.is_pro);
+    if (tipoModulo === 'vaca') {
+       alert("El módulo 'La Vaca' es exclusivo y estará disponible próximamente.");
+       return;
     }
 
-    if (tipoModulo !== 'individual' && !esCuentaPro) { setShowPaywall(true); return; }
-
     setIsGuest(false);
-    let espacioEncontrado = espacios.find(e => e.tipo === tipoModulo);
+    
+    let espacioEncontrado = eId ? espacios.find(e => e.id === eId) : espacios.find(e => e.tipo === tipoModulo);
     
     if (espacioEncontrado) {
       setEspacioActivo(espacioEncontrado);
+      localStorage.setItem('mipote_last_space', espacioEncontrado.id);
       setCurrentView('dashboard');
     } else {
       const titulos: Record<string, string> = { 'individual': 'Mi Billetera', 'pote': 'Mi Pote', 'vaca': 'La Vaca' };
@@ -255,6 +465,7 @@ export default function MiPoteApp() {
         await supabase.from('espacio_miembros').insert([{ espacio_id: newSpace.id, usuario_id: session.user.id, rol: 'admin' }]);
         setEspacios([...espacios, newSpace]);
         setEspacioActivo(newSpace);
+        localStorage.setItem('mipote_last_space', newSpace.id);
         setCurrentView('dashboard');
       }
     }
@@ -262,54 +473,175 @@ export default function MiPoteApp() {
 
   if (loadingAuth) return ( <div className="min-h-screen bg-[#0d0714] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div></div> );
 
+  // ============================================================================
+  // NUEVO FLUJO DE AUTENTICACIÓN MULTI-PASO
+  // ============================================================================
   if (currentView === 'auth') {
-    return (
-      <div className="min-h-screen bg-[#0d0714] flex flex-col items-center justify-center p-4 relative">
-        <div className="w-full max-w-md bg-[#1a0f2e] border border-purple-500/30 p-8 rounded-[2rem] shadow-2xl">
-          <div className="flex flex-col items-center mb-8">
-            <img src="/pote.png" alt="Mi Pote" className="w-16 h-16 object-contain drop-shadow-[0_0_15px_rgba(251,191,36,0.6)] mb-4" />
-            <h1 className="text-2xl font-black text-white">{isLoginView ? 'Bienvenido de vuelta' : 'Crea tu cuenta'}</h1>
-          </div>
-          <form onSubmit={handleAuth} className="space-y-4">
-            {authError && <p className="text-rose-400 text-xs text-center bg-rose-500/10 p-2 rounded-lg border border-rose-500/20">{authError}</p>}
-            <div className="space-y-1">
-              <label className="text-[10px] text-purple-300 uppercase font-bold tracking-widest pl-1">Correo Electrónico</label>
-              <div className="relative">
-                <Mail className="w-5 h-5 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-purple-500/30 rounded-xl py-3 pl-10 pr-4 text-sm text-white outline-none focus:border-purple-400 transition-colors" required />
+    if (authStage === 'welcome') {
+      return (
+        <div className="min-h-screen bg-[#0d0714] flex flex-col relative overflow-hidden animate-in fade-in duration-500">
+           {/* Decoraciones de fondo */}
+           <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-purple-600/20 blur-[100px] rounded-full pointer-events-none" />
+           <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-emerald-600/10 blur-[100px] rounded-full pointer-events-none" />
+
+           <div className="flex-1 flex flex-col justify-end p-8 z-10 relative mb-10 max-w-md mx-auto w-full">
+              <div className="flex justify-center mb-10">
+                 <div className="relative">
+                    <div className="absolute inset-0 bg-fuchsia-500/30 blur-[40px] rounded-full animate-pulse"></div>
+                    <img src="/pote.png" alt="Mi Pote" className="w-40 h-40 object-contain relative z-10 drop-shadow-[0_0_35px_rgba(192,38,211,0.5)] hover:scale-105 transition-transform" />
+                 </div>
               </div>
-            </div>
-            {!isLoginView && (
-              <div className="space-y-1">
-                <label className="text-[10px] text-purple-300 uppercase font-bold tracking-widest pl-1">WhatsApp (Teléfono)</label>
-                <div className="relative">
-                  <Phone className="w-5 h-5 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="Ej: 04121234567" className="w-full bg-black/40 border border-purple-500/30 rounded-xl py-3 pl-10 pr-4 text-sm text-white outline-none focus:border-purple-400 transition-colors" required />
-                </div>
+              <h1 className="text-[40px] md:text-5xl font-black text-white tracking-tighter mb-4 leading-tight">
+                Domina <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">tus finanzas.</span>
+              </h1>
+              <p className="text-white/60 text-sm md:text-base mb-10 max-w-sm">
+                Cuentas claras conservan amistades (y parejas). Organiza, divide y ahorra sin estrés.
+              </p>
+              
+              <div className="space-y-4">
+                <button onClick={() => setAuthStage('reg1')} className="w-full bg-white text-black font-black py-4 rounded-2xl text-base shadow-[0_0_20px_rgba(255,255,255,0.2)] active:scale-95 transition-all">Comenzar ahora</button>
+                <button onClick={() => setAuthStage('login')} className="w-full bg-[#1a0f2e] border border-white/10 text-white font-bold py-4 rounded-2xl text-base hover:bg-white/5 active:scale-95 transition-all">Ya tengo cuenta</button>
               </div>
-            )}
-            <div className="space-y-1">
-              <label className="text-[10px] text-purple-300 uppercase font-bold tracking-widest pl-1">Contraseña</label>
-              <div className="relative">
-                <Lock className="w-5 h-5 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-purple-500/30 rounded-xl py-3 pl-10 pr-4 text-sm text-white outline-none focus:border-purple-400 transition-colors" required />
-              </div>
-            </div>
-            <button type="submit" className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3 rounded-xl shadow-lg active:scale-95 transition-all mt-4 flex items-center justify-center gap-2">
-              {isLoginView ? <><LogIn className="w-5 h-5"/> INICIAR SESIÓN</> : <><UserPlus className="w-5 h-5"/> REGISTRARME</>}
-            </button>
-            <button type="button" onClick={() => { setIsGuest(true); setCurrentView('dashboard'); setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' }); }} className="w-full bg-transparent border border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-400 font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-all mt-2 flex items-center justify-center gap-2 text-xs">
-              <Sparkles className="w-4 h-4"/> Entrar como Invitado
-            </button>
-          </form>
-          <div className="mt-6 text-center">
-            <button onClick={() => setIsLoginView(!isLoginView)} className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
-              {isLoginView ? "¿Nuevo aquí? Crea una cuenta gratis" : "¿Ya tienes cuenta? Inicia sesión"}
-            </button>
-          </div>
+              <button onClick={() => { setIsGuest(true); setCurrentView('dashboard'); setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' }); }} className="mt-8 text-emerald-400 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 mx-auto active:scale-95 transition-transform">
+                <Sparkles className="w-4 h-4"/> Entrar como Invitado
+              </button>
+           </div>
         </div>
-      </div>
-    );
+      );
+    }
+
+    if (authStage === 'login') {
+       return (
+        <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+           <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+              <button onClick={() => setAuthStage('welcome')} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white/50 hover:text-white mb-8 transition-colors"><ArrowLeft className="w-5 h-5"/></button>
+              <h2 className="text-3xl font-black text-white mb-2">Bienvenido de vuelta</h2>
+              <p className="text-white/50 text-sm mb-10">Ingresa tus datos para continuar</p>
+
+              <form onSubmit={handleLoginUser} className="space-y-5 flex-1">
+                {authError && <p className="text-rose-400 text-xs text-center bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">{authError}</p>}
+                <div>
+                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Correo Electrónico</label>
+                  <div className="relative">
+                    <Mail className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Contraseña</label>
+                  <div className="relative">
+                    <Lock className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                  </div>
+                </div>
+                <div className="pt-8">
+                  <button type="submit" className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                    Iniciar Sesión <ChevronRight className="w-4 h-4"/>
+                  </button>
+                </div>
+              </form>
+           </div>
+        </div>
+       );
+    }
+
+    if (authStage === 'reg1') {
+      return (
+       <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+          <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+             <div className="flex items-center justify-between mb-8">
+               <button onClick={() => setAuthStage('welcome')} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors"><ArrowLeft className="w-5 h-5"/></button>
+               <div className="flex gap-2">
+                  <div className="h-1.5 w-8 bg-purple-500 rounded-full"></div>
+                  <div className="h-1.5 w-8 bg-white/10 rounded-full"></div>
+               </div>
+               <div className="w-10"></div>
+             </div>
+             
+             <h2 className="text-3xl font-black text-white mb-2">Crea tu cuenta</h2>
+             <p className="text-white/50 text-sm mb-10">Ingresa tu correo y crea una contraseña segura</p>
+
+             <form onSubmit={(e) => { e.preventDefault(); setAuthStage('reg2'); }} className="space-y-5 flex-1">
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Correo Electrónico</label>
+                 <div className="relative">
+                   <Mail className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Contraseña</label>
+                 <div className="relative">
+                   <Lock className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div className="pt-8">
+                 <button type="submit" className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                   Siguiente <ChevronRight className="w-4 h-4"/>
+                 </button>
+               </div>
+             </form>
+          </div>
+       </div>
+      );
+   }
+
+   if (authStage === 'reg2') {
+      return (
+       <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+          <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+             <div className="flex items-center justify-between mb-8">
+               <button onClick={() => setAuthStage('reg1')} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors"><ArrowLeft className="w-5 h-5"/></button>
+               <div className="flex gap-2">
+                  <div className="h-1.5 w-8 bg-purple-500 rounded-full"></div>
+                  <div className="h-1.5 w-8 bg-purple-500 rounded-full"></div>
+               </div>
+               <div className="w-10"></div>
+             </div>
+             
+             <h2 className="text-3xl font-black text-white mb-2">Información personal</h2>
+             <p className="text-white/50 text-sm mb-10">¿Cómo quieres que te llamen en tus potes?</p>
+
+             <form onSubmit={handleRegisterUser} className="space-y-5 flex-1">
+               {authError && <p className="text-rose-400 text-xs text-center bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">{authError}</p>}
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Nombre o Apodo</label>
+                 <div className="relative">
+                   <UserPlus className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="text" placeholder="Ej: Víctor Delgado" value={regNombre} onChange={e => setRegNombre(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">WhatsApp (Teléfono)</label>
+                 <div className="relative">
+                   <Phone className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="tel" placeholder="Ej: 04121234567" value={telefono} onChange={e => setTelefono(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div className="pt-8">
+                 <button type="submit" className="w-full bg-emerald-500 text-black font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                   Finalizar Registro <Check className="w-4 h-4"/>
+                 </button>
+               </div>
+             </form>
+          </div>
+       </div>
+      );
+   }
+
+   if (authStage === 'loading') {
+      return (
+        <div className="min-h-screen bg-[#0d0714] flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+           <div className="relative mb-8">
+              <div className="absolute inset-0 bg-purple-500/30 blur-[30px] rounded-full animate-pulse"></div>
+              <img src="/pote.png" alt="Mi Pote" className="w-24 h-24 object-contain relative z-10 animate-bounce" />
+           </div>
+           <h2 className="text-2xl font-black text-white mb-2">Armando tu Pote...</h2>
+           <p className="text-white/50 text-sm flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Ya casi estamos listos</p>
+        </div>
+      );
+   }
   }
 
   if (currentView === 'calculadora-libre') {
@@ -317,7 +649,7 @@ export default function MiPoteApp() {
       <div className="min-h-screen bg-[#0d0714] p-4 flex flex-col items-center pt-10">
         <div className="w-full max-w-md relative">
           <button onClick={() => setCurrentView('dashboard')} className="absolute -top-10 left-0 text-purple-400 flex items-center gap-2 text-sm font-bold"><ArrowLeft className="w-4 h-4"/> Volver</button>
-          <FinanzasDashboardContent session={null} espacioActivo={null} onSelectModule={seleccionarModulo} handleLogout={handleLogout} openJoinModal={() => setShowJoinModal(true)} openProfileModal={() => setShowProfileModal(true)} isGuest={isGuest} perfil={perfil} forceTab="calculadora" onChangeView={setCurrentView} />
+          <FinanzasDashboardContent session={session} espacios={espacios} espacioActivo={espacioActivo} onSelectModule={seleccionarModulo} handleLogout={handleLogout} openJoinModal={() => setShowJoinModal(true)} openProfileModal={() => setShowProfileModal(true)} isGuest={isGuest} perfil={perfil} forceTab="calculadora" onChangeView={setCurrentView} />
         </div>
       </div>
     );
@@ -333,7 +665,7 @@ export default function MiPoteApp() {
             <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-500/20"><Key className="w-8 h-8 text-blue-400" /></div>
             <h3 className="text-xl font-black text-white mb-2">Unirse a un Espacio</h3>
             <p className="text-sm text-blue-300 mb-6">Ingresa el código de invitación que te compartió tu pareja o amigo.</p>
-            <input type="text" value={joinCode} onChange={(e)=>setJoinCode(e.target.value.toUpperCase())} placeholder="EJ: X7K9P2" className="w-full bg-black/50 border border-blue-500/30 rounded-xl p-4 text-center text-xl font-mono text-white mb-4 outline-none focus:border-blue-400 uppercase tracking-[0.3em]" required maxLength={6} />
+            <input type="text" value={joinCode} onChange={(e)=>setJoinCode(e.target.value.toUpperCase())} placeholder="EJ: X7K9P2" className="w-full bg-black/50 border border-blue-500/30 rounded-xl p-4 text-center text-xl font-bold text-white mb-4 outline-none focus:border-blue-400 uppercase tracking-widest tabular-nums font-sans" required maxLength={6} />
             <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3.5 rounded-xl shadow-lg transition-transform active:scale-95">VERIFICAR CÓDIGO</button>
           </form>
         </div>
@@ -353,7 +685,7 @@ export default function MiPoteApp() {
         </div>
       )}
 
-      {/* EL MODAL DEL PAYWALL ESTABA PERDIDO, AHORA ESTÁ DE REGRESO AQUÍ */}
+      {/* EL MODAL DEL PAYWALL */}
       {showPaywall && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in overflow-y-auto">
           <div className="bg-[#1a0f2e] border border-amber-500/50 p-6 md:p-8 rounded-[2.5rem] shadow-[0_0_50px_rgba(245,158,11,0.2)] max-w-md w-full text-center relative my-8">
@@ -443,28 +775,14 @@ export default function MiPoteApp() {
         <FinanzasDashboardContent 
           key={`${session?.user?.id || 'guest'}-${espacioActivo?.id || 'none'}`}
           session={session} 
+          espacios={espacios}
           espacioActivo={espacioActivo} 
           onSelectModule={seleccionarModulo}
           handleLogout={handleLogout}
-          openJoinModal={() => setShowJoinModal(true)}
           openProfileModal={() => { setEditNombre(perfil?.nombre || session?.user?.email?.split('@')[0]); setShowProfileModal(true); }}
           isGuest={isGuest}
           perfil={perfil}
           onTriggerPaywall={() => setShowPaywall(true)}
-          showPaywall={showPaywall}
-          setShowPaywall={setShowPaywall}
-          checkoutPaso={checkoutPaso}
-          setCheckoutPaso={setCheckoutPaso}
-          metodoPago={metodoPago}
-          setMetodoPago={setMetodoPago}
-          referencia={referencia}
-          setReferencia={setReferencia}
-          archivo={archivo}
-          setArchivo={setArchivo}
-          enviandoPago={enviandoPago}
-          tasaCheckout={tasaCheckout}
-          procesarPagoPRO={procesarPagoPRO}
-          goAuth={() => {setShowPaywall(false); setCurrentView('auth'); setIsLoginView(false);}}
           onChangeView={setCurrentView}
         />
       </div>
@@ -476,10 +794,7 @@ export default function MiPoteApp() {
 // DASHBOARD PRINCIPAL - NÚCLEO DINÁMICO
 // ============================================================================
 function FinanzasDashboardContent({ 
-  session, espacioActivo, onSelectModule, handleLogout, openJoinModal, openProfileModal, isGuest = false, perfil, onTriggerPaywall, 
-  showPaywall, setShowPaywall, checkoutPaso, setCheckoutPaso, metodoPago, 
-  setMetodoPago, referencia, setReferencia, archivo, setArchivo, enviandoPago, 
-  tasaCheckout, procesarPagoPRO, forceTab, goAuth, onChangeView
+  session, espacios, espacioActivo, onSelectModule, handleLogout, openProfileModal, isGuest = false, perfil, onTriggerPaywall, forceTab, onChangeView
 }: any) {
   const getTheme = (tipo: string) => {
     switch(tipo) {
@@ -494,17 +809,10 @@ function FinanzasDashboardContent({
   const [isMenuOpen, setIsMenuOpen] = useState(false); 
   const [activeWallet, setActiveWallet] = useState<'usdt'|'bs'|'cash'>('usdt'); 
   const [filtroHistorial, setFiltroHistorial] = useState("Todos");
-  const [showQRModal, setShowQRModal] = useState(false);
-
-  // Estados de los nuevos Drawers Táctiles
-  const [isAddingEmergencia, setIsAddingEmergencia] = useState(false);
-  const [isEditingBudget, setIsEditingBudget] = useState(false);
-  const [isAddingCashea, setIsAddingCashea] = useState(false);
 
   const [rates, setRates] = useState({ bcv: 0, usdt: 0 });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [cuotasCashea, setCuotasCashea] = useState<any[]>([]);
-  const [recordatorios, setRecordatorios] = useState<any[]>([]);
   const [presupuestos, setPresupuestos] = useState<any[]>([]);
   const [potes, setPotes] = useState<any[]>([]);
   const [participantes, setParticipantes] = useState<any[]>([]);
@@ -516,13 +824,20 @@ function FinanzasDashboardContent({
   
   const [poteForm, setPoteForm] = useState({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" });
   
-  const [isAddingPart, setIsAddingPart] = useState(false);
   const [nuevoPart, setNuevoPart] = useState("");
+  const [joinCodeInput, setJoinCodeInput] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [mesActual, setMesActual] = useState(() => new Date().toISOString().slice(0, 7));
 
+  // Modales
+  const [isAddingEmergencia, setIsAddingEmergencia] = useState(false);
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
+  const [isAddingCashea, setIsAddingCashea] = useState(false);
+  const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
+
+  // CATEGORIAS SIN FREELANCE
   const DEFAULT_CATEGORIES = [
     { valor: "salario", label: "Ingreso / Salario 💰" },
     { valor: "comida", label: "Comida 🍔" },
@@ -534,15 +849,15 @@ function FinanzasDashboardContent({
   const [categoriasList, setCategoriasList] = useState<any[]>(DEFAULT_CATEGORIES);
 
   const [casheaForm, setCasheaForm] = useState({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" });
-  const [nuevoRecordatorio, setNuevoRecordatorio] = useState("");
   const [budgetForm, setBudgetForm] = useState({ categoria: "", monto_limite: "" });
 
   const [showToast, setShowToast] = useState(false);
   const [mensajeMotivacional, setMensajeMotivacional] = useState("");
   const [toastType, setToastType] = useState("ingreso");
 
-  const [calcMonto, setCalcMonto] = useState("");
-  const [calcMoneda, setCalcMoneda] = useState("usd");
+  // CALCULADORA ESTADOS BIDIRECCIONALES
+  const [calcUsd, setCalcUsd] = useState("");
+  const [calcBs, setCalcBs] = useState("");
 
   const [monto, setMonto] = useState("");
   const [moneda, setMoneda] = useState("usd");
@@ -621,7 +936,6 @@ function FinanzasDashboardContent({
         "Ajustando las cuentas del desastre. 📊"
       ];
     } else {
-      // MENSAJES VENEZOLANIZADOS PARA BILLETERA INDIVIDUAL
       return tipoTx === 'ingreso' ? [
         "¡Cayó la quincena, papá! 🤑", 
         "¡Coronamos! Platica pa' la cuenta. 💰", 
@@ -670,24 +984,28 @@ function FinanzasDashboardContent({
     setTimeout(() => setShowToast(false), 4500);
   };
 
-  const fetchData = useCallback(async () => {
-    setTransactions([]); setCuotasCashea([]); setRecordatorios([]); setPresupuestos([]); setPotes([]); setParticipantes([]);
+  const fetchRates = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/rates");
+      const data = await res.json();
+      if (data.success) {
+        setRates({ bcv: data.bcv, usdt: data.usdt });
+      }
+    } catch (error) {
+      console.error("Error al traer tasas:", error);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
-    if (!espacioActivo && !forceTab) return;
+  const fetchData = useCallback(async () => {
+    setTransactions([]); setCuotasCashea([]); setPresupuestos([]); setPotes([]); setParticipantes([]);
+
+    if (!espacioActivo) return;
     setLoading(true);
     
     try {
-      // Si estamos en la calculadora libre, NO verificamos PRO
-      if (forceTab !== 'calculadora' && !isGuest && espacioActivo?.tipo !== 'individual') {
-         const { data: checkPro } = await supabase.from('perfiles').select('is_pro').eq('id', session?.user?.id).single();
-         if (!checkPro?.is_pro) {
-             alert("Tu acceso PRO ha expirado o fue revocado por el administrador.");
-             handleLogout?.(); 
-             onTriggerPaywall?.(); 
-             return;
-         }
-      }
-
       if (isGuest) {
         setTransactions(JSON.parse(localStorage.getItem('mipote_guest_tx') || '[]'));
         setPotes(JSON.parse(localStorage.getItem('mipote_guest_potes') || '[]'));
@@ -708,9 +1026,6 @@ function FinanzasDashboardContent({
           setCategoriasList(uniqueCats);
         }
 
-        const { data: recData } = await supabase.from("recordatorios").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: false });
-        if (recData) setRecordatorios(recData);
-
         const { data: presData } = await supabase.from("presupuestos").select("*").eq("espacio_id", espacioActivo.id);
         if (presData) setPresupuestos(presData);
 
@@ -718,34 +1033,52 @@ function FinanzasDashboardContent({
         if (metasData) setPotes(metasData);
       }
     } catch (err) {
-      console.error("Error:", err);
+      console.error("Error fetch:", err);
     } finally {
       setLoading(false);
     }
-  }, [espacioActivo, isGuest, forceTab, session?.user?.id, handleLogout, onTriggerPaywall]);
+  }, [espacioActivo, isGuest]);
 
-  const fetchRates = async () => {
-    setSyncing(true);
-    try {
-      const res = await fetch("/api/rates");
-      const data = await res.json();
-      if (data.success) setRates({ bcv: data.bcv, usdt: data.usdt });
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setSyncing(false);
+  useEffect(() => { 
+    fetchRates(); 
+    fetchData(); 
+  }, [fetchData]);
+
+  // Actualizador de calculadora
+  useEffect(() => {
+    let interval: any;
+    if (activeTab === 'calculadora' || forceTab === 'calculadora') {
+      fetchRates();
+      interval = setInterval(fetchRates, 10000); 
     }
-  };
-
-  useEffect(() => { fetchRates(); fetchData(); }, [fetchData]);
+    return () => clearInterval(interval);
+  }, [activeTab, forceTab]);
 
   useEffect(() => {
     if (espacioActivo?.tipo === 'individual') {
       setUsuario((perfil?.nombre || session?.user?.email?.split('@')[0]) || "Tú");
-    } else {
-      setUsuario(""); 
     }
   }, [espacioActivo, session]);
+
+  const unirseConCodigoInterno = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinCodeInput.trim()) return;
+    
+    const { data: spaceFound } = await supabase.from('espacios').select('*').eq('codigo_invitacion', joinCodeInput.trim().toUpperCase()).single();
+    if (!spaceFound) { alert("❌ Código inválido."); return; }
+    
+    const yaEsMiembro = espacios?.find((e:any) => e.id === spaceFound.id);
+    if (yaEsMiembro) { alert("Ya eres miembro de este espacio."); return; }
+
+    const { count } = await supabase.from('espacio_miembros').select('*', { count: 'exact', head: true }).eq('espacio_id', spaceFound.id);
+    if (spaceFound.tipo === 'pote' && count !== null && count >= 2) { alert("❌ Este Pote ya está lleno."); return; }
+
+    await supabase.from('espacio_miembros').insert([{ espacio_id: spaceFound.id, usuario_id: session.user.id, rol: 'miembro' }]);
+    await supabase.from('participantes').insert([{ nombre: (perfil?.nombre || session.user.email.split('@')[0]), espacio_id: spaceFound.id }]);
+    
+    alert("✅ ¡Te has unido exitosamente!");
+    window.location.reload();
+  };
 
   const nombresParticipantes = participantes.map(p => p.nombre);
   const filterOptions = ["Todos", ...nombresParticipantes];
@@ -817,8 +1150,15 @@ function FinanzasDashboardContent({
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!descripcion.trim() || !usuario.trim()) { alert("Completa el detalle y quién pagó."); return; }
-    if (!verificarLimiteInvitado()) return;
+    
+    // Validación ajustada para no exigir descripción si es ingreso
+    const isValidDesc = tipo === 'ingreso' ? true : descripcion.trim() !== "";
+    const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
+
+    if (!isValidDesc || !isValidUser || !monto || !categoria) { 
+      alert("Falta información. Verifica el monto, la categoría, el detalle y quién pagó."); 
+      return; 
+    }
 
     if (categoria === 'cashea') {
       const montoTotal = parseFloat(monto);
@@ -833,7 +1173,7 @@ function FinanzasDashboardContent({
           articulo: descripcion,
           monto_cuota: montoCuota,
           fecha_pago: format(addDays(new Date(), i * 14), 'yyyy-MM-dd'),
-          usuario: usuario,
+          usuario: usuario || "Tú",
           espacio_id: espacioActivo.id,
           pagado: false
         });
@@ -843,7 +1183,7 @@ function FinanzasDashboardContent({
       
       if (error) alert("🚨 Error Cashea: " + error.message);
       else {
-        setMonto(""); setDescripcion(""); fetchData();
+        fetchData();
         triggerToast("egreso", `¡Brutal! Programadas ${nCuotas} cuotas de $${montoCuota.toFixed(2)}`);
       }
       return; 
@@ -868,39 +1208,42 @@ function FinanzasDashboardContent({
        }
     } else {
        let labelCategoria = categoriasList.find(c => c.valor === categoria)?.label || categoria;
-       descFinal = `${labelCategoria} - ${descripcion}`;
+       // Si es ingreso y no hay desc, usar la categoria como detalle
+       descFinal = tipo === 'ingreso' && !descripcion ? labelCategoria : `${labelCategoria} - ${descripcion}`;
     }
 
     if (isGuest) {
-      const newTx = { id: Date.now().toString(), descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario, tipo, created_at: new Date().toISOString() };
+      const newTx = { id: Date.now().toString(), descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario: usuario || "Tú", tipo, created_at: new Date().toISOString() };
       const updatedTx = [newTx, ...transactions];
       setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
-      setMonto(""); setDescripcion(""); triggerToast(tipo, msjAlertaEspecial || undefined);
+      triggerToast(tipo, msjAlertaEspecial || undefined);
     } else {
       const { error } = await supabase.from("transacciones_saas").insert([{
-        descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario, tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id
+        descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario: usuario || "Tú", tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id
       }]);
       if (error) alert("🚨 Error: " + error.message);
-      else { setMonto(""); setDescripcion(""); fetchData(); triggerToast(tipo, msjAlertaEspecial || undefined); }
+      else { fetchData(); triggerToast(tipo, msjAlertaEspecial || undefined); }
     }
   };
 
   const handleEmergenciaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!descripcion.trim() || !usuario.trim()) { alert("Completa el detalle y quién aportó/retiró."); return; }
-    if (!verificarLimiteInvitado()) return;
+    if (!descripcion.trim() || (!usuario.trim() && espacioActivo?.tipo !== 'individual')) { 
+      alert("Completa el detalle y quién aportó/retiró."); 
+      return; 
+    }
 
     const valorMonto = parseFloat(monto);
     const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
     
     if (isGuest) {
-      const newTx = { id: Date.now().toString(), descripcion: `Emergencia - ${descripcion}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'emergencia', usuario, tipo, created_at: new Date().toISOString() };
+      const newTx = { id: Date.now().toString(), descripcion: `Emergencia - ${descripcion}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'emergencia', usuario: usuario || "Tú", tipo, created_at: new Date().toISOString() };
       const updatedTx = [newTx, ...transactions];
       setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
       setMonto(""); setDescripcion(""); triggerToast(tipo);
     } else {
       const { error } = await supabase.from("transacciones_saas").insert([{
-        descripcion: `Emergencia - ${descripcion}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'emergencia', usuario, tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id
+        descripcion: `Emergencia - ${descripcion}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'emergencia', usuario: usuario || "Tú", tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id
       }]);
       if (error) alert("🚨 Error: " + error.message);
       else { setMonto(""); setDescripcion(""); fetchData(); triggerToast(tipo); }
@@ -952,20 +1295,10 @@ function FinanzasDashboardContent({
     await supabase.from("presupuestos").delete().eq("id", id); fetchData();
   };
 
-  const agregarRecordatorio = async (e: React.FormEvent) => { 
-    e.preventDefault(); if(!verificarLimiteInvitado()) return;
-    if (!nuevoRecordatorio.trim()) return;
-    await supabase.from("recordatorios").insert([{ texto: nuevoRecordatorio, usuario: (perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado", espacio_id: espacioActivo.id }]);
-    setNuevoRecordatorio(""); fetchData();
-  };
-  
-  const eliminarRecordatorio = async (id: string) => { await supabase.from("recordatorios").delete().eq("id", id); fetchData(); };
-  const toggleRecordatorio = async (id: string, estado: boolean) => { await supabase.from("recordatorios").update({ completado: !estado }).eq("id", id); fetchData(); };
-
   const agregarCashea = async (e: React.FormEvent) => { 
     e.preventDefault(); if(!verificarLimiteInvitado()) return; 
     if (!casheaForm.articulo || !casheaForm.monto_cuota || !casheaForm.fecha_pago) return;
-    await supabase.from("cashea").insert([{ articulo: casheaForm.articulo, monto_cuota: parseFloat(casheaForm.monto_cuota), fecha_pago: casheaForm.fecha_pago, usuario: casheaForm.usuario, espacio_id: espacioActivo.id }]);
+    await supabase.from("cashea").insert([{ articulo: casheaForm.articulo, monto_cuota: parseFloat(casheaForm.monto_cuota), fecha_pago: casheaForm.fecha_pago, usuario: casheaForm.usuario || "Tú", espacio_id: espacioActivo.id }]);
     setIsAddingCashea(false); setCasheaForm({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" }); fetchData();
   };
 
@@ -1006,6 +1339,16 @@ function FinanzasDashboardContent({
     return { bs, usdt, cash };
   };
 
+  const getPatrimonioNeto = () => {
+     const saldos = getSaldosAislados('ALL');
+     const bsEnDolaresParalelo = rates.usdt > 0 ? saldos.bs / rates.usdt : 0;
+     const bsEnDolaresBCV = rates.bcv > 0 ? saldos.bs / rates.bcv : 0;
+     return {
+        paralelo: saldos.usdt + saldos.cash + bsEnDolaresParalelo,
+        bcv: saldos.usdt + saldos.cash + bsEnDolaresBCV
+     };
+  };
+
   const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
   const transaccionesFiltradas = transaccionesDelMes.filter(tx => filtroHistorial === "Todos" || tx.usuario === filtroHistorial);
 
@@ -1028,7 +1371,7 @@ function FinanzasDashboardContent({
         <div className="bg-[#1a0f2e] border border-purple-500/30 p-3 rounded-xl shadow-xl">
           <p className="text-white font-bold text-xs mb-1">{payload[0].name || payload[0].payload.name}</p>
           {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-xs font-mono" style={{ color: entry.color }}>{entry.dataKey}: ${entry.value.toFixed(2)} USDT</p>
+            <p key={index} className="text-xs font-sans tabular-nums tracking-tight" style={{ color: entry.color }}>{entry.dataKey}: ${entry.value.toFixed(2)} USDT</p>
           ))}
         </div>
       );
@@ -1036,35 +1379,76 @@ function FinanzasDashboardContent({
     return null;
   };
 
+  // LOGICA BIDIRECCIONAL CALCULADORA
+  const handleCalcUsd = (val: string) => {
+    setCalcUsd(val);
+    const num = parseFloat(val) || 0;
+    setCalcBs((num * rates.usdt).toFixed(2));
+  };
+
+  const handleCalcBs = (val: string) => {
+    setCalcBs(val);
+    const num = parseFloat(val) || 0;
+    setCalcUsd(rates.usdt > 0 ? (num / rates.usdt).toFixed(2) : "0.00");
+  };
+
   const renderTabContent = () => {
     if (activeTab === 'calculadora' || forceTab === 'calculadora') {
       return (
-        <div className={`bg-[#1a0f2e] border ${theme.border} p-6 rounded-[2rem] shadow-xl w-full max-w-md mx-auto mt-6 md:mt-10`}>
-          <h2 className="text-xl font-black text-white flex items-center justify-center gap-3 mb-6"><Calculator className={`w-6 h-6 ${theme.text}`} /> Calculadora Libre</h2>
+        <div className={`bg-[#1a0f2e] border ${theme.border} p-6 rounded-[2rem] shadow-xl w-full max-w-md mx-auto mt-6 md:mt-10 animate-in zoom-in-95`}>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-black text-white flex items-center gap-3"><Calculator className={`w-6 h-6 ${theme.text}`} /> Calculadora </h2>
+            <button onClick={fetchRates} className={`${theme.lightBg} ${theme.text} p-2 rounded-xl active:scale-95`}><RefreshCw size={16} className={syncing ? 'animate-spin' : ''}/></button>
+          </div>
           <div className="space-y-6">
-            <div className={`bg-black/40 p-4 rounded-2xl border ${theme.border}`}>
-              <label className={`text-[10px] uppercase ${theme.text} font-bold tracking-widest block mb-2`}>Ingresa el Monto</label>
-              <div className="flex gap-3">
-                <input type="number" step="0.01" placeholder="0.00" value={calcMonto} onChange={(e) => setCalcMonto(e.target.value)} className="flex-1 bg-transparent text-3xl font-black text-white outline-none font-mono w-full" />
-                <select 
-                  value={moneda} onChange={(e) => setMoneda(e.target.value)}
-                  className="bg-[#121212] border border-[#333] rounded-xl px-3 text-sm text-white font-bold outline-none cursor-pointer">
-                  <option value="cash">CASH</option>
-                  <option value="bs">BS</option>
-                  <option value="usdt">USDT</option>
-                </select>
+            <div className={`bg-black/40 p-5 rounded-3xl border border-white/5 shadow-inner`}>
+              <label className={`text-[10px] uppercase text-white/50 font-bold tracking-widest block mb-2`}>Monto en Dólares ($)</label>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-black text-white/30">$</span>
+                <input 
+                  type="number" step="0.01" placeholder="0.00" 
+                  value={calcUsd} 
+                  onChange={(e) => handleCalcUsd(e.target.value)} 
+                  className="flex-1 bg-transparent text-4xl font-black text-white outline-none tabular-nums tracking-tight font-sans w-full" 
+                />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className={`${theme.darkBg} p-4 rounded-2xl border border-white/5 text-center`}>
-                <p className={`text-[10px] uppercase ${theme.text} font-bold mb-1`}>{calcMoneda === 'bs' ? 'Equivale a (BCV)' : 'Pagar a Tasa BCV'}</p>
-                <p className="text-xl font-black text-white font-mono">{calcMoneda === 'bs' ? `$ ${(rates.bcv > 0 ? parseFloat(calcMonto||"0")/rates.bcv : 0).toFixed(2)}` : `Bs. ${(parseFloat(calcMonto||"0")*rates.bcv).toFixed(2)}`}</p>
-              </div>
-              <div className={`${theme.darkBg} p-4 rounded-2xl border border-white/5 text-center`}>
-                <p className={`text-[10px] uppercase ${theme.text} font-bold mb-1`}>{calcMoneda === 'bs' ? 'Equivale a (Paralelo)' : 'Pagar a Paralelo'}</p>
-                <p className="text-xl font-black text-white font-mono">{calcMoneda === 'bs' ? `$ ${(rates.usdt > 0 ? parseFloat(calcMonto||"0")/rates.usdt : 0).toFixed(2)}` : `Bs. ${(parseFloat(calcMonto||"0")*rates.usdt).toFixed(2)}`}</p>
+            
+            <div className="flex justify-center -my-3 relative z-10">
+               <div className={`bg-[#1a0f2e] p-2 rounded-full border ${theme.border}`}>
+                  <ArrowDownCircle className={`w-6 h-6 ${theme.text} opacity-50`} />
+               </div>
+            </div>
+
+            <div className={`bg-black/40 p-5 rounded-3xl border border-white/5 shadow-inner`}>
+              <label className={`text-[10px] uppercase text-white/50 font-bold tracking-widest block mb-2`}>Monto en Bolívares (Bs)</label>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-black text-white/30">Bs.</span>
+                <input 
+                  type="number" step="0.01" placeholder="0.00" 
+                  value={calcBs} 
+                  onChange={(e) => handleCalcBs(e.target.value)} 
+                  className="flex-1 bg-transparent text-4xl font-black text-white outline-none tabular-nums tracking-tight font-sans w-full" 
+                />
               </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
+              <div className="text-center">
+                <p className="text-[10px] uppercase text-white/30 font-bold mb-1">Tasa BCV</p>
+                <p className="text-sm font-black text-white font-sans tabular-nums tracking-tight">Bs. {rates.bcv.toFixed(2)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] uppercase text-white/30 font-bold mb-1">Tasa Paralelo</p>
+                <p className="text-sm font-black text-white font-sans tabular-nums tracking-tight">Bs. {rates.usdt.toFixed(2)}</p>
+              </div>
+            </div>
+            
+            {forceTab === 'calculadora' && (
+              <button onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 mt-4">
+                <ArrowLeft className="w-4 h-4"/> Volver al Inicio
+              </button>
+            )}
           </div>
         </div>
       );
@@ -1079,7 +1463,7 @@ function FinanzasDashboardContent({
           <div className={`relative overflow-hidden bg-gradient-to-br ${theme.card} to-[#1a0f2e] border ${theme.border} p-6 md:p-8 rounded-3xl shadow-xl flex flex-col items-center text-center mt-6`}>
             <Shield className={`w-12 h-12 ${theme.text} mb-4`} />
             <p className="text-xs font-bold text-white/70 uppercase tracking-widest mb-2">Fondo "Por Si Acaso" 🚨</p>
-            <p className="text-4xl font-black text-white">$<AnimatedNum value={fondoEmergencia} format="usd" /></p>
+            <p className="text-4xl font-black text-white font-sans tabular-nums tracking-tight">$<AnimatedNum value={fondoEmergencia} format="usd" /></p>
             <p className="text-xs text-white/50 mt-4 max-w-md">Esta es tu red de seguridad. Este dinero se suma a tu patrimonio total, pero no aparece en tu liquidez diaria para evitar que lo gastes.</p>
           </div>
 
@@ -1089,29 +1473,27 @@ function FinanzasDashboardContent({
              </button>
           </div>
 
-          {/* DRAWER PARA EMERGENCIAS */}
           <Drawer.Root open={isAddingEmergencia} onOpenChange={setIsAddingEmergencia}>
             <Drawer.Portal>
               <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[24px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#3b82f6]">
+              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[70vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#3b82f6]">
                 <Drawer.Title className="sr-only">Registrar Emergencia</Drawer.Title>
-                <Drawer.Description className="sr-only">Añadir o retirar del fondo de emergencia</Drawer.Description>
-                <div className="p-6 bg-[#121212] rounded-t-[24px] flex-1 overflow-y-auto">
+                <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
                   <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
                   <h3 className="text-xl font-black text-white mb-6 text-center">Fondo de Emergencia</h3>
                   
                   <form onSubmit={handleEmergenciaSubmit} className="flex flex-col gap-4">
                     <div className="flex gap-2">
-                      <select value={tipo} onChange={(e) => setTipo(e.target.value)} data-vaul-no-drag className={`flex-1 border rounded-xl p-3 text-sm font-black outline-none cursor-pointer ${tipo === 'ingreso' ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/30 border-rose-500/50 text-rose-400'}`}>
-                        <option value="ingreso">AGREGAR FONDO 💰</option><option value="egreso">RETIRO/EMERGENCIA 💸</option>
+                      <select value={tipo} onChange={(e) => setTipo(e.target.value)} data-vaul-no-drag className={`flex-1 border rounded-xl p-4 text-sm font-black outline-none cursor-pointer ${tipo === 'ingreso' ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/30 border-rose-500/50 text-rose-400'}`}>
+                        <option value="ingreso">AGREGAR FONDO 💰</option><option value="egreso">RETIRO 💸</option>
                       </select>
                       
                       {espacioActivo?.tipo === 'individual' ? (
-                        <div className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-3 text-sm text-white/50 font-bold flex items-center cursor-not-allowed`}>
+                        <div className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white/50 font-bold flex items-center cursor-not-allowed`}>
                           👤 {(perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado"}
                         </div>
                       ) : (
-                        <select required value={usuario} onChange={(e) => setUsuario(e.target.value)} data-vaul-no-drag className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-3 text-sm text-white outline-none cursor-pointer`}>
+                        <select required value={usuario} onChange={(e) => setUsuario(e.target.value)} data-vaul-no-drag className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white outline-none cursor-pointer appearance-none`}>
                           <option value="">¿Quién aporta?</option>
                           {nombresParticipantes.map(u => <option key={u} value={u}>{u}</option>)}
                           {nombresParticipantes.length > 0 && <option value={espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos (Div)'}>{espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos'}</option>}
@@ -1119,34 +1501,16 @@ function FinanzasDashboardContent({
                       )}
                     </div>
                     
-                    <input type="text" required placeholder="Detalle (Ej: Reparación carro)" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white outline-none focus:border-[#3b82f6]`} />
+                    <input type="text" required placeholder="Detalle (Ej: Reparación carro)" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-5 text-sm font-bold text-white outline-none focus:border-[#3b82f6]`} />
 
-                    <div className="flex gap-2">
-                      <input type="number" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Monto" data-vaul-no-drag className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-2xl font-black text-white font-mono outline-none focus:border-[#3b82f6]`} />
-                      <select value={moneda} onChange={(e) => setMoneda(e.target.value)} data-vaul-no-drag className={`w-24 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white outline-none cursor-pointer`}>
+                    <div className="flex gap-2 min-h-[80px]">
+                      <input type="number" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Monto" data-vaul-no-drag className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-[#3b82f6]`} />
+                      <select value={moneda} onChange={(e) => setMoneda(e.target.value)} data-vaul-no-drag className={`w-24 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none`}>
                         <option value="usd">USD</option><option value="bs">BS</option>
                       </select>
                     </div>
                     
-                    {monto && rates.bcv > 0 && (
-                      <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 w-full mb-2 text-center">
-                        {moneda === 'bs' ? (
-                          <>
-                            <div className="flex-1"><p className={`text-[9px] uppercase ${theme.text} font-bold mb-0.5`}>Equiv. BCV</p><p className="font-mono text-white font-bold text-sm">${(parseFloat(monto) / rates.bcv).toFixed(2)}</p></div>
-                            <div className={`h-6 w-px bg-white/10 mx-2`}></div>
-                            <div className="flex-1"><p className={`text-[9px] uppercase ${theme.text} font-bold mb-0.5`}>Equiv. Paralelo</p><p className="font-mono text-white font-bold text-sm">${(parseFloat(monto) / rates.usdt).toFixed(2)}</p></div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="flex-1"><p className={`text-[9px] uppercase ${theme.text} font-bold mb-0.5`}>En Tasa BCV</p><p className="font-mono text-white font-bold text-sm">Bs. {(parseFloat(monto) * rates.bcv).toFixed(2)}</p></div>
-                            <div className={`h-6 w-px bg-white/10 mx-2`}></div>
-                            <div className="flex-1"><p className={`text-[9px] uppercase ${theme.text} font-bold mb-0.5`}>En Paralelo</p><p className="font-mono text-white font-bold text-sm">Bs. {(parseFloat(monto) * rates.usdt).toFixed(2)}</p></div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                    
-                    <button type="submit" className={`w-full font-black py-4 mt-4 rounded-xl ${theme.primary} text-white text-sm shadow-lg active:scale-95 transition-transform`}>GUARDAR REGISTRO</button>
+                    <button type="submit" className={`w-full font-black py-5 mt-4 rounded-3xl ${theme.primary} text-white text-sm shadow-xl active:scale-95 transition-transform tracking-widest uppercase`}>GUARDAR REGISTRO</button>
                   </form>
                 </div>
               </Drawer.Content>
@@ -1173,7 +1537,7 @@ function FinanzasDashboardContent({
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <div className="text-right">
-                      <p className={`text-sm font-black ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>$<AnimatedNum value={tx.monto_usd_paralelo || 0} format="usd" /></p>
+                      <p className={`text-sm font-black font-sans tabular-nums tracking-tight ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>$<AnimatedNum value={tx.monto_usd_paralelo || 0} format="usd" /></p>
                     </div>
                     <button onClick={() => eliminarTransaccion(tx.id)} className="p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-rose-500"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
@@ -1225,40 +1589,37 @@ function FinanzasDashboardContent({
             </div>
           )}
 
-          {/* PRESUPUESTO (TOPES MENSUALES) */}
           <div className={`bg-[#1a0f2e] border ${theme.border} p-4 md:p-6 rounded-3xl shadow-xl`}>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2">
-                <Target className="w-4 h-4 text-rose-400"/> Control Presupuestario (Base Cero)
+                <Target className="w-4 h-4 text-rose-400"/> Control Presupuestario
               </h3>
               <button onClick={() => setIsEditingBudget(true)} className={`flex items-center gap-1 ${theme.lightBg} ${theme.text} px-3 py-1.5 rounded-lg text-[10px] font-black transition-colors`}>
                 <Plus className="w-3 h-3" /> Nuevo Tope
               </button>
             </div>
 
-            {/* DRAWER DE NUEVO PRESUPUESTO */}
             <Drawer.Root open={isEditingBudget} onOpenChange={setIsEditingBudget}>
               <Drawer.Portal>
                 <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[24px] h-[50vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-rose-500">
-                  <Drawer.Title className="sr-only">Nuevo Límite de Presupuesto</Drawer.Title>
-                  <Drawer.Description className="sr-only">Fijar un tope máximo para una categoría</Drawer.Description>
-                  <div className="p-6 bg-[#121212] rounded-t-[24px] flex-1 overflow-y-auto">
+                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-rose-500">
+                  <Drawer.Title className="sr-only">Nuevo Límite</Drawer.Title>
+                  <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
                     <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
                     <h3 className="text-xl font-black text-white mb-6 text-center">Fijar Límite Mensual</h3>
                     <form onSubmit={guardarPresupuesto} className="flex flex-col gap-4">
                       <div>
                         <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Categoría a limitar</label>
-                        <select value={budgetForm.categoria} onChange={e => setBudgetForm({...budgetForm, categoria: e.target.value})} data-vaul-no-drag className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white outline-none cursor-pointer focus:border-rose-500" required>
+                        <select value={budgetForm.categoria} onChange={e => setBudgetForm({...budgetForm, categoria: e.target.value})} data-vaul-no-drag className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-rose-500" required>
                           <option value="" className="bg-[#1a0f2e]">Selecciona Categoría...</option>
                           {categoriasList.map(c => <option key={c.id || c.valor} value={c.valor} className="bg-[#1a0f2e]">{c.label}</option>)}
                         </select>
                       </div>
-                      <div>
+                      <div className="min-h-[80px]">
                         <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Máximo ($)</label>
-                        <input type="number" step="0.01" placeholder="0.00" value={budgetForm.monto_limite} onChange={e => setBudgetForm({...budgetForm, monto_limite: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-2xl font-black text-white font-mono outline-none focus:border-rose-500`} required />
+                        <input type="number" step="0.01" placeholder="0.00" value={budgetForm.monto_limite} onChange={e => setBudgetForm({...budgetForm, monto_limite: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-rose-500`} required />
                       </div>
-                      <button type="submit" className="w-full bg-rose-500 text-black font-black py-4 rounded-xl text-sm shadow-[0_0_20px_rgba(244,63,94,0.3)] mt-4 active:scale-95 transition-transform">Guardar Límite</button>
+                      <button type="submit" className="w-full bg-rose-500 text-black font-black py-5 rounded-3xl uppercase tracking-widest text-sm shadow-[0_0_20px_rgba(244,63,94,0.3)] mt-6 active:scale-95 transition-transform">Guardar Límite</button>
                     </form>
                   </div>
                 </Drawer.Content>
@@ -1276,7 +1637,7 @@ function FinanzasDashboardContent({
                         {p.catLabel} 
                         <button onClick={() => eliminarPresupuesto(p.id)} className="text-rose-500/0 group-hover:text-rose-500/50 hover:text-rose-500 transition-colors"><Trash2 className="w-3 h-3 md:w-3.5 md:h-3.5" /></button>
                       </span>
-                      <span className="font-mono">
+                      <span className="font-sans tabular-nums tracking-tight">
                         <span className={p.isOver ? 'text-rose-400 font-black' : ''}>$<AnimatedNum value={p.gastoActual} /></span> 
                         <span className="text-white/50"> / ${p.monto_limite}</span>
                       </span>
@@ -1291,47 +1652,44 @@ function FinanzasDashboardContent({
             </div>
           </div>
 
-          {/* CASHEA (OBLIGACIONES) */}
           <div className={`bg-[#1a0f2e] border ${theme.border} p-4 md:p-5 rounded-3xl`}>
             <div className="flex justify-between items-center mb-3 md:mb-4">
               <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2"><Calendar className={`w-3.5 h-3.5 md:w-4 md:h-4 ${theme.text}`}/> Cashea</h3>
               <button onClick={() => setIsAddingCashea(true)} className={`flex items-center gap-1 ${theme.lightBg} ${theme.text} px-3 py-1.5 rounded-lg text-[10px] font-black transition-colors`}><Plus className="w-3 h-3"/> Nuevo Pago</button>
             </div>
 
-            {/* DRAWER PARA NUEVO CASHEA */}
             <Drawer.Root open={isAddingCashea} onOpenChange={setIsAddingCashea}>
               <Drawer.Portal>
                 <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[24px] h-[75vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-purple-500">
+                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[80vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-purple-500">
                   <Drawer.Title className="sr-only">Registrar Cuota Cashea</Drawer.Title>
-                  <Drawer.Description className="sr-only">Registrar un nuevo pago o obligación a futuro</Drawer.Description>
-                  <div className="p-6 bg-[#121212] rounded-t-[24px] flex-1 overflow-y-auto">
+                  <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
                     <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
                     <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Cuota Cashea</h3>
                     
                     <form onSubmit={agregarCashea} className="flex flex-col gap-4">
                       <div>
                         <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿Qué compraste?</label>
-                        <input type="text" placeholder="Ej: Zapatos Nike" value={casheaForm.articulo} onChange={e => setCasheaForm({...casheaForm, articulo: e.target.value})} data-vaul-no-drag className="w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-sm text-white outline-none focus:border-purple-500" required />
+                        <input type="text" placeholder="Ej: Zapatos Nike" value={casheaForm.articulo} onChange={e => setCasheaForm({...casheaForm, articulo: e.target.value})} data-vaul-no-drag className="w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-sm font-bold text-white outline-none focus:border-purple-500" required />
                       </div>
-                      <div className="flex gap-4 items-start">
+                      <div className="flex gap-4 items-start min-h-[80px]">
                         <div className="w-1/2">
                           <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Cuota ($)</label>
-                          <input type="number" step="0.01" placeholder="0.00" value={casheaForm.monto_cuota} onChange={e => setCasheaForm({...casheaForm, monto_cuota: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-2xl text-white font-mono font-black outline-none focus:border-purple-500`} required />
+                          <input type="number" step="0.01" placeholder="0.00" value={casheaForm.monto_cuota} onChange={e => setCasheaForm({...casheaForm, monto_cuota: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-2xl text-white font-sans tabular-nums tracking-tight font-black outline-none focus:border-purple-500`} required />
                         </div>
                         <div className="w-1/2">
                           <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Fecha de Pago</label>
-                          <input type="date" value={casheaForm.fecha_pago} onChange={e => setCasheaForm({...casheaForm, fecha_pago: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-sm text-white outline-none focus:border-purple-500 h-[64px]`} required />
+                          <input type="date" value={casheaForm.fecha_pago} onChange={e => setCasheaForm({...casheaForm, fecha_pago: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-sm font-bold text-white outline-none focus:border-purple-500 h-[64px]`} required />
                         </div>
                       </div>
                       <div>
                         <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Responsable</label>
-                        <select required value={casheaForm.usuario} onChange={e => setCasheaForm({...casheaForm, usuario: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white outline-none cursor-pointer focus:border-purple-500`}>
+                        <select required value={casheaForm.usuario} onChange={e => setCasheaForm({...casheaForm, usuario: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-purple-500`}>
                           <option value="">¿Quién debe pagar?</option>
                           {espacioActivo?.tipo === 'individual' ? <option value={(perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado"}>Tú</option> : nombresParticipantes.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                       </div>
-                      <button type="submit" className={`w-full bg-purple-600 text-white font-black py-4 rounded-xl text-sm shadow-[0_0_20px_rgba(168,85,247,0.3)] mt-4 active:scale-95 transition-transform`}>Guardar Cuota</button>
+                      <button type="submit" className={`w-full bg-purple-600 text-white font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(168,85,247,0.3)] mt-6 active:scale-95 transition-transform`}>Guardar Cuota</button>
                     </form>
                   </div>
                 </Drawer.Content>
@@ -1343,7 +1701,7 @@ function FinanzasDashboardContent({
                 <p className="text-[10px] md:text-xs text-white/50 italic px-2">No hay cuotas pendientes.</p>
               ) : cuotasCashea.map(cuota => (
                 <div key={cuota.id} className={`group flex items-center justify-between p-3 md:p-4 rounded-2xl border ${cuota.pagado ? 'bg-emerald-900/20 border-emerald-500/30' : `bg-black/40 ${theme.border}`}`}>
-                  <div className="flex items-center gap-3 cursor-pointer" onClick={() => toggleCashea(cuota)}>
+                  <div className="flex items-center gap-2.5 md:gap-3 cursor-pointer" onClick={() => toggleCashea(cuota)}>
                     {cuota.pagado ? <CheckSquare className="text-emerald-400 w-5 h-5"/> : <Square className={`${theme.text} w-5 h-5`}/>}
                     <div>
                       <p className="text-xs md:text-sm font-bold text-white">
@@ -1353,8 +1711,8 @@ function FinanzasDashboardContent({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`font-mono font-black ${cuota.pagado ? 'text-emerald-400/50' : 'text-rose-400'}`}>${cuota.monto_cuota}</span>
-                    <button onClick={async (e) => { e.stopPropagation(); if(confirm("¿Eliminar esta cuota de Cashea?")) { await supabase.from('cashea').delete().eq('id', cuota.id); fetchData(); } }} className="p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-white/30 hover:text-rose-500 transition-colors">
+                    <span className={`font-sans tabular-nums tracking-tight font-black ${cuota.pagado ? 'text-emerald-400/50' : 'text-rose-400'}`}>${cuota.monto_cuota}</span>
+                    <button onClick={async (e) => { e.stopPropagation(); if(confirm("¿Eliminar esta cuota de Cashea?")) { await supabase.from('cashea').delete().eq('id', cuota.id); fetchData(); } }} className="p-2 md:p-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-white/30 hover:text-rose-500 transition-colors">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -1363,7 +1721,6 @@ function FinanzasDashboardContent({
             </div>
           </div>
 
-          {/* HISTORIAL DEL MES EN PRESUPUESTO */}
           <div className="mt-6">
             <div className={`bg-[#1a0f2e] border ${theme.border} rounded-3xl overflow-hidden shadow-xl`}>
               <div className={`p-3 border-b border-white/5 bg-black/20 flex flex-col gap-3`}>
@@ -1402,11 +1759,11 @@ function FinanzasDashboardContent({
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <div className="text-right">
-                        <p className={`text-sm font-black ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          $<AnimatedNum value={tx.monto_usd_paralelo || 0} />
+                        <p className={`text-sm font-black font-sans tabular-nums tracking-tight ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          $<AnimatedNum value={tx.monto_usd_paralelo || 0} format="usd" />
                         </p>
                         {tx.moneda_original === 'bs' && (
-                          <p className="text-[9px] text-white/30 font-mono">Bs. {(tx.monto_original || 0).toFixed(2)}</p>
+                          <p className="text-[9px] text-white/30 font-sans tabular-nums font-medium">Bs. {(tx.monto_original || 0).toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                         )}
                       </div>
                       <button onClick={() => eliminarTransaccion(tx.id)} className="p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-rose-500"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -1420,68 +1777,46 @@ function FinanzasDashboardContent({
       );
     }
 
-    if (activeTab === 'avisos') {
-      return (
-        <div className={`bg-[#1a0f2e] border ${theme.border} p-6 rounded-[2rem] shadow-xl mt-6`}>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-black text-white flex items-center gap-3">
-               <Bell className={`w-6 h-6 ${theme.text} animate-bounce`} /> Recordatorios
-            </h2>
-          </div>
-          
-          <form onSubmit={agregarRecordatorio} className="flex gap-3 mb-6">
-            <input 
-              type="text" placeholder="Escribe un aviso..." value={nuevoRecordatorio} onChange={(e) => setNuevoRecordatorio(e.target.value)}
-              className={`flex-1 bg-black/40 border ${theme.border} rounded-2xl px-5 py-4 text-sm text-white outline-none`}
-            />
-            <button type="submit" className={`${theme.primary} hover:bg-opacity-80 text-white px-6 rounded-2xl transition-colors font-bold flex items-center gap-2`}>
-              <Send className="w-5 h-5" /> Enviar
-            </button>
-          </form>
-
-          <div className="space-y-3">
-            {recordatorios.length === 0 ? (
-              <p className="text-sm text-white/50 italic text-center py-10">No hay avisos pendientes</p>
-            ) : (
-              recordatorios.map(rec => (
-                <div key={rec.id} className={`flex items-center justify-between p-4 rounded-2xl border ${rec.completado ? 'bg-emerald-900/10 border-emerald-500/20 opacity-50' : `bg-black/30 ${theme.border}`}`}>
-                  <div className="flex items-center gap-4 cursor-pointer flex-1" onClick={() => toggleRecordatorio(rec.id, rec.completado)}>
-                    {rec.completado ? <CheckSquare className="w-6 h-6 text-emerald-400" /> : <Square className={`w-6 h-6 ${theme.text}`} />}
-                    <div>
-                      <p className={`text-base ${rec.completado ? 'line-through text-emerald-200' : 'text-white font-bold'}`}>{rec.texto}</p>
-                      <p className={`text-[10px] ${theme.text} uppercase mt-1`}>Enviado por {rec.usuario} • {new Date(rec.created_at).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                  <button onClick={() => eliminarRecordatorio(rec.id)} className="text-rose-400/50 hover:text-rose-400 p-2">
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      );
-    }
-
     if (activeTab === 'inicio') {
       const nombreUsuario = (perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado";
-      const saldoPrincipal = getSaldosAislados('ALL');
+      const saldoPrincipal = getSaldosAislados(nombreUsuario); 
+      const patrimonioTotal = getPatrimonioNeto();
 
       return (
         <div className="space-y-6">
           
-          {/* 1. TARJETA PRINCIPAL (TU BALANCE) */}
-          <div className="mt-2 mb-6">
-            <div className={`bg-[#1a0f2e] border ${theme.border} p-6 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[220px]`}>
+          {/* 0. PATRIMONIO NETO GLOBAL */}
+          <div className="mt-2 mb-4">
+             <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#1a0f2e] to-black/40 border border-white/5 rounded-[2rem] shadow-2xl">
+                <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-1 flex items-center gap-2"><Globe className="w-3 h-3"/> Patrimonio Neto Total</p>
+                
+                <p className="text-5xl font-black text-white tracking-tighter tabular-nums font-sans text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-200">
+                  $<AnimatedNum value={patrimonioTotal.paralelo} format="usd" />
+                </p>
+                
+                <div className="flex gap-4 mt-3">
+                   <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
+                     Paralelo: $<AnimatedNum value={patrimonioTotal.paralelo} format="usd" />
+                   </p>
+                   <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
+                     BCV: $<AnimatedNum value={patrimonioTotal.bcv} format="usd" />
+                   </p>
+                </div>
+             </div>
+          </div>
+
+          {/* 1. TARJETA PRINCIPAL (TU BALANCE AISLADO) */}
+          <div className="mb-6">
+            <div className={`bg-[#1a1a1a] border border-[#333] p-6 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[220px]`}>
                <div className="flex justify-between items-start mb-4">
-                  <p className="text-white/80 font-bold text-sm">Tu Balance ({activeWallet.toUpperCase()})</p>
+                  <p className="text-white/80 font-bold text-sm">Tu Liquidez ({activeWallet.toUpperCase()})</p>
                   <Wallet className="w-6 h-6 text-white/30" />
                </div>
                
                <div className="mb-6">
                   {activeWallet === 'usdt' && (
                      <div className="animate-in fade-in">
-                       <p className="text-5xl font-black text-white tracking-tighter">
+                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
                          $<AnimatedNum value={saldoPrincipal.usdt} format="usd" />
                        </p>
                        <p className="text-emerald-400 text-xs font-bold mt-2">
@@ -1491,7 +1826,7 @@ function FinanzasDashboardContent({
                   )}
                   {activeWallet === 'bs' && (
                      <div className="animate-in fade-in">
-                       <p className="text-5xl font-black text-white tracking-tighter">
+                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
                          Bs. <AnimatedNum value={saldoPrincipal.bs} format="bs" />
                        </p>
                        <p className="text-blue-400 text-xs font-bold mt-2">
@@ -1501,7 +1836,7 @@ function FinanzasDashboardContent({
                   )}
                   {activeWallet === 'cash' && (
                      <div className="animate-in fade-in">
-                       <p className="text-5xl font-black text-white tracking-tighter">
+                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
                          $<AnimatedNum value={saldoPrincipal.cash} format="usd" />
                        </p>
                        <p className="text-amber-400 text-xs font-bold mt-2 uppercase">Monto Físico Exacto</p>
@@ -1527,9 +1862,9 @@ function FinanzasDashboardContent({
                   <div key={p.id} className="bg-[#1a0f2e] border border-white/5 p-4 rounded-2xl shadow-lg flex flex-col hover:border-white/10 transition-colors">
                      <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest mb-3 border-b border-white/5 pb-2">{p.nombre}</p>
                      <div className="space-y-1.5">
-                        <div className="flex justify-between text-xs font-bold"><span className="text-emerald-400">USDT:</span> <span className="text-white font-mono">$<AnimatedNum value={saldoP.usdt} /></span></div>
-                        <div className="flex justify-between text-xs font-bold"><span className="text-blue-400">BS:</span> <span className="text-white font-mono">Bs. <AnimatedNum value={saldoP.bs} format="bs" /></span></div>
-                        <div className="flex justify-between text-xs font-bold"><span className="text-amber-400">CASH:</span> <span className="text-white font-mono">$<AnimatedNum value={saldoP.cash} /></span></div>
+                        <div className="flex justify-between text-xs font-bold"><span className="text-emerald-400">USDT:</span> <span className="text-white font-sans tabular-nums tracking-tight">$<AnimatedNum value={saldoP.usdt} /></span></div>
+                        <div className="flex justify-between text-xs font-bold"><span className="text-blue-400">BS:</span> <span className="text-white font-sans tabular-nums tracking-tight">Bs. <AnimatedNum value={saldoP.bs} format="bs" /></span></div>
+                        <div className="flex justify-between text-xs font-bold"><span className="text-amber-400">CASH:</span> <span className="text-white font-sans tabular-nums tracking-tight">$<AnimatedNum value={saldoP.cash} /></span></div>
                      </div>
                   </div>
                 )
@@ -1537,7 +1872,35 @@ function FinanzasDashboardContent({
             </div>
           )}
 
-          {/* 2. MIS POTES (METAS CON DRAWER TÁCTIL) - MOVIDO ARRIBA */}
+          {/* CÓDIGO DE INVITACIÓN DIRECTO EN EL INICIO (SOLO COMPARTIDO) */}
+          {espacioActivo?.tipo !== 'individual' && espacioActivo?.codigo_invitacion && (
+             <div className="bg-[#1a0f2e] border border-fuchsia-500/30 p-5 rounded-[2rem] shadow-[0_0_20px_rgba(192,38,211,0.1)] mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] text-fuchsia-400 font-bold uppercase tracking-widest flex items-center gap-2 mb-1">
+                     <Key className="w-3 h-3"/> Invita a este espacio
+                  </p>
+                  <p className="text-xs text-white/50">Copia este código y compártelo.</p>
+                </div>
+                <button onClick={() => {navigator.clipboard.writeText(espacioActivo.codigo_invitacion); alert("Código copiado al portapapeles");}} className="w-full sm:w-auto bg-black/40 hover:bg-black/60 border border-white/10 p-3 rounded-xl text-xl text-white font-black tracking-[0.2em] transition-colors flex items-center justify-center gap-2 font-sans tabular-nums cursor-pointer">
+                  {espacioActivo.codigo_invitacion} <Copy className="w-4 h-4 text-white/30 ml-1"/>
+                </button>
+             </div>
+          )}
+
+          {/* UNIRSE A UN ESPACIO (DENTRO DEL INICIO) */}
+          {espacioActivo?.tipo === 'individual' && !isGuest && (
+             <div className="bg-black/40 border border-white/5 p-5 rounded-[2rem] mb-6">
+                <p className="text-[10px] text-white/50 font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
+                   <Users className="w-3 h-3"/> ¿Te invitaron a un espacio?
+                </p>
+                <div className="flex gap-2">
+                  <input type="text" value={joinCodeInput} onChange={(e)=>setJoinCodeInput(e.target.value.toUpperCase())} placeholder="Código (Ej: X7K9P2)" className="flex-1 bg-[#1a0f2e] border border-white/10 rounded-xl p-3 text-sm text-white font-bold outline-none uppercase tracking-widest" maxLength={6} />
+                  <button onClick={unirseConCodigoInterno} className={`px-4 py-3 rounded-xl ${theme.primary} text-white font-bold text-xs uppercase tracking-widest`}>Unirse</button>
+                </div>
+             </div>
+          )}
+
+          {/* 2. MIS POTES (METAS CON DRAWER TÁCTIL) */}
           <div className="space-y-4">
             <div className="flex justify-between items-center px-2">
               <h2 className={`text-base font-black ${theme.text} uppercase tracking-widest flex items-center gap-2`}>
@@ -1548,14 +1911,12 @@ function FinanzasDashboardContent({
               </button>
             </div>
 
-            {/* DRAWER PARA POTES */}
             <Drawer.Root open={isAddingPote} onOpenChange={setIsAddingPote}>
               <Drawer.Portal>
                 <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[24px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#10b981]">
+                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[75vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#10b981]">
                   <Drawer.Title className="sr-only">Registrar Nueva Meta</Drawer.Title>
-                  <Drawer.Description className="sr-only">Formulario para crear un nuevo pote de ahorro</Drawer.Description>
-                  <div className="p-6 bg-[#121212] rounded-t-[24px] flex-1 overflow-y-auto">
+                  <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
                     <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
                     <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Nueva Meta</h3>
                     
@@ -1567,7 +1928,7 @@ function FinanzasDashboardContent({
                             value={poteForm.tipo} 
                             onChange={(e) => setPoteForm({...poteForm, tipo: e.target.value})} 
                             data-vaul-no-drag
-                            className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white outline-none cursor-pointer focus:border-emerald-500`}
+                            className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-emerald-500`}
                           >
                             {POTE_OPCIONES.map(opt => <option key={opt} value={opt} className="bg-[#121212]">{opt}</option>)}
                           </select>
@@ -1579,24 +1940,24 @@ function FinanzasDashboardContent({
                                type="text" placeholder="Ej: Viaje a Margarita" 
                                value={poteForm.nombreCustom} onChange={(e) => setPoteForm({...poteForm, nombreCustom: e.target.value})} 
                                data-vaul-no-drag
-                               className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white outline-none focus:border-emerald-500`} 
+                               className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-emerald-500`} 
                                required 
                              />
                           </div>
                         )}
 
-                        <div>
+                        <div className="min-h-[80px]">
                           <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Objetivo ($)</label>
                           <input 
                             type="number" step="0.01" placeholder="0.00" 
                             value={poteForm.monto_objetivo} onChange={(e) => setPoteForm({...poteForm, monto_objetivo: e.target.value})} 
                             data-vaul-no-drag
-                            className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-2xl font-black text-white font-mono outline-none focus:border-emerald-500`} 
+                            className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-emerald-500`} 
                             required 
                           />
                         </div>
                       </div>
-                      <button type="submit" className={`w-full bg-emerald-500 text-black font-black py-4 rounded-xl text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] mt-4 active:scale-95 transition-transform`}>Guardar Meta</button>
+                      <button type="submit" className={`w-full bg-emerald-500 text-black font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(16,185,129,0.3)] mt-6 active:scale-95 transition-transform`}>Guardar Meta</button>
                     </form>
                   </div>
                 </Drawer.Content>
@@ -1642,7 +2003,7 @@ function FinanzasDashboardContent({
             })}
           </div>
 
-          {/* 3. BOTÓN DE REGISTRO RÁPIDO Y CALCULADORA */}
+          {/* 3. BOTÓN DE REGISTRO RÁPIDO, CALCULADORA E INTEGRANTES */}
           <div className="mb-8 mt-6 flex gap-3">
             <div className="flex-1">
               <TransactionDrawer
@@ -1659,56 +2020,71 @@ function FinanzasDashboardContent({
                     <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-emerald-500 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] group-hover:scale-110 transition-transform`}>
                       <Plus className="w-6 h-6 md:w-8 md:h-8 text-black" />
                     </div>
-                    <span className="text-white font-black text-xs md:text-sm">Registrar Movimiento</span>
+                    <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Nuevo Registro</span>
                   </button>
               </TransactionDrawer>
             </div>
             
-            {/* ACCESO DIRECTO A LA CALCULADORA */}
-            <button onClick={() => onChangeView('calculadora-libre')} className="w-1/3 max-w-[120px] bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group">
+            <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="w-1/4 max-w-[100px] bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group">
               <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform`}>
                 <Calculator className="w-5 h-5 md:w-7 md:h-7 text-blue-400" />
               </div>
-              <span className="text-white font-black text-xs md:text-sm">Cálculo</span>
+              <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Cálculo</span>
             </button>
+
+            {/* BOTÓN GESTIONAR INTEGRANTES (SÓLO SI NO ES INDIVIDUAL) */}
+            {espacioActivo?.tipo !== 'individual' && (
+               <>
+                 <button onClick={() => setIsManageUsersOpen(true)} className="w-1/4 max-w-[100px] bg-[#1a1a1a] border border-[#333] hover:border-purple-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group">
+                   <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.2)] group-hover:scale-110 transition-transform`}>
+                     <Users className="w-5 h-5 md:w-7 md:h-7 text-purple-400" />
+                   </div>
+                   <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Miembros</span>
+                 </button>
+
+                 <Drawer.Root open={isManageUsersOpen} onOpenChange={setIsManageUsersOpen}>
+                    <Drawer.Portal>
+                      <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
+                      <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#A855F7]">
+                        <Drawer.Title className="sr-only">Gestionar Integrantes</Drawer.Title>
+                        <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+                          <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+                          <h3 className="text-xl font-black text-white mb-6 text-center">Gestionar Integrantes</h3>
+                          
+                          <div className="flex flex-wrap gap-2 mb-6">
+                            {participantes.length === 0 ? (
+                              <p className="text-xs text-white/20 italic text-center w-full">No hay miembros agregados...</p>
+                            ) : (
+                              participantes.map((p: any) => (
+                                <div key={p.id} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-white/5 bg-[#1a1a1a] text-white group hover:border-rose-500/50 transition-colors">
+                                  {p.nombre}
+                                  <button onClick={() => eliminarParticipante(p.id, p.nombre)} className="text-white/20 hover:text-rose-500 transition-colors">
+                                    <X size={16} />
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" placeholder="Nombre del integrante..." 
+                              value={nuevoPart} onChange={(e) => setNuevoPart(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && agregarParticipante()}
+                              data-vaul-no-drag
+                              className="flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#A855F7] transition-all"
+                            />
+                            <button onClick={agregarParticipante} className={`p-4 rounded-xl ${theme.primary} text-white shadow-lg active:scale-95 transition-all`}>
+                              <UserPlus size={20} />
+                            </button>
+                          </div>
+                        </div>
+                      </Drawer.Content>
+                    </Drawer.Portal>
+                  </Drawer.Root>
+               </>
+            )}
           </div>
-
-          {/* 4. GESTOR DE INTEGRANTES */}
-          {espacioActivo?.tipo !== 'individual' && (
-            <div className={`bg-[#1a0f2e] border ${theme.border} p-5 rounded-[2rem] shadow-xl mt-6`}>
-              <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-4 flex items-center gap-2">
-                <Users size={12} className={theme.text} /> Gestionar Integrantes
-              </p>
-              
-              <div className="flex flex-wrap gap-2 mb-4">
-                {participantes.length === 0 ? (
-                  <p className="text-[10px] text-white/20 italic">No hay miembros agregados...</p>
-                ) : (
-                  participantes.map((p: any) => (
-                    <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border border-white/5 bg-white/5 text-white group hover:border-rose-500/50 transition-colors">
-                      {p.nombre}
-                      <button onClick={() => eliminarParticipante(p.id, p.nombre)} className="text-white/20 hover:text-rose-500 transition-colors">
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                <input 
-                  type="text" placeholder="Nombre del integrante..." 
-                  value={nuevoPart} onChange={(e) => setNuevoPart(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && agregarParticipante()}
-                  className="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-[#A855F7] transition-all"
-                />
-                <button onClick={agregarParticipante} className={`p-2.5 rounded-xl ${theme.primary} text-white shadow-lg active:scale-95 transition-all`}>
-                  <UserPlus size={18} />
-                </button>
-              </div>
-            </div>
-          )}
-
         </div>
       );
     }
@@ -1724,7 +2100,7 @@ function FinanzasDashboardContent({
         </div>
       )}
 
-      {/* NUEVO HEADER MINIMALISTA CON MENÚ HAMBURGUESA Y QR */}
+      {/* HEADER */}
       <div className="flex items-center justify-between p-4 mb-2">
         <div className="flex items-center gap-3">
           <button onClick={() => setIsMenuOpen(true)} className="p-2 text-white hover:text-purple-400 bg-transparent rounded-xl transition-colors">
@@ -1740,16 +2116,15 @@ function FinanzasDashboardContent({
           </div>
         </div>
         
-        {/* Indicador de Tasas Dobles */}
         <div className="text-right flex flex-col items-end">
            <p className="text-[9px] text-white/40 uppercase font-bold tracking-widest flex items-center gap-1">BCV <button onClick={fetchRates} disabled={syncing}><RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`}/></button></p>
-           <p className="text-sm font-mono text-white font-black">Bs. {rates.bcv.toFixed(2)}</p>
+           <p className="text-sm font-sans tabular-nums tracking-tight text-white font-black">Bs. {rates.bcv.toFixed(2)}</p>
            <p className="text-[9px] text-white/40 uppercase font-bold tracking-widest mt-1">Paralelo</p>
-           <p className="text-sm font-mono text-white font-black">Bs. {rates.usdt.toFixed(2)}</p>
+           <p className="text-sm font-sans tabular-nums tracking-tight text-white font-black">Bs. {rates.usdt.toFixed(2)}</p>
         </div>
       </div>
 
-      {/* EL MENÚ LATERAL DESPLEGABLE */}
+      {/* EL MENÚ LATERAL */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-[200] flex">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)}></div>
@@ -1767,26 +2142,14 @@ function FinanzasDashboardContent({
               <button onClick={() => { setIsMenuOpen(false); onSelectModule('pote'); }} className="w-full flex items-center gap-3 p-3 rounded-xl bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/30 hover:bg-fuchsia-500/20 font-bold text-sm transition-colors text-left">
                 <img src="/pote.png" className="w-5 h-5 opacity-80" /> Mi Pote
               </button>
-              <button onClick={() => { setIsMenuOpen(false); onSelectModule('vaca'); }} className="w-full flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 font-bold text-sm transition-colors text-left">
-                <Users className="w-5 h-5"/> La Vaca
-              </button>
               
-              {/* CÓDIGO DE INVITACIÓN (SÓLO SI NO ES INDIVIDUAL) */}
-              {espacioActivo?.tipo !== 'individual' && espacioActivo?.codigo_invitacion && (
-                 <div className="p-4 rounded-xl bg-black/40 border border-white/5 mt-4">
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-2">Invitar Amigos</p>
-                    <div className="flex gap-2">
-                       <button onClick={() => {navigator.clipboard.writeText(espacioActivo.codigo_invitacion); alert("Código copiado al portapapeles");}} className="flex-1 bg-white/10 hover:bg-white/20 p-2 rounded text-xs text-white transition-colors flex items-center justify-center gap-1 font-mono">
-                         <Key className="w-3 h-3"/> {espacioActivo.codigo_invitacion}
-                       </button>
-                       <button onClick={() => { setIsMenuOpen(false); setShowQRModal(true); }} className="bg-white/10 hover:bg-white/20 p-2 rounded text-white transition-colors" title="Mostrar QR"><QrCode className="w-4 h-4"/></button>
-                    </div>
-                 </div>
-              )}
-              
-              <button onClick={() => { setIsMenuOpen(false); openJoinModal(); }} className="w-full flex items-center gap-3 p-3 mt-4 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 font-bold text-sm transition-colors text-left">
-                <Key className="w-5 h-5"/> Unirse con Código
-              </button>
+              <div className="relative">
+                <button onClick={() => { setIsMenuOpen(false); onSelectModule('vaca'); }} className="w-full flex items-center justify-between p-3 rounded-xl bg-gray-800/50 text-gray-500 border border-gray-700/50 font-bold text-sm text-left opacity-60 cursor-not-allowed">
+                  <span className="flex items-center gap-3"><Users className="w-5 h-5"/> La Vaca</span>
+                  <Lock className="w-4 h-4"/>
+                </button>
+                <div className="absolute -top-2 right-2 bg-amber-500 text-black text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Próximamente</div>
+              </div>
             </div>
             
             <div className="pt-4 border-t border-white/5 space-y-2">
@@ -1803,38 +2166,21 @@ function FinanzasDashboardContent({
 
       {renderTabContent()}
 
-      {/* MODAL QR UBICADO CORRECTAMENTE */}
-      {showQRModal && (
-        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className={`bg-[#1a0f2e] border ${theme.border} p-8 rounded-[2.5rem] shadow-2xl max-w-sm w-full text-center relative`}>
-            <button onClick={() => setShowQRModal(false)} className="absolute top-4 right-4 text-white/50 hover:text-white"><X className="w-5 h-5"/></button>
-            <h3 className="text-xl font-black text-white mb-2">Escanea para unirte</h3>
-            <p className={`text-sm ${theme.text} mb-6`}>Pídele a tu amigo que escanee este código o ingrese el texto: <strong className="text-white bg-white/10 px-2 py-1 rounded">{espacioActivo?.codigo_invitacion}</strong></p>
-            <div className="bg-white p-4 rounded-2xl inline-block mb-6 shadow-xl">
-              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${espacioActivo?.codigo_invitacion}`} alt="QR Code" className="w-48 h-48" />
-            </div>
-            <button onClick={() => {navigator.clipboard.writeText(espacioActivo?.codigo_invitacion); alert("Código copiado"); setShowQRModal(false);}} className={`w-full ${theme.primary} text-white font-black py-3.5 rounded-xl shadow-lg transition-transform active:scale-95`}>COPIAR CÓDIGO</button>
-          </div>
-        </div>
-      )}
-
-      <nav className={`fixed bottom-0 left-0 right-0 bg-[#1a0f2e]/90 backdrop-blur-xl border-t ${theme.border} p-3 md:hidden z-50 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)]`}>
+      <nav className={`fixed bottom-0 left-0 right-0 bg-[#1a0f2e]/90 backdrop-blur-xl border-t ${theme.border} p-3 md:hidden z-40 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)]`}>
         <div className="flex justify-around items-center max-w-md mx-auto">
-          <NavButton icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => setActiveTab('inicio')} theme={theme} />
-          <NavButton icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => {if(isGuest) onTriggerPaywall?.(); else setActiveTab('pagos')}} theme={theme} />
-          <NavButton icon={<StickyNote />} label="Recordatorios" active={activeTab === 'avisos'} onClick={() => {if(isGuest) onTriggerPaywall?.(); else setActiveTab('avisos')}} theme={theme} />
+          <NavButton icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
+          <NavButton icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
           {espacioActivo?.tipo !== 'vaca' && (
-            <NavButton icon={<Shield />} label="Reserva" active={activeTab === 'emergencia'} onClick={() => {if(isGuest) onTriggerPaywall?.(); else setActiveTab('emergencia')}} theme={theme} />
+            <NavButton icon={<Shield />} label="Reserva" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
           )}
         </div>
       </nav>
 
       <nav className="hidden md:flex justify-center mt-8 space-x-4">
-        <NavButtonDesktop icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => setActiveTab('inicio')} theme={theme} />
-        <NavButtonDesktop icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => {if(isGuest) onTriggerPaywall?.(); else setActiveTab('pagos')}} theme={theme} />
-        <NavButtonDesktop icon={<StickyNote />} label="Recordatorios" active={activeTab === 'avisos'} onClick={() => {if(isGuest) onTriggerPaywall?.(); else setActiveTab('avisos')}} theme={theme} />
+        <NavButtonDesktop icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
+        <NavButtonDesktop icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
         {espacioActivo?.tipo !== 'vaca' && (
-          <NavButtonDesktop icon={<Shield />} label="Por si acaso" active={activeTab === 'emergencia'} onClick={() => {if(isGuest) onTriggerPaywall?.(); else setActiveTab('emergencia')}} theme={theme} />
+          <NavButtonDesktop icon={<Shield />} label="Por si acaso" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
         )}
       </nav>
       
@@ -1871,7 +2217,6 @@ function NavButtonDesktop({ icon, label, active, onClick, theme }: any) {
   );
 }
 
-// COMPONENTE PARA LA ANIMACIÓN FLUIDA DE LOS NÚMEROS
 function AnimatedNum({ value, format = 'usd' }: { value: number, format?: 'usd'|'bs'|'pct' }) {
   const [display, setDisplay] = useState(0);
 
