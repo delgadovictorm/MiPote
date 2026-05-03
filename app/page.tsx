@@ -126,7 +126,7 @@ export default function LandingPage() {
           </h1>
           
           <p className="text-lg md:text-xl text-white/60 max-w-3xl mx-auto mb-10 font-medium leading-relaxed">
-            Mi Pote no es un banco aburrido, es la app diseñada para la locura multimoneda de Venezuela. Organiza tu dinero, tus potes en pareja y las vacas con tus panas (y te regaña si gastas de más).
+            Mi Pote no es una App aburrida de finanzad, es la app diseñada para la locura multimoneda de Venezuela. Organiza tu dinero, tus potes en pareja y las vacas con tus panas.
           </p>
           
           <div className="flex flex-col md:flex-row items-center justify-center gap-6 mb-16">
@@ -288,7 +288,7 @@ export default function LandingPage() {
       <section className="py-20 px-6 relative z-10">
         <div className="max-w-5xl mx-auto text-center">
           <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter mb-4">Te cantamos las <span className="text-amber-400">verdades</span></h2>
-          <p className="text-white/50 mb-12 max-w-xl mx-auto">La app no solo saca cuentas, también te regaña si botas los reales o te motiva cuando ahorras pa' cumplir el objetivo. Cero lenguaje aburrido de banco.</p>
+          <p className="text-white/50 mb-12 max-w-xl mx-auto">La app no solo saca cuentas, también te regaña si botas los reales o te motiva cuando ahorras pa' cumplir el objetivo.</p>
 
           <div className="h-32 relative max-w-md mx-auto">
             {mensajesMuestra.map((m, i) => (
@@ -323,7 +323,7 @@ export default function LandingPage() {
                 <ul className="space-y-4 mb-10">
                   <li className="flex items-center gap-3 text-sm text-white/60"><Zap size={16} className="text-white/30"/> Control de Billetera Personal</li>
                   <li className="flex items-center gap-3 text-sm text-white/60"><Zap size={16} className="text-white/30"/> Calculadora Multimoneda</li>
-                  <li className="flex items-center gap-3 text-sm text-white/60"><Zap size={16} className="text-white/30"/> Registro de Fondo de Emergencia</li>
+                  <li className="flex items-center gap-3 text-sm text-white/60"><Zap size={16} className="text-white/30"/> Hasta 5 registros</li>
                   <li className="flex items-center gap-3 text-sm text-white/60"><Zap size={16} className="text-white/30"/> Límites Mensuales (Base Cero)</li>
                 </ul>
               </div>

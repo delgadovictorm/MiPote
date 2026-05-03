@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Drawer } from "vaul";
-import { TrendingUp, TrendingDown, Briefcase, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3 } from "lucide-react";
+import { TrendingUp, TrendingDown, Briefcase, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3, Plus, Wallet, Users } from "lucide-react";
 
 export function TransactionDrawer({ 
   children,
@@ -19,7 +19,6 @@ export function TransactionDrawer({
   usuario, setUsuario
 }: any) {
   
-  // Controlamos la apertura/cierre del panel manualmente
   const [isOpen, setIsOpen] = useState(false);
 
   const categories = {
@@ -42,7 +41,6 @@ export function TransactionDrawer({
     ]
   };
 
-  // Reglas estrictas para mostrar el campo de Detalle libre
   const showDetalle = 
     (tipo === "ingreso" && categoria === "otro") || 
     (tipo === "egreso" && (categoria === "comida" || categoria === "otro"));
@@ -58,42 +56,43 @@ export function TransactionDrawer({
         <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
         <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[24px] h-[88vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#A855F7]">
           
-          {/* SR-ONLY: Arregla el error rojo de la consola */}
           <Drawer.Title className="sr-only">Registrar Nuevo Movimiento</Drawer.Title>
-          <Drawer.Description className="sr-only">Formulario para registrar ingresos y egresos en Mi Pote</Drawer.Description>
+          <Drawer.Description className="sr-only">Formulario para registrar ingresos y egresos</Drawer.Description>
 
           <div className="p-4 bg-[#121212] rounded-t-[24px] flex-1 overflow-y-auto pb-10">
             <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
             
+            {/* SELECTOR INGRESO/EGRESO */}
             <div className="flex bg-[#262626] p-1 rounded-xl mb-6 shadow-inner">
               <button
+                type="button"
                 onClick={() => { setTipo("ingreso"); setCategoria(""); setDescripcion(""); }}
                 className={`flex-1 py-3 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${
                   tipo === "ingreso" ? "bg-green-500 text-black shadow-md" : "text-gray-400 hover:text-white"
                 }`}
               >
-                <TrendingUp size={18} />
-                INGRESO
+                <TrendingUp size={18} /> INGRESO
               </button>
               <button
+                type="button"
                 onClick={() => { setTipo("egreso"); setCategoria(""); setDescripcion(""); }}
                 className={`flex-1 py-3 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${
                   tipo === "egreso" ? "bg-red-500 text-black shadow-md" : "text-gray-400 hover:text-white"
                 }`}
               >
-                <TrendingDown size={18} />
-                EGRESO
+                <TrendingDown size={18} /> EGRESO
               </button>
             </div>
 
+            {/* CATEGORÍAS */}
             <h3 className="text-gray-400 text-sm mb-3 font-semibold px-2">Selecciona una categoría</h3>
             <div className="grid grid-cols-2 gap-3 mb-6">
               {categories[tipo as keyof typeof categories].map((cat) => (
                 <button
                   key={cat.id}
+                  type="button"
                   onClick={() => {
                     setCategoria(cat.id);
-                    // Si no mostramos detalle libre, auto-completamos la descripción para que la Base de Datos no falle
                     if (!( (tipo === "ingreso" && cat.id === "otro") || (tipo === "egreso" && (cat.id === "comida" || cat.id === "otro")) )) {
                         setDescripcion(cat.label);
                     } else {
@@ -111,28 +110,27 @@ export function TransactionDrawer({
                 </button>
               ))}
             </div>
-{/* MONTO Y DETALLES INTELIGENTES */}
+
             <div className="space-y-4">
-              
-              {/* SELECTOR DE USUARIO (Si aplica) */}
+              {/* SELECTOR DE USUARIO (Con data-vaul-no-drag para iPhone) */}
               {espacioActivo?.tipo !== 'individual' && (
                 <div className="animate-in fade-in slide-in-from-top-2">
-                  <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-1">Responsable del gasto</label>
+                  <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-1">Responsable</label>
                   <div className="flex bg-[#262626] p-1 rounded-xl border border-[#333]">
                     <select 
                       required value={usuario} onChange={(e) => setUsuario(e.target.value)} 
+                      data-vaul-no-drag
                       className="w-full bg-transparent p-3 text-sm text-white outline-none cursor-pointer"
                     >
                       <option value="" className="bg-[#121212]">¿Quién paga?</option>
                       {participantes?.map((u: any) => <option key={u.id} value={u.nombre} className="bg-[#121212]">{u.nombre}</option>)}
-                      {/* Agregamos las opciones grupales que tenías antes */}
-                      {participantes?.length > 0 && <option value={espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos (Div)'} className="bg-[#121212]">{espacioActivo?.tipo === 'pote' ? 'Ambos (Mitad)' : 'Todos (División igual)'}</option>}
+                      {participantes?.length > 0 && <option value={espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos (Div)'} className="bg-[#121212]">{espacioActivo?.tipo === 'pote' ? 'Ambos (Mitad)' : 'Todos (Igual)'}</option>}
                     </select>
                   </div>
                 </div>
               )}
 
-              {/* INPUT DE MONTO (Cambia etiqueta si es Cashea) */}
+              {/* MONTO Y MONEDA (Con data-vaul-no-drag para iPhone) */}
               <div className="flex bg-[#262626] p-4 rounded-xl border border-[#333] focus-within:border-[#A855F7] transition-colors">
                 <div className="flex-1">
                   <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-1">
@@ -141,54 +139,24 @@ export function TransactionDrawer({
                   <input 
                     type="number" step="0.01" placeholder="0.00" 
                     value={monto} onChange={(e) => setMonto(e.target.value)}
+                    data-vaul-no-drag
                     className="w-full bg-transparent text-3xl font-black text-white outline-none font-mono" 
                   />
                 </div>
                 <select 
                   value={moneda} onChange={(e) => setMoneda(e.target.value)}
-                  className="bg-[#121212] border border-[#333] rounded-xl px-3 text-sm text-white font-bold outline-none cursor-pointer">
+                  data-vaul-no-drag
+                  className="bg-[#121212] border border-[#333] rounded-xl px-3 text-sm text-white font-bold outline-none cursor-pointer"
+                >
                   <option value="cash">CASH</option>
                   <option value="usd">USD</option>
                   <option value="bs">BS</option>
                 </select>
               </div>
 
-              {/* LÓGICA EXCLUSIVA DE CUOTAS CASHEA */}
-              {categoria === 'cashea' && (
-                <div className="animate-in zoom-in duration-300">
-                  <label className="text-[10px] uppercase text-purple-400 font-bold tracking-widest block mb-1">¿En cuántas cuotas? (Sin contar el pago inicial)</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[3, 6, 9].map((n) => (
-                      <button 
-                        key={n}
-                        type="button"
-                        onClick={() => (window as any).numCuotasCashea = n}
-                        className="py-3 rounded-xl border border-[#333] bg-[#1a1a1a] text-white font-bold hover:border-purple-500 focus:bg-purple-600 focus:text-black transition-all"
-                      >
-                        {n} Cuotas
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-white/40 mt-2 italic text-center">Mi Pote creará { (window as any).numCuotasCashea || 3 } recordatorios cada 14 días automáticamente.</p>
-                </div>
-              )}
-              
-              {/* INPUT DE DETALLE (Visible según tus reglas o si es Cashea) */}
-              {(showDetalle || categoria === 'cashea') && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                  <input 
-                    type="text" 
-                    value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
-                    placeholder={categoria === 'cashea' ? "¿Qué compraste? (Ej: Zapatos Nike)" : "Escribe un detalle específico..."} 
-                    className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#A855F7] rounded-xl p-4 text-sm text-white outline-none transition-colors" 
-                  />
-                </div>
-              )}
-            
-
-              {/* EL BLOQUE DE CONVERSIÓN BCV / PARALELO RESTAURADO */}
+              {/* CONVERSIÓN DE TASAS */}
               {monto && rates && rates.bcv > 0 && moneda !== 'cash' && (
-                <div className="flex items-center justify-between bg-[#1a1a1a] p-4 rounded-xl border border-[#333] w-full text-center animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-center justify-between bg-[#1a1a1a] p-4 rounded-xl border border-[#333] w-full text-center">
                   {moneda === 'bs' ? (
                     <>
                       <div className="flex-1">
@@ -204,7 +172,7 @@ export function TransactionDrawer({
                   ) : (
                     <>
                       <div className="flex-1">
-                        <p className={`text-[10px] uppercase ${tText} font-bold mb-1`}>En Tasa BCV</p>
+                        <p className={`text-[10px] uppercase ${tText} font-bold mb-1`}>Tasa BCV</p>
                         <p className="font-mono text-white font-bold text-lg">Bs. {(parseFloat(monto) * rates.bcv).toFixed(2)}</p>
                       </div>
                       <div className={`h-8 w-px bg-[#333] mx-2`}></div>
@@ -216,14 +184,33 @@ export function TransactionDrawer({
                   )}
                 </div>
               )}
+
+              {/* LÓGICA CASHEA */}
+              {categoria === 'cashea' && (
+                <div className="animate-in zoom-in p-1">
+                  <label className="text-[10px] uppercase text-purple-400 font-bold tracking-widest block mb-2">Cuotas (Sin inicial)</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[3, 6, 9].map((n) => (
+                      <button 
+                        key={n} type="button"
+                        onClick={() => (window as any).numCuotasCashea = n}
+                        className="py-3 rounded-xl border border-[#333] bg-[#1a1a1a] text-white font-bold hover:border-purple-500 focus:bg-purple-600 focus:text-black transition-all"
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               
-              {/* CAMPO DE DETALLE CONDICIONAL */}
-              {showDetalle && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+              {/* DETALLE CONDICIONAL (Con data-vaul-no-drag) */}
+              {(showDetalle || categoria === 'cashea') && (
+                <div className="animate-in fade-in slide-in-from-top-2">
                   <input 
                     type="text" 
+                    data-vaul-no-drag
                     value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
-                    placeholder={categoria === 'comida' ? "Detalle (Ej: Arturo's, KFC...)" : "Escribe un detalle específico..."} 
+                    placeholder={categoria === 'cashea' ? "¿Qué compraste?" : "Escribe un detalle..."} 
                     className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#A855F7] rounded-xl p-4 text-sm text-white outline-none transition-colors" 
                   />
                 </div>
@@ -231,9 +218,9 @@ export function TransactionDrawer({
             </div>
 
             <button 
+              type="button"
               onClick={(e) => {
                 onSubmit(e);
-                // Solo cerramos el panel automáticamente si no faltan datos importantes
                 if (monto && categoria && (usuario || espacioActivo?.tipo === 'individual')) {
                   setIsOpen(false);
                 }
@@ -243,7 +230,7 @@ export function TransactionDrawer({
               }`}
               disabled={!categoria || !monto}
             >
-              {!categoria ? 'SELECCIONA UNA CATEGORÍA' : !monto ? 'INGRESA UN MONTO' : 'GUARDAR REGISTRO'}
+              {!categoria ? 'SELECCIONA CATEGORÍA' : !monto ? 'INGRESA MONTO' : 'GUARDAR REGISTRO'}
             </button>
             
           </div>
