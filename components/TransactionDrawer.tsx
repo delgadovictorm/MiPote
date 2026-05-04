@@ -2,44 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { TrendingUp, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3, X } from "lucide-react";
-
-const modalStyles = `
-  @supports (height: 100dvh) {
-    .modal-backdrop {
-      background: rgba(0, 0, 0, 0);
-      transition: background 200ms ease-out;
-    }
-    .modal-backdrop.open {
-      background: rgba(0, 0, 0, 0.8);
-    }
-    
-    .modal-content {
-      opacity: 0;
-      transform: translateY(100%);
-      transition: opacity 250ms ease-out, transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
-      pointer-events: none;
-    }
-    .modal-content.open {
-      opacity: 1;
-      transform: translateY(0);
-      pointer-events: auto;
-    }
-
-    .modal-content * {
-      touch-action: manipulation !important;
-    }
-  }
-`;
-
-if (typeof document !== 'undefined') {
-  const style = document.createElement('style');
-  style.textContent = modalStyles;
-  style.setAttribute('data-modal-styles', 'true');
-  if (!document.querySelector('style[data-modal-styles]')) {
-    document.head.appendChild(style);
-  }
-}
+import { TrendingUp, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3, ChevronLeft } from "lucide-react";
 
 export function TransactionDrawer({ 
   children,
@@ -59,13 +22,17 @@ export function TransactionDrawer({
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Evita errores de hidratación en Next.js
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Limpiamos los campos al cerrar
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      // ESCUDO iOS: Bloqueamos el fondo completamente
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
       const timer = setTimeout(() => {
         setMonto("");
         setDescripcion("");
@@ -73,6 +40,7 @@ export function TransactionDrawer({
       }, 300);
       return () => clearTimeout(timer);
     }
+    return () => { document.body.style.overflow = ''; };
   }, [isOpen, setMonto, setDescripcion, setCategoria]);
 
   const categories = {
@@ -107,201 +75,179 @@ export function TransactionDrawer({
     }
   };
 
-  // 🔥 EL PARCHE PARA EL BUG DEL TECLADO EN IOS PWA
-  const forceIOSRepaint = () => {
-    setTimeout(() => {
-      window.scrollTo(0, 0);
-    }, 100);
-  };
-
   return (
     <>
       {React.cloneElement(children, { onClick: () => setIsOpen(true) })}
 
-      {/* PORTAL: Saca el modal del dashboard y lo inyecta limpio en la raíz */}
+      {/* PORTAL: Pantalla Completa Nativa (Mata el bug del PWA en iOS) */}
       {mounted && isOpen && createPortal(
-        <div className="fixed inset-0 z-[9999] flex flex-col justify-end overflow-hidden">
+        <div className="fixed inset-0 z-[99999] bg-[#0d0714] w-full h-[100dvh] flex flex-col animate-in slide-in-from-bottom-8 fade-in duration-200">
           
-          {/* BACKDROP */}
-          <div 
-            className={`modal-backdrop fixed inset-0 ${isOpen ? 'open' : ''}`}
-            onClick={() => setIsOpen(false)}
-          />
+          {/* HEADER NATIVO TIPO APP */}
+          <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#121212] shrink-0 shadow-md z-20">
+            <div className="flex items-center gap-3">
+              <button 
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="p-2 bg-white/5 rounded-full text-white/70 hover:text-white hover:bg-rose-500 transition-colors"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <h3 className="text-white font-black text-lg">Nuevo Registro</h3>
+            </div>
+          </div>
 
-          {/* MODAL CONTENT (Pegado abajo) */}
-          <div 
-            className={`modal-content relative w-full bg-[#121212] rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.8)] ${isOpen ? 'open' : ''}`}
-            style={{ maxHeight: '92dvh' }}
-          >
-            <div className="flex flex-col h-full max-h-[92dvh] overflow-hidden">
-              
-              {/* HEADER (Fijo) */}
-              <div className="flex items-center justify-between p-6 border-b border-white/5 shrink-0 bg-[#121212] rounded-t-[32px]">
-                <h3 className="text-white font-black text-lg">Nuevo Registro</h3>
-                <button 
-                  onClick={() => setIsOpen(false)}
-                  className="p-2 bg-white/10 rounded-full text-white/70 hover:text-white hover:bg-rose-500 transition-colors"
+          {/* CONTENIDO SCROLLEABLE (Con overscroll-contain para que iOS no mueva la pantalla base) */}
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32 bg-[#0d0714] overscroll-contain">
+            
+            {/* TIPO DE REGISTRO */}
+            <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6">
+              <button 
+                type="button"
+                onClick={() => {setTipo("ingreso"); setCategoria("");}}
+                className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
+              >
+                INGRESO
+              </button>
+              <button 
+                type="button"
+                onClick={() => {setTipo("egreso"); setCategoria("");}}
+                className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
+              >
+                GASTO
+              </button>
+            </div>
+
+            {/* CATEGORÍAS */}
+            <div className="grid grid-cols-3 gap-2 mb-6">
+              {categories[tipo as keyof typeof categories].map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => {
+                    setCategoria(cat.id);
+                    setDescripcion(cat.id === 'otro' ? '' : cat.label);
+                  }}
+                  className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
+                    categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
+                  }`}
                 >
-                  <X size={20} />
+                  {cat.icon}
+                  <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
                 </button>
+              ))}
+            </div>
+
+            {/* USER SELECT */}
+            {espacioActivo?.tipo !== 'individual' && (
+              <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 mb-6">
+                <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest pointer-events-none">¿Quién realizó el movimiento?</label>
+                <select 
+                  value={usuario} 
+                  onChange={(e) => setUsuario(e.target.value)}
+                  className="w-full bg-transparent text-white font-bold outline-none appearance-none cursor-pointer"
+                  required
+                >
+                  <option value="" className="bg-[#1a1a1a]">Seleccionar integrante...</option>
+                  {participantes?.map((p: any) => <option key={p.id} value={p.nombre} className="bg-[#1a1a1a]">{p.nombre}</option>)}
+                  <option value="Ambos" className="bg-[#1a1a1a]">Ambos (Mitad y mitad)</option>
+                </select>
+              </div>
+            )}
+
+            {/* MONTO Y MONEDA */}
+            <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 space-y-4 mb-6">
+              <div>
+                <label className="text-[9px] uppercase font-black text-white/30 block mb-1 tracking-widest pointer-events-none">Monto</label>
+                <input 
+                  type="number" step="0.01" placeholder="0.00"
+                  value={monto} 
+                  onChange={(e) => setMonto(e.target.value)}
+                  className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums tracking-tight font-sans"
+                />
+              </div>
+              
+              <div className="flex gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+                <button type="button" onClick={() => setMoneda('usdt')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>USDT</button>
+                <button type="button" onClick={() => setMoneda('bs')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>BS</button>
+                <button type="button" onClick={() => setMoneda('cash')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>CASH</button>
               </div>
 
-              {/* CONTENT (Scrolleable) */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-8">
-                
-                {/* TIPO DE REGISTRO */}
-                <div className="flex bg-[#1a1a1a] p-1 rounded-2xl gap-1 shrink-0">
-                  <button 
-                    type="button"
-                    onClick={() => {setTipo("ingreso"); setCategoria("");}}
-                    className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
-                  >
-                    INGRESO
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => {setTipo("egreso"); setCategoria("");}}
-                    className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
-                  >
-                    GASTO
-                  </button>
+              {monto && rates.bcv > 0 && moneda !== 'cash' && (
+                <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 text-center text-sm pointer-events-none">
+                  {moneda === 'bs' ? (
+                    <>
+                      <div className="flex-1">
+                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
+                        <p className="text-white font-bold font-sans tracking-tight">${(parseFloat(monto) / rates.bcv).toFixed(2)}</p>
+                      </div>
+                      <div className="h-6 w-px bg-white/10"></div>
+                      <div className="flex-1">
+                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
+                        <p className="text-white font-bold font-sans tracking-tight">${(parseFloat(monto) / rates.usdt).toFixed(2)}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex-1">
+                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
+                        <p className="text-white font-bold font-sans tracking-tight">Bs. {(parseFloat(monto) * rates.bcv).toFixed(2)}</p>
+                      </div>
+                      <div className="h-6 w-px bg-white/10"></div>
+                      <div className="flex-1">
+                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
+                        <p className="text-white font-bold font-sans tracking-tight">Bs. {(parseFloat(monto) * rates.usdt).toFixed(2)}</p>
+                      </div>
+                    </>
+                  )}
                 </div>
+              )}
+            </div>
 
-                {/* CATEGORÍAS */}
-                <div className="grid grid-cols-3 gap-2 shrink-0">
-                  {categories[tipo as keyof typeof categories].map((cat) => (
-                    <button
-                      key={cat.id}
+            {/* CASHEA CUOTAS */}
+            {categoria === 'cashea' && (
+              <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-2xl mb-6">
+                <p className="text-[10px] font-black text-purple-400 uppercase mb-3 text-center pointer-events-none">¿En cuántas cuotas?</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[3, 6, 9].map(n => (
+                    <button 
+                      key={n} 
                       type="button"
-                      onClick={() => {
-                        setCategoria(cat.id);
-                        setDescripcion(cat.id === 'otro' ? '' : cat.label);
-                      }}
-                      className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
-                        categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
-                      }`}
+                      onClick={() => (window as any).numCuotasCashea = n}
+                      className="cursor-pointer py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-colors focus:ring-2 ring-purple-400 tabular-nums"
                     >
-                      {cat.icon}
-                      <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
+                      {n}
                     </button>
                   ))}
                 </div>
-
-                {/* USER SELECT */}
-                {espacioActivo?.tipo !== 'individual' && (
-                  <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 shrink-0">
-                    <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest pointer-events-none">¿Quién realizó el movimiento?</label>
-                    <select 
-                      value={usuario} 
-                      onChange={(e) => setUsuario(e.target.value)}
-                      className="w-full bg-transparent text-white font-bold outline-none appearance-none cursor-pointer"
-                      required
-                    >
-                      <option value="" className="bg-[#1a1a1a]">Seleccionar integrante...</option>
-                      {participantes?.map((p: any) => <option key={p.id} value={p.nombre} className="bg-[#1a1a1a]">{p.nombre}</option>)}
-                      <option value="Ambos" className="bg-[#1a1a1a]">Ambos (Mitad y mitad)</option>
-                    </select>
-                  </div>
-                )}
-
-                {/* MONTO Y MONEDA */}
-                <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 space-y-4 shrink-0">
-                  <div>
-                    <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest pointer-events-none">Monto</label>
-                    <input 
-                      type="number" step="0.01" placeholder="0.00"
-                      value={monto} 
-                      onChange={(e) => setMonto(e.target.value)}
-                      onBlur={forceIOSRepaint} // Solución al teclado
-                      className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums tracking-tight font-sans"
-                    />
-                  </div>
-                  
-                  {/* MONEDA BUTTONS */}
-                  <div className="flex gap-1 bg-black/40 p-1 rounded-xl border border-white/5 shrink-0">
-                    <button type="button" onClick={() => setMoneda('usdt')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>USDT</button>
-                    <button type="button" onClick={() => setMoneda('bs')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>BS</button>
-                    <button type="button" onClick={() => setMoneda('cash')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>CASH</button>
-                  </div>
-
-                  {/* CONVERSION */}
-                  {monto && rates.bcv > 0 && moneda !== 'cash' && (
-                    <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 text-center text-sm pointer-events-none">
-                      {moneda === 'bs' ? (
-                        <>
-                          <div className="flex-1">
-                            <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
-                            <p className="text-white font-bold font-sans tracking-tight">${(parseFloat(monto) / rates.bcv).toFixed(2)}</p>
-                          </div>
-                          <div className="h-6 w-px bg-white/10"></div>
-                          <div className="flex-1">
-                            <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
-                            <p className="text-white font-bold font-sans tracking-tight">${(parseFloat(monto) / rates.usdt).toFixed(2)}</p>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex-1">
-                            <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
-                            <p className="text-white font-bold font-sans tracking-tight">Bs. {(parseFloat(monto) * rates.bcv).toFixed(2)}</p>
-                          </div>
-                          <div className="h-6 w-px bg-white/10"></div>
-                          <div className="flex-1">
-                            <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
-                            <p className="text-white font-bold font-sans tracking-tight">Bs. {(parseFloat(monto) * rates.usdt).toFixed(2)}</p>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* CASHEA CUOTAS */}
-                {categoria === 'cashea' && (
-                  <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-2xl shrink-0">
-                    <p className="text-[10px] font-black text-purple-400 uppercase mb-3 text-center pointer-events-none">¿En cuántas cuotas?</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[3, 6, 9].map(n => (
-                        <button 
-                          key={n} 
-                          type="button"
-                          onClick={() => (window as any).numCuotasCashea = n}
-                          className="cursor-pointer py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-colors focus:ring-2 ring-purple-400 tabular-nums"
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* DESCRIPCION */}
-                {tipo === 'egreso' && (
-                  <div className="shrink-0 pb-4">
-                    <input 
-                      type="text" placeholder="¿En qué se fue? (Ej: Pizza)"
-                      value={descripcion} 
-                      onChange={(e) => setDescripcion(e.target.value)}
-                      onBlur={forceIOSRepaint} // Solución al teclado
-                      className="w-full bg-[#1a1a1a] border border-white/5 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-purple-500 transition-colors"
-                    />
-                  </div>
-                )}
-
-                {/* BOTÓN CONFIRMAR */}
-                <button 
-                  type="button"
-                  onClick={handleLocalSubmit}
-                  className="cursor-pointer w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-5 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.3)] active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0"
-                >
-                  Confirmar Registro
-                </button>
-
               </div>
-            </div>
+            )}
+
+            {/* DESCRIPCION */}
+            {tipo === 'egreso' && (
+              <div className="mb-6">
+                <input 
+                  type="text" placeholder="¿En qué se fue la plata? (Ej: Pizza)"
+                  value={descripcion} 
+                  onChange={(e) => setDescripcion(e.target.value)}
+                  className="w-full bg-[#1a1a1a] border border-white/5 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+            )}
+
+            {/* BOTÓN CONFIRMAR */}
+            <button 
+              type="button"
+              onClick={handleLocalSubmit}
+              className="cursor-pointer w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-5 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.3)] active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0"
+            >
+              Confirmar Registro
+            </button>
+
           </div>
-        </div>
-      ), document.body)}
+        </div>,
+        document.body
+      )}
     </>
   );
 }
