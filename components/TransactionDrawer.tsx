@@ -3,6 +3,42 @@
 import React, { useState, useEffect } from "react";
 import { TrendingUp, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3, X } from "lucide-react";
 
+// ✅ ESTILOS CSS SIN TRANSFORMS - Soluciona bug de iOS PWA
+const drawerStyles = `
+  @supports (height: 100dvh) {
+    .drawer-overlay {
+      opacity: 0;
+      transition: opacity 200ms ease-out;
+      pointer-events: none;
+    }
+    .drawer-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    
+    .drawer-panel {
+      bottom: -90dvh;
+      transition: bottom 300ms cubic-bezier(0.32, 0.72, 0, 1);
+      will-change: bottom;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .drawer-panel.open {
+      bottom: 0;
+    }
+  }
+`;
+
+// Inyectar estilos en el documento
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = drawerStyles;
+  style.setAttribute('data-drawer-styles', 'true');
+  if (!document.querySelector('style[data-drawer-styles]')) {
+    document.head.appendChild(style);
+  }
+}
+
 export function TransactionDrawer({ 
   children,
   tipo, setTipo,
@@ -69,20 +105,23 @@ export function TransactionDrawer({
       {/* BOTÓN INICIAL PARA ABRIR EL PANEL */}
       {React.cloneElement(children, { onClick: () => setIsOpen(true) })}
 
-      {/* PANEL MANUAL DESDE CERO - SIN ANIMACIONES DE TRANSFORM PARA EVITAR EL BUG DE IOS */}
+      {/* 🔧 CONTENEDOR PRINCIPAL - Sin transform, usando bottom/fixed */}
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex flex-col justify-end">
+        <div className="fixed inset-0 z-[9999] flex flex-col justify-end overflow-hidden">
           
-          {/* FONDO OSCURO (Al hacer clic, se cierra) */}
+          {/* FONDO OSCURO - Solo transición de opacidad */}
           <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" 
-            onClick={(e) => { e.stopPropagation(); setIsOpen(false); }} 
+            className={`drawer-overlay absolute inset-0 bg-black/80 backdrop-blur-sm ${isOpen ? 'open' : ''}`}
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              setIsOpen(false); 
+            }} 
           />
 
-          {/* CONTENEDOR DEL PANEL: Usa dvh para iOS y NO tiene transformaciones de css */}
+          {/* 🎯 CONTENEDOR DEL PANEL - bottom en lugar de transform */}
           <div 
-            className="relative bg-[#121212] w-full rounded-t-[32px] h-[90dvh] flex flex-col animate-in fade-in duration-200 shadow-[0_-10px_50px_rgba(0,0,0,0.8)]"
-            onClick={(e) => e.stopPropagation()} // Bloquea que los clics pasen al fondo
+            className={`drawer-panel fixed left-0 right-0 bg-[#121212] w-full rounded-t-[32px] h-[90dvh] flex flex-col shadow-[0_-10px_50px_rgba(0,0,0,0.8)] ${isOpen ? 'open' : ''}`}
+            onClick={(e) => e.stopPropagation()}
           >
             
             <div className="px-4 md:px-6 flex-1 overflow-y-auto pb-20 flex flex-col">
