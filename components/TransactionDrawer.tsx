@@ -60,7 +60,7 @@ export function TransactionDrawer({
       onSubmit(e);
       setIsOpen(false);
     } else {
-      onSubmit(e); 
+      onSubmit(e); // Para disparar la alerta desde la página principal
     }
   };
 
@@ -75,10 +75,9 @@ export function TransactionDrawer({
             <div className="mx-auto w-12 h-1.5 rounded-full bg-white/10 mb-6" />
             
             {/* TIPO */}
-            <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6">
+            <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6" data-vaul-no-drag>
               <button 
                 type="button"
-                data-vaul-no-drag onTouchStart={(e) => e.stopPropagation()}
                 onClick={() => {setTipo("ingreso"); setCategoria("");}} 
                 className={`cursor-pointer flex-1 py-3 text-xs font-black rounded-xl transition-all ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40'}`}
               >
@@ -86,7 +85,6 @@ export function TransactionDrawer({
               </button>
               <button 
                 type="button"
-                data-vaul-no-drag onTouchStart={(e) => e.stopPropagation()}
                 onClick={() => {setTipo("egreso"); setCategoria("");}} 
                 className={`cursor-pointer flex-1 py-3 text-xs font-black rounded-xl transition-all ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40'}`}
               >
@@ -95,12 +93,11 @@ export function TransactionDrawer({
             </div>
 
             {/* CATEGORÍAS */}
-            <div className="grid grid-cols-3 gap-2 mb-6">
+            <div className="grid grid-cols-3 gap-2 mb-6" data-vaul-no-drag>
               {categories[tipo as keyof typeof categories].map((cat) => (
                 <button
                   key={cat.id}
                   type="button"
-                  data-vaul-no-drag onTouchStart={(e) => e.stopPropagation()}
                   onClick={() => {
                     setCategoria(cat.id);
                     setDescripcion(cat.id === 'otro' ? '' : cat.label);
@@ -118,12 +115,11 @@ export function TransactionDrawer({
             {/* INPUTS PRINCIPALES */}
             <div className="space-y-4">
               {espacioActivo?.tipo !== 'individual' && (
-                <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5">
+                <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5" data-vaul-no-drag>
                   <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest">¿Quién realizó el movimiento?</label>
                   <select 
                     value={usuario} 
                     onChange={(e) => setUsuario(e.target.value)}
-                    data-vaul-no-drag onTouchStart={(e) => e.stopPropagation()}
                     className="cursor-pointer w-full bg-transparent text-white font-bold outline-none appearance-none"
                     required
                   >
@@ -135,23 +131,22 @@ export function TransactionDrawer({
               )}
 
               <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 flex flex-col gap-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between" data-vaul-no-drag>
                   <div className="flex-1">
                     <label className="text-[9px] uppercase font-black text-white/30 block mb-1 tracking-widest">Monto</label>
                     <input 
                       type="number" step="0.01" placeholder="0.00"
                       value={monto} onChange={(e) => setMonto(e.target.value)}
-                      data-vaul-no-drag onTouchStart={(e) => e.stopPropagation()}
                       className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums tracking-tight font-sans"
                     />
                   </div>
                 </div>
                 
                 {/* BOTONES SEGMENTADOS PARA MONEDA */}
-                <div className="flex bg-black/40 p-1 rounded-xl w-full border border-white/5 shadow-inner">
-                  <button type="button" data-vaul-no-drag onTouchStart={(e) => e.stopPropagation()} onClick={() => setMoneda('usdt')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}>USDT</button>
-                  <button type="button" data-vaul-no-drag onTouchStart={(e) => e.stopPropagation()} onClick={() => setMoneda('bs')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}>BS</button>
-                  <button type="button" data-vaul-no-drag onTouchStart={(e) => e.stopPropagation()} onClick={() => setMoneda('cash')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}>CASH</button>
+                <div className="flex bg-black/40 p-1 rounded-xl w-full border border-white/5 shadow-inner" data-vaul-no-drag>
+                  <button type="button" onClick={() => setMoneda('usdt')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}>USDT</button>
+                  <button type="button" onClick={() => setMoneda('bs')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}>BS</button>
+                  <button type="button" onClick={() => setMoneda('cash')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}>CASH</button>
                 </div>
 
                 {/* CONVERSIÓN EN TIEMPO REAL */}
@@ -175,14 +170,13 @@ export function TransactionDrawer({
               </div>
 
               {categoria === 'cashea' && (
-                <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-2xl animate-in zoom-in-95 min-h-[100px]">
+                <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-2xl animate-in zoom-in-95 min-h-[100px]" data-vaul-no-drag>
                   <p className="text-[10px] font-black text-purple-400 uppercase mb-3 text-center">¿En cuántas cuotas?</p>
                   <div className="grid grid-cols-3 gap-2">
                     {[3, 6, 9].map(n => (
                       <button 
                         key={n} 
                         type="button"
-                        data-vaul-no-drag onTouchStart={(e) => e.stopPropagation()}
                         onClick={() => (window as any).numCuotasCashea = n}
                         className="cursor-pointer py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-all focus:ring-2 ring-purple-400 tabular-nums"
                       >
@@ -194,11 +188,10 @@ export function TransactionDrawer({
               )}
 
               {tipo === 'egreso' && (
-                <div className="min-h-[64px]">
+                <div className="min-h-[64px]" data-vaul-no-drag>
                   <input 
                     type="text" placeholder="¿En qué se fue la plata? (Ej: Pizza)"
                     value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
-                    data-vaul-no-drag onTouchStart={(e) => e.stopPropagation()}
                     className="w-full bg-[#1a1a1a] border border-white/5 p-5 rounded-2xl text-sm font-bold text-white outline-none focus:border-purple-500 transition-all"
                   />
                 </div>
@@ -207,8 +200,8 @@ export function TransactionDrawer({
 
             <button 
               type="button"
-              data-vaul-no-drag onTouchStart={(e) => e.stopPropagation()}
               onClick={handleLocalSubmit}
+              data-vaul-no-drag
               className="cursor-pointer w-full bg-purple-600 text-white font-black py-5 rounded-3xl mt-8 shadow-xl active:scale-95 transition-all text-sm uppercase tracking-widest"
             >
               Confirmar Registro
