@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { TrendingUp, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3, ChevronLeft } from "lucide-react";
+import { TrendingUp, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3, ChevronLeft, Plus, ArrowRight } from "lucide-react";
 
 export function TransactionDrawer({ 
   children,
@@ -16,7 +16,10 @@ export function TransactionDrawer({
   onSubmit,
   espacioActivo,
   participantes,
-  usuario, setUsuario
+  usuario, setUsuario,
+  espacios,
+  potes,
+  destinoTransferencia, setDestinoTransferencia
 }: any) {
   
   const [isOpen, setIsOpen] = useState(false);
@@ -63,26 +66,12 @@ export function TransactionDrawer({
     ]
   };
 
-  {/* SELECTOR DE POTE DESTINO - SOLO SI ELIGE ABONAR */}
-  {categoria === 'abono_pote' && (
-    <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-emerald-500/30 mb-6 animate-in zoom-in-95">
-      <label className="text-[9px] uppercase font-black text-emerald-400 block mb-2 tracking-widest">¿A qué meta enviamos el dinero?</label>
-      <select 
-        value={destinoTransferencia} 
-        onChange={(e) => setDestinoTransferencia(e.target.value)}
-        className="w-full bg-transparent text-white font-bold outline-none appearance-none cursor-pointer"
-      >
-        <option value="" className="bg-[#121212]">Seleccionar Pote...</option>
-        {potes.map((p: any) => (
-          <option key={p.id} value={p.id} className="bg-[#121212]">{p.nombre}</option>
-        ))}
-      </select>
-    </div>
-  )}
-
   const handleLocalSubmit = (e: any) => {
     e.preventDefault();
-    const isValidDesc = tipo === 'ingreso' ? true : descripcion.trim() !== "";
+
+    if (categoria === 'abono_pote' && !destinoTransferencia) return alert("Selecciona a qué Pote vas a mandar la plata");
+
+    const isValidDesc = (tipo === 'ingreso' || categoria === 'abono_pote') ? true : descripcion.trim() !== "";
     const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
     
     if (monto && categoria && isValidDesc && isValidUser) {
@@ -144,7 +133,7 @@ export function TransactionDrawer({
                   type="button"
                   onClick={() => {
                     setCategoria(cat.id);
-                    setDescripcion(cat.id === 'otro' ? '' : cat.label);
+                    setDescripcion(cat.id === 'otro' || cat.id === 'abono_pote' ? '' : cat.label);
                   }}
                   className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
                     categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
@@ -155,6 +144,23 @@ export function TransactionDrawer({
                 </button>
               ))}
             </div>
+
+            {/* SELECTOR DE POTE DESTINO - SOLO SI ELIGE ABONAR */}
+            {categoria === 'abono_pote' && (
+              <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-emerald-500/30 mb-6 animate-in zoom-in-95">
+                <label className="text-[9px] uppercase font-black text-emerald-400 block mb-2 tracking-widest">¿A qué meta enviamos el dinero?</label>
+                <select 
+                  value={destinoTransferencia} 
+                  onChange={(e) => setDestinoTransferencia(e.target.value)}
+                  className="w-full bg-transparent text-white font-bold outline-none appearance-none cursor-pointer"
+                >
+                  <option value="" className="bg-[#121212]">Seleccionar Pote...</option>
+                  {potes?.map((p: any) => (
+                    <option key={p.id} value={p.id} className="bg-[#121212]">{p.nombre}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* USER SELECT */}
             {espacioActivo?.tipo !== 'individual' && (
@@ -242,7 +248,7 @@ export function TransactionDrawer({
             )}
 
             {/* DESCRIPCION */}
-            {tipo === 'egreso' && (
+            {tipo === 'egreso' && categoria !== 'abono_pote' && (
               <div className="mb-6">
                 <input 
                   type="text" placeholder="¿En qué se fue la plata? (Ej: Pizza)"

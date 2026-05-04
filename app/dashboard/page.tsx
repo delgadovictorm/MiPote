@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Drawer } from "vaul";
+
 // ============================================================================
 // 1. COMPONENTE TRANSACTION DRAWER (PANTALLA COMPLETA NATIVA PARA IOS)
 // ============================================================================
@@ -26,6 +27,7 @@ export function TransactionDrawer({
   participantes,
   usuario, setUsuario,
   espacios,
+  potes,
   destinoTransferencia, setDestinoTransferencia
 }: any) {
   
@@ -62,8 +64,9 @@ export function TransactionDrawer({
     ],
     egreso: [
       { id: "comida", label: "Comida", icon: <ShoppingCart size={18} /> },
-      { id: "cashea", label: "Cashea", icon: <DollarSign size={18} /> },
       { id: "internet", label: "Internet", icon: <Wifi size={18} /> },
+      { id: "abono_pote", label: "Abonar a Pote 🍯", icon: <Plus size={18} /> },
+      { id: "cashea", label: "Cashea", icon: <DollarSign size={18} /> },
       { id: "mascotas", label: "Mascotas", icon: <Dog size={18} /> },
       { id: "condominio", label: "Condominio", icon: <Home size={18} /> },
       { id: "regalos", label: "Regalos", icon: <Gift size={18} /> },
@@ -73,15 +76,10 @@ export function TransactionDrawer({
 
   const handleLocalSubmit = (e: any) => {
     e.preventDefault();
-    if (tipo === 'transferencia') {
-      if (!destinoTransferencia) return alert("Selecciona a qué Pote vas a mandar la plata");
-      if (!monto) return alert("Ingresa un monto válido");
-      onSubmit(e);
-      setIsOpen(false);
-      return;
-    }
+    
+    if (categoria === 'abono_pote' && !destinoTransferencia) return alert("Selecciona a qué Pote vas a mandar la plata");
 
-    const isValidDesc = tipo === 'ingreso' ? true : descripcion.trim() !== "";
+    const isValidDesc = (tipo === 'ingreso' || categoria === 'abono_pote') ? true : descripcion.trim() !== "";
     const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
     
     if (monto && categoria && isValidDesc && isValidUser) {
@@ -130,51 +128,40 @@ export function TransactionDrawer({
               >
                 GASTO
               </button>
-              {/* PESTAÑA TRANSFERIR SOLO SI ESTÁS EN INDIVIDUAL Y TIENES POTES */}
-              {espacios?.length > 1 && espacioActivo?.tipo === 'individual' && (
-                <button 
-                  type="button" 
-                  onClick={() => {setTipo("transferencia"); setCategoria("transferencia");}} 
-                  className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'transferencia' ? 'bg-blue-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
-                >
-                  TRANSFERIR
-                </button>
-              )}
             </div>
 
-            {tipo === 'transferencia' ? (
-               <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-blue-500/30 mb-6">
-                 <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2"><ArrowRight size={14}/> Enviar dinero a un Pote</p>
-                 <select value={destinoTransferencia} onChange={(e) => setDestinoTransferencia(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer mb-4">
+            <div className="grid grid-cols-3 gap-2 mb-6">
+              {categories[tipo as keyof typeof categories].map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => {
+                    setCategoria(cat.id);
+                    setDescripcion(cat.id === 'otro' || cat.id === 'abono_pote' ? '' : cat.label);
+                  }}
+                  className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
+                    categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
+                  }`}
+                >
+                  {cat.icon}
+                  <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {categoria === 'abono_pote' && (
+               <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-emerald-500/30 mb-6 animate-in zoom-in-95">
+                 <label className="text-[10px] text-emerald-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2">¿A qué meta enviamos el dinero?</label>
+                 <select value={destinoTransferencia} onChange={(e) => setDestinoTransferencia(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer mb-2">
                     <option value="">Selecciona el destino...</option>
-                    {espacios?.filter((e:any) => e.id !== espacioActivo.id && e.tipo !== 'individual').map((e:any) => (
-                      <option key={e.id} value={e.id}>{e.nombre}</option>
+                    {potes?.map((p:any) => (
+                      <option key={p.id} value={p.id}>{p.nombre}</option>
                     ))}
                  </select>
-                 <p className="text-xs text-white/50 leading-relaxed">El dinero se descontará de <b>{espacioActivo.nombre}</b> y se agregará automáticamente al Pote que selecciones.</p>
                </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2 mb-6">
-                {categories[tipo as keyof typeof categories].map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => {
-                      setCategoria(cat.id);
-                      setDescripcion(cat.id === 'otro' ? '' : cat.label);
-                    }}
-                    className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
-                      categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
-                    }`}
-                  >
-                    {cat.icon}
-                    <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
-                  </button>
-                ))}
-              </div>
             )}
 
-            {tipo !== 'transferencia' && espacioActivo?.tipo !== 'individual' && (
+            {espacioActivo?.tipo !== 'individual' && (
               <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 mb-6">
                 <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest pointer-events-none">¿Quién realizó el movimiento?</label>
                 <select 
@@ -256,7 +243,7 @@ export function TransactionDrawer({
               </div>
             )}
 
-            {tipo === 'egreso' && (
+            {tipo === 'egreso' && categoria !== 'abono_pote' && (
               <div className="mb-6">
                 <input 
                   type="text" placeholder="¿En qué se fue la plata? (Ej: Pizza)"
@@ -270,9 +257,9 @@ export function TransactionDrawer({
             <button 
               type="button"
               onClick={handleLocalSubmit}
-              className={`cursor-pointer w-full text-white font-black py-5 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.3)] active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0 ${tipo === 'transferencia' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-purple-600 hover:bg-purple-500'}`}
+              className={`cursor-pointer w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-5 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.3)] active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0`}
             >
-              {tipo === 'transferencia' ? 'Confirmar Transferencia' : 'Confirmar Registro'}
+              Confirmar Registro
             </button>
 
           </div>
@@ -513,8 +500,6 @@ export default function MiPoteApp() {
       return;
     }
 
- 
-
     setIsGuest(false);
     
     let espacioEncontrado = eId ? espacios.find(e => e.id === eId) : espacios.find(e => e.tipo === tipoModulo);
@@ -542,25 +527,6 @@ export default function MiPoteApp() {
     }
   };
 
-  // AQUÍ PEGAS LA FUNCIÓN NUEVA
-  const eliminarEspacio = async (e: React.MouseEvent, idEspacio: string, tipo: string, nombre: string) => {
-    e.stopPropagation();
-    const misBilleteras = espacios.filter((esp: any) => esp.tipo === 'individual');
-    
-    if (tipo === 'individual' && misBilleteras.length <= 1) {
-      return alert("🚨 No puedes eliminar tu única billetera principal.");
-    }
-    
-    if (!confirm(`¿Seguro que deseas eliminar "${nombre}"?`)) return;
-
-    await supabase.from('espacios').delete().eq('id', idEspacio);
-    alert("✅ Espacio eliminado. Recargando...");
-    window.location.reload();
-  };
-
-  
-
-  // ESTO YA LO TIENES EN TU CÓDIGO
   if (loadingAuth) return ( <div className="min-h-screen bg-[#0d0714] flex items-center justify-center"><Loader2 className="w-8 h-8 text-purple-500 animate-spin"/></div> );
 
   if (currentView === 'auth') {
@@ -893,7 +859,7 @@ function FinanzasDashboardContent({
   };
   const theme = getTheme(espacioActivo?.tipo || 'individual');
 
-const eliminarEspacio = async (e: React.MouseEvent, idEspacio: string, tipo: string, nombre: string) => {
+  const eliminarEspacio = async (e: React.MouseEvent, idEspacio: string, tipo: string, nombre: string) => {
     e.stopPropagation();
     const misBilleteras = espacios.filter((esp: any) => esp.tipo === 'individual');
     
@@ -990,6 +956,18 @@ const eliminarEspacio = async (e: React.MouseEvent, idEspacio: string, tipo: str
   
   // NUEVO: DESTINO DE LA TRANSFERENCIA
   const [destinoTransferencia, setDestinoTransferencia] = useState("");
+
+  const handleCalcUsd = (val: string) => {
+    setCalcUsd(val);
+    const num = parseFloat(val) || 0;
+    setCalcBs((num * rates.usdt).toFixed(2));
+  };
+
+  const handleCalcBs = (val: string) => {
+    setCalcBs(val);
+    const num = parseFloat(val) || 0;
+    setCalcUsd(rates.usdt > 0 ? (num / rates.usdt).toFixed(2) : "0.00");
+  };
 
   const getMensajes = (tipoApp: string, tipoTx: string) => {
     if (tipoApp === 'pote') {
@@ -1154,7 +1132,6 @@ const eliminarEspacio = async (e: React.MouseEvent, idEspacio: string, tipo: str
         const { data: metasData } = await supabase.from("metas").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: true });
         if (metasData) setPotes(metasData);
 
-        // Cargar Recordatorios
         const { data: recData } = await supabase.from("recordatorios").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: false });
         if (recData) setRecordatorios(recData);
       }
@@ -1194,49 +1171,60 @@ const eliminarEspacio = async (e: React.MouseEvent, idEspacio: string, tipo: str
     }
     return { monto_bs, monto_usd_bcv, monto_usd_paralelo };
   };
-const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.filter(tx => tx.categoria === `pote_${poteId}`).reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+
+  const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.filter(tx => tx.categoria === `pote_${poteId}`).reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+
   // 🔥 LÓGICA DE REGISTRO Y TRANSFERENCIAS
- const handleManualSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  const valorMonto = parseFloat(monto);
-  const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const valorMonto = parseFloat(monto);
+    const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
 
-  // LOGICA DE ABONO (EL CORAZÓN DEL CAMBIO)
-  if (categoria === 'abono_pote') {
-    if (!destinoTransferencia) return alert("Selecciona un Pote");
+    // LOGICA DE ABONO (EL CORAZÓN DEL CAMBIO)
+    if (categoria === 'abono_pote') {
+      if (!destinoTransferencia) return alert("Selecciona un Pote");
+      const poteDestino = potes.find((p:any) => p.id === destinoTransferencia);
+      
+      if (isGuest) {
+        const tx1 = { id: Date.now().toString() + "_out", descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', created_at: new Date().toISOString() };
+        const tx2 = { id: Date.now().toString() + "_in", descripcion: `Abono recibido de Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', created_at: new Date().toISOString() };
+        const updatedTx = [tx1, tx2, ...transactions];
+        setTransactions(updatedTx);
+        localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+      } else {
+        // 1. REGISTRO EN LA BILLETERA (Gasto que resta balance)
+        await supabase.from("transacciones_saas").insert([{
+          descripcion: `Abono a meta: ${poteDestino?.nombre}`,
+          monto_original: valorMonto,
+          moneda_original: moneda,
+          monto_bs, monto_usd_bcv, monto_usd_paralelo,
+          categoria: 'transferencia_salida', // Categoría interna para no duplicar gasto en gráficas
+          usuario: usuario || "Tú",
+          tipo: 'egreso', 
+          espacio_id: espacioActivo.id, // ID de tu billetera
+          usuario_id: session.user.id
+        }]);
 
-    // 1. REGISTRO EN LA BILLETERA (Gasto que resta balance)
-    await supabase.from("transacciones_saas").insert([{
-      descripcion: `Abono a meta: ${potes.find(p => p.id === destinoTransferencia)?.nombre}`,
-      monto_original: valorMonto,
-      moneda_original: moneda,
-      monto_bs, monto_usd_bcv, monto_usd_paralelo,
-      categoria: 'transferencia_salida', // Categoría interna para no duplicar gasto en gráficas
-      usuario: usuario || "Tú",
-      tipo: 'egreso', 
-      espacio_id: espacioActivo.id, // ID de tu billetera
-      usuario_id: session.user.id
-    }]);
+        // 2. REGISTRO EN EL POTE (Ingreso que suma a la meta)
+        await supabase.from("transacciones_saas").insert([{
+          descripcion: `Abono desde Billetera`,
+          monto_original: valorMonto,
+          moneda_original: moneda,
+          monto_bs, monto_usd_bcv, monto_usd_paralelo,
+          categoria: `pote_${destinoTransferencia}`, // ESTO es lo que hace que la barra de progreso suba
+          usuario: usuario || "Tú",
+          tipo: 'ingreso',
+          espacio_id: destinoTransferencia, // ID del pote destino
+          usuario_id: session.user.id
+        }]);
+      }
 
-    // 2. REGISTRO EN EL POTE (Ingreso que suma a la meta)
-    await supabase.from("transacciones_saas").insert([{
-      descripcion: `Abono desde Billetera`,
-      monto_original: valorMonto,
-      moneda_original: moneda,
-      monto_bs, monto_usd_bcv, monto_usd_paralelo,
-      categoria: `pote_${destinoTransferencia}`, // ESTO es lo que hace que la barra de progreso suba
-      usuario: usuario || "Tú",
-      tipo: 'ingreso',
-      espacio_id: destinoTransferencia, // ID del pote destino
-      usuario_id: session.user.id
-    }]);
+      fetchData();
+      triggerToast("ingreso", "¡Abono realizado con éxito! 🍯");
+      return;
+    }
 
-    fetchData();
-    triggerToast("ingreso", "¡Abono realizado con éxito! 🍯");
-    return;
-  }
-
-    const isValidDesc = tipo === 'ingreso' ? true : descripcion.trim() !== "";
+    const isValidDesc = (tipo === 'ingreso' || categoria === 'abono_pote') ? true : descripcion.trim() !== "";
     const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
 
     if (!isValidDesc || !isValidUser || !categoria) { 
@@ -1264,7 +1252,7 @@ const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.fil
 
     if (categoria.startsWith("pote_")) {
        const poteId = categoria.split("_")[1];
-       const poteRelacionado = potes.find(p => p.id.toString() === poteId);
+       const poteRelacionado = potes.find((p:any) => p.id.toString() === poteId);
        if (poteRelacionado) descFinal = `Pote: ${poteRelacionado.nombre} - ${descripcion}`;
     } else {
        let labelCategoria = categoriasList.find(c => c.valor === categoria)?.label || categoria;
@@ -1303,7 +1291,6 @@ const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.fil
     window.location.reload();
   };
 
-  // 🔥 EDITAR NOMBRE DEL ESPACIO
   const guardarNombreEspacio = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSpaceName.trim() || isGuest) return;
@@ -1317,7 +1304,6 @@ const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.fil
     }
   };
 
-  // 🔥 LÓGICA DE RECORDATORIOS (LISTA DE TAREAS)
   const agregarRecordatorio = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoRecordatorio.trim() || isGuest) return;
@@ -1346,13 +1332,8 @@ const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.fil
     fetchData();
   };
 
-  // Resto de la logica...
   const verificarLimiteInvitado = () => {
-    if (!isGuest) return true;
-    const count = parseInt(localStorage.getItem('mipote_guest_count') || '0');
-    if (count >= 5) { onTriggerPaywall?.(); return false; }
-    localStorage.setItem('mipote_guest_count', (count + 1).toString());
-    return true;
+    return true; 
   };
 
   const agregarCashea = async (e: React.FormEvent) => { 
@@ -1484,51 +1465,55 @@ const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.fil
     return { bs, usdt, cash };
   };
 
-const getPatrimonioNeto = () => {
-  // El patrimonio es el saldo neto de TODAS las transacciones que existen a tu nombre
-  // No importa en qué espacio estén.
-  const saldos = getSaldosAislados('ALL'); 
-  
-  const bsEnDolaresParalelo = rates.usdt > 0 ? saldos.bs / rates.usdt : 0;
-  
-  return {
-    paralelo: saldos.usdt + saldos.cash + bsEnDolaresParalelo,
-    bcv: saldos.usdt + saldos.cash + (rates.bcv > 0 ? saldos.bs / rates.bcv : 0)
-  };
-};
+  const getPatrimonioNeto = () => {
+    const saldos = getSaldosAislados('ALL'); 
+    let balanceLiquido = saldos.usdt + saldos.cash + (rates.usdt > 0 ? saldos.bs / rates.usdt : 0);
+    let balanceLiquidoBcv = saldos.usdt + saldos.cash + (rates.bcv > 0 ? saldos.bs / rates.bcv : 0);
 
-  const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
-  const transaccionesFiltradas = transaccionesDelMes.filter(tx => filtroHistorial === "Todos" || tx.usuario === filtroHistorial);
-const CustomTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-[#1a0f2e] border border-purple-500/30 p-3 rounded-xl shadow-xl">
-        <p className="text-white font-bold text-xs mb-1">{payload[0].name}</p>
-        <p className="text-xs font-sans tabular-nums text-purple-400">
-          ${payload[0].value.toFixed(2)} USDT
-        </p>
-      </div>
-    );
-  }
-  return null;
-};
+    let ahorradoPotes = transactions
+      .filter(tx => tx.categoria.startsWith("pote_"))
+      .reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+
+    let ahorradoEmergencia = transactions
+      .filter(tx => tx.categoria === "emergencia")
+      .reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+
+    return {
+      paralelo: balanceLiquido + ahorradoPotes + ahorradoEmergencia,
+      bcv: balanceLiquidoBcv + ahorradoPotes + ahorradoEmergencia
+    };
+  };
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-[#1a0f2e] border border-purple-500/30 p-3 rounded-xl shadow-xl">
+          <p className="text-white font-bold text-xs mb-1">{payload[0].name}</p>
+          <p className="text-xs font-sans tabular-nums text-purple-400">
+            ${payload[0].value.toFixed(2)} USDT
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   const renderTabContent = () => {
     const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
-  const transaccionesFiltradas = transaccionesDelMes.filter(tx => filtroHistorial === "Todos" || tx.usuario === filtroHistorial);
-  const gastosDelMesCalculados = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
+    const transaccionesFiltradas = transaccionesDelMes.filter(tx => filtroHistorial === "Todos" || tx.usuario === filtroHistorial);
+    const gastosDelMesCalculados = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
 
-  const datosCategoriasMap = gastosDelMesCalculados.reduce((acc, tx) => {
-    let catName = tx.categoria.startsWith('pote_') ? 'Extracción Potes' : 
-                  tx.categoria === 'emergencia' ? 'Emergencias 🚨' : 
-                  (categoriasList.find(c => c.valor === tx.categoria)?.label || tx.categoria);
-    acc[catName] = (acc[catName] || 0) + (tx.monto_usd_paralelo || 0);
-    return acc;
-  }, {} as Record<string, number>);
+    const datosCategoriasMap = gastosDelMesCalculados.reduce((acc, tx) => {
+      let catName = tx.categoria.startsWith('pote_') ? 'Extracción Potes' : 
+                    tx.categoria === 'emergencia' ? 'Emergencias 🚨' : 
+                    (categoriasList.find(c => c.valor === tx.categoria)?.label || tx.categoria);
+      acc[catName] = (acc[catName] || 0) + (tx.monto_usd_paralelo || 0);
+      return acc;
+    }, {} as Record<string, number>);
 
-  const dataGraficoTorta = Object.keys(datosCategoriasMap).map(key => ({ name: key, value: datosCategoriasMap[key] })).sort((a, b) => b.value - a.value);
-  const COLORS = [theme.stroke, '#ec4899', '#f97316', '#eab308', '#10b981', '#0ea5e9', '#6366f1', '#d946ef'];
-  // --- FIN DEL BLOQUE A PEGAR ---
+    const dataGraficoTorta = Object.keys(datosCategoriasMap).map(key => ({ name: key, value: datosCategoriasMap[key] })).sort((a, b) => b.value - a.value);
+    const COLORS = [theme.stroke, '#ec4899', '#f97316', '#eab308', '#10b981', '#0ea5e9', '#6366f1', '#d946ef'];
+    
     // 🔥 NUEVA PESTAÑA: RECORDATORIOS
     if (activeTab === 'recordatorios') {
       return (
@@ -1590,6 +1575,10 @@ const CustomTooltip = ({ active, payload }: any) => {
                   className="flex-1 bg-transparent text-4xl font-black text-white outline-none tabular-nums tracking-tight font-sans w-full" 
                 />
               </div>
+              <div className="mt-4 grid grid-cols-2 gap-4 border-t border-white/5 pt-4">
+                <div><p className="text-[8px] text-blue-400 uppercase font-black">Bs. BCV</p><p className="text-sm font-bold text-white">Bs. {(parseFloat(calcUsd || '0') * rates.bcv).toFixed(2)}</p></div>
+                <div><p className="text-[8px] text-emerald-400 uppercase font-black">Bs. Paralelo</p><p className="text-sm font-bold text-white">Bs. {(parseFloat(calcUsd || '0') * rates.usdt).toFixed(2)}</p></div>
+              </div>
             </div>
             
             <div className="flex justify-center -my-3 relative z-10">
@@ -1608,6 +1597,10 @@ const CustomTooltip = ({ active, payload }: any) => {
                   onChange={(e) => handleCalcBs(e.target.value)} 
                   className="flex-1 bg-transparent text-4xl font-black text-white outline-none tabular-nums tracking-tight font-sans w-full" 
                 />
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-4 border-t border-white/5 pt-4">
+                <div><p className="text-[8px] text-blue-400 uppercase font-black">$ BCV</p><p className="text-sm font-bold text-white">$ {(rates.bcv > 0 ? parseFloat(calcBs || '0') / rates.bcv : 0).toFixed(2)}</p></div>
+                <div><p className="text-[8px] text-emerald-400 uppercase font-black">$ Paralelo</p><p className="text-sm font-bold text-white">$ {(rates.usdt > 0 ? parseFloat(calcBs || '0') / rates.usdt : 0).toFixed(2)}</p></div>
               </div>
             </div>
 
@@ -1728,12 +1721,6 @@ const CustomTooltip = ({ active, payload }: any) => {
     }
 
     if (activeTab === 'pagos') {
-      const gastosDelMesCalculados = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
-      const gastosPorCategoriaValor = gastosDelMesCalculados.reduce((acc, tx) => {
-        acc[tx.categoria] = (acc[tx.categoria] || 0) + (tx.monto_usd_paralelo || 0);
-        return acc;
-      }, {} as Record<string, number>);
-
       const presupuestosPorCategoria = presupuestos.map(p => {
         const gastoActual = gastosPorCategoriaValor[p.categoria] || 0;
         const porcentaje = Math.min((gastoActual / p.monto_limite) * 100, 100);
@@ -1899,6 +1886,56 @@ const CustomTooltip = ({ active, payload }: any) => {
             </div>
           </div>
 
+          <div className={`bg-[#1a0f2e] border ${theme.border} rounded-3xl overflow-hidden shadow-xl`}>
+             <div className={`p-3 border-b border-white/5 bg-black/20 flex flex-col gap-3`}>
+                <div className={`flex justify-between items-center text-xs font-bold uppercase text-white/70`}>
+                  <span>Historial del Mes</span>
+                  <input type="month" value={mesActual} onChange={(e) => setMesActual(e.target.value)} className={`bg-black/50 border ${theme.border} rounded-lg p-1 text-white outline-none text-[10px]`} />
+                </div>
+                {espacioActivo?.tipo !== 'individual' && filterOptions.length > 1 && (
+                  <div className="flex flex-wrap gap-2 p-1 bg-black/50 rounded-xl">
+                    {filterOptions.map(filtro => (
+                      <button 
+                        key={filtro}
+                        onClick={() => setFiltroHistorial(filtro)}
+                        className={`flex-1 text-[10px] font-bold py-1.5 px-2 rounded-lg transition-colors ${filtroHistorial === filtro ? `${theme.primary} text-white` : `text-white/50 hover:${theme.lightBg}`}`}
+                      >
+                        {filtro}
+                      </button>
+                    ))}
+                  </div>
+                )}
+             </div>
+             <div className="divide-y divide-white/5 max-h-[400px] overflow-y-auto">
+                {transaccionesFiltradas.length === 0 ? (
+                  <div className="p-8 text-center text-white/30 text-sm">No hay registros en este mes.</div>
+                ) : transaccionesFiltradas.map((tx) => (
+                  <div key={tx.id} className="p-3 flex justify-between hover:bg-white/5 group">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className={`p-1.5 rounded-xl shrink-0 ${tx.tipo === 'ingreso' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                        {tx.tipo === 'ingreso' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
+                      </div>
+                      <div className="truncate">
+                        <p className="text-xs font-bold text-white truncate">{tx.descripcion}</p>
+                        <p className="text-[8px] text-white/40 uppercase truncate">{tx.usuario} • {new Date(tx.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="text-right">
+                        <p className={`text-sm font-black font-sans tabular-nums tracking-tight ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          $<AnimatedNum value={tx.monto_usd_paralelo || 0} format="usd" />
+                        </p>
+                        {tx.moneda_original === 'bs' && (
+                          <p className="text-[9px] text-white/30 font-sans tabular-nums font-medium">Bs. {(tx.monto_original || 0).toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                        )}
+                      </div>
+                      <button onClick={() => eliminarTransaccion(tx.id)} className="p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-rose-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                ))}
+             </div>
+          </div>
+
         </div>
       );
     }
@@ -1913,7 +1950,9 @@ const CustomTooltip = ({ active, payload }: any) => {
           
           <div className="mt-2 mb-4">
              <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#1a0f2e] to-black/40 border border-white/5 rounded-[2rem] shadow-2xl">
-                <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-1 flex items-center gap-2"><Globe className="w-3 h-3"/> Patrimonio Neto Total</p>
+                <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-1 flex items-center gap-2">
+                  <Globe className="w-3 h-3"/> {espacioActivo?.tipo === 'individual' ? 'Patrimonio Neto Total' : 'Balance Total del Espacio'}
+                </p>
                 <p className="text-5xl font-black text-white tracking-tighter tabular-nums font-sans text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-200">
                   $<AnimatedNum value={patrimonioTotal.paralelo} format="usd" />
                 </p>
@@ -1928,51 +1967,53 @@ const CustomTooltip = ({ active, payload }: any) => {
              </div>
           </div>
 
-          <div className="mb-6">
-            <div className={`bg-[#1a1a1a] border border-[#333] p-6 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[220px]`}>
-               <div className="flex justify-between items-start mb-4">
-                  <p className="text-white/80 font-bold text-sm">Tu Liquidez ({activeWallet.toUpperCase()})</p>
-                  <Wallet className="w-6 h-6 text-white/30" />
-               </div>
-               
-               <div className="mb-6">
-                  {activeWallet === 'usdt' && (
-                     <div className="animate-in fade-in">
-                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
-                         $<AnimatedNum value={saldoPrincipal.usdt} format="usd" />
-                       </p>
-                       <p className="text-emerald-400 text-xs font-bold mt-2">
-                         Eqv: Bs. <AnimatedNum value={saldoPrincipal.usdt * rates.usdt} format="bs" /> (Paralelo)
-                       </p>
-                     </div>
-                  )}
-                  {activeWallet === 'bs' && (
-                     <div className="animate-in fade-in">
-                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
-                         Bs. <AnimatedNum value={saldoPrincipal.bs} format="bs" />
-                       </p>
-                       <p className="text-blue-400 text-xs font-bold mt-2">
-                         Eqv: $<AnimatedNum value={rates.bcv > 0 ? saldoPrincipal.bs / rates.bcv : 0} format="usd" /> (Tasa BCV)
-                       </p>
-                     </div>
-                  )}
-                  {activeWallet === 'cash' && (
-                     <div className="animate-in fade-in">
-                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
-                         $<AnimatedNum value={saldoPrincipal.cash} format="usd" />
-                       </p>
-                       <p className="text-amber-400 text-xs font-bold mt-2 uppercase">Monto Físico Exacto</p>
-                     </div>
-                  )}
-               </div>
+          {espacioActivo?.tipo === 'individual' && (
+            <div className="mb-6">
+              <div className={`bg-[#1a1a1a] border border-[#333] p-6 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[220px]`}>
+                 <div className="flex justify-between items-start mb-4">
+                    <p className="text-white/80 font-bold text-sm">Tu Liquidez ({activeWallet.toUpperCase()})</p>
+                    <Wallet className="w-6 h-6 text-white/30" />
+                 </div>
+                 
+                 <div className="mb-6">
+                    {activeWallet === 'usdt' && (
+                       <div className="animate-in fade-in">
+                         <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
+                           $<AnimatedNum value={saldoPrincipal.usdt} format="usd" />
+                         </p>
+                         <p className="text-emerald-400 text-xs font-bold mt-2">
+                           Eqv: Bs. <AnimatedNum value={saldoPrincipal.usdt * rates.usdt} format="bs" /> (Paralelo)
+                         </p>
+                       </div>
+                    )}
+                    {activeWallet === 'bs' && (
+                       <div className="animate-in fade-in">
+                         <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
+                           Bs. <AnimatedNum value={saldoPrincipal.bs} format="bs" />
+                         </p>
+                         <p className="text-blue-400 text-xs font-bold mt-2">
+                           Eqv: $<AnimatedNum value={rates.bcv > 0 ? saldoPrincipal.bs / rates.bcv : 0} format="usd" /> (Tasa BCV)
+                         </p>
+                       </div>
+                    )}
+                    {activeWallet === 'cash' && (
+                       <div className="animate-in fade-in">
+                         <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
+                           $<AnimatedNum value={saldoPrincipal.cash} format="usd" />
+                         </p>
+                         <p className="text-amber-400 text-xs font-bold mt-2 uppercase">Monto Físico Exacto</p>
+                       </div>
+                    )}
+                 </div>
 
-               <div className="flex bg-black/40 p-1 rounded-xl w-max border border-white/5 shadow-inner">
-                 <button onClick={() => setActiveWallet('usdt')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'usdt' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>USDT</button>
-                 <button onClick={() => setActiveWallet('bs')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'bs' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>BS</button>
-                 <button onClick={() => setActiveWallet('cash')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'cash' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>CASH</button>
-               </div>
+                 <div className="flex bg-black/40 p-1 rounded-xl w-max border border-white/5 shadow-inner">
+                   <button onClick={() => setActiveWallet('usdt')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'usdt' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>USDT</button>
+                   <button onClick={() => setActiveWallet('bs')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'bs' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>BS</button>
+                   <button onClick={() => setActiveWallet('cash')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'cash' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>CASH</button>
+                 </div>
+              </div>
             </div>
-          </div>
+          )}
 
           {espacioActivo?.tipo !== 'individual' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
@@ -2101,17 +2142,35 @@ const CustomTooltip = ({ active, payload }: any) => {
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         <span className={`text-sm md:text-base font-black text-emerald-400`}><AnimatedNum value={porcentaje} format="pct"/></span>
-                        {porcentaje < 100 && (
-                          <div className="flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => eliminarPote(pote.id)} className="p-1.5 bg-rose-500/20 text-rose-400 rounded-lg hover:bg-rose-500 hover:text-white transition-colors"><Trash2 className="w-3.5 h-3.5"/></button>
-                            
-                          </div>
-                        )}
                       </div>
                     </div>
                     <div className={`h-3 w-full bg-black/60 rounded-full border border-white/5 p-0.5 mt-2`}>
                       <div className={`h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]`} style={{ width: `${porcentaje}%`, transition: 'width 1s ease-in-out' }}></div>
                     </div>
+                    
+                    <div className="flex gap-2 mt-4">
+                      {porcentaje < 100 && (
+                        <button 
+                          onClick={() => {
+                            setTipo("egreso"); 
+                            setCategoria("abono_pote"); 
+                            setDestinoTransferencia(pote.id); 
+                            const trigger = document.getElementById('nuevo-registro-trigger'); 
+                            if (trigger) trigger.click(); 
+                          }} 
+                          className="w-10 h-10 bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center rounded-full shadow-lg shadow-emerald-500/20 active:scale-90 transition-all"
+                        >
+                          <Plus size={20} strokeWidth={3} />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => eliminarPote(pote.id)} 
+                        className="w-10 h-10 bg-white/5 hover:bg-rose-500/20 text-white/30 hover:text-rose-500 flex items-center justify-center rounded-full border border-white/5 transition-colors"
+                      >
+                        <Trash2 size={18}/>
+                      </button>
+                    </div>
+
                   </div>
                 </div>
               )
@@ -2127,11 +2186,11 @@ const CustomTooltip = ({ active, payload }: any) => {
                   moneda={moneda} setMoneda={setMoneda}
                   descripcion={descripcion} setDescripcion={setDescripcion}
                   rates={rates} theme={theme} onSubmit={handleManualSubmit}
-                  espacios={espacios} espacioActivo={espacioActivo} 
+                  espacios={espacios} espacioActivo={espacioActivo} potes={potes}
                   participantes={participantes} usuario={usuario} setUsuario={setUsuario}
                   destinoTransferencia={destinoTransferencia} setDestinoTransferencia={setDestinoTransferencia}
                 >
-                  <button type="button" className="w-full bg-[#1a1a1a] border border-[#333] hover:border-emerald-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group h-full">
+                  <button id="nuevo-registro-trigger" type="button" className="w-full bg-[#1a1a1a] border border-[#333] hover:border-emerald-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group h-full">
                     <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-emerald-500 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] group-hover:scale-110 transition-transform`}>
                       <Plus className="w-6 h-6 md:w-8 md:h-8 text-black" />
                     </div>
@@ -2200,58 +2259,6 @@ const CustomTooltip = ({ active, payload }: any) => {
             )}
           </div>
 
-          <div className="mt-6">
-            <div className={`bg-[#1a0f2e] border ${theme.border} rounded-3xl overflow-hidden shadow-xl`}>
-              <div className={`p-3 border-b border-white/5 bg-black/20 flex flex-col gap-3`}>
-                <div className={`flex justify-between items-center text-xs font-bold uppercase text-white/70`}>
-                  <span>Historial del Mes</span>
-                  <input type="month" value={mesActual} onChange={(e) => setMesActual(e.target.value)} className={`bg-black/50 border ${theme.border} rounded-lg p-1 text-white outline-none text-[10px]`} />
-                </div>
-                {espacioActivo?.tipo !== 'individual' && filterOptions.length > 1 && (
-                  <div className="flex flex-wrap gap-2 p-1 bg-black/50 rounded-xl">
-                    {filterOptions.map(filtro => (
-                      <button 
-                        key={filtro}
-                        onClick={() => setFiltroHistorial(filtro)}
-                        className={`flex-1 text-[10px] font-bold py-1.5 px-2 rounded-lg transition-colors ${filtroHistorial === filtro ? `${theme.primary} text-white` : `text-white/50 hover:${theme.lightBg}`}`}
-                      >
-                        {filtro}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              
-              <div className="divide-y divide-white/5 max-h-[400px] overflow-y-auto">
-                {transaccionesFiltradas.length === 0 ? (
-                  <div className="p-8 text-center text-white/30 text-sm">No hay registros en este mes.</div>
-                ) : transaccionesFiltradas.map((tx) => (
-                  <div key={tx.id} className="p-3 flex justify-between hover:bg-white/5 group">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <div className={`p-1.5 rounded-xl shrink-0 ${tx.tipo === 'ingreso' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                        {tx.tipo === 'ingreso' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
-                      </div>
-                      <div className="truncate">
-                        <p className="text-xs font-bold text-white truncate">{tx.descripcion}</p>
-                        <p className="text-[8px] text-white/40 uppercase truncate">{tx.usuario} • {new Date(tx.created_at).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="text-right">
-                        <p className={`text-sm font-black font-sans tabular-nums tracking-tight ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          $<AnimatedNum value={tx.monto_usd_paralelo || 0} format="usd" />
-                        </p>
-                        {tx.moneda_original === 'bs' && (
-                          <p className="text-[9px] text-white/30 font-sans tabular-nums font-medium">Bs. {(tx.monto_original || 0).toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
-                        )}
-                      </div>
-                      <button onClick={() => eliminarTransaccion(tx.id)} className="p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-rose-500"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       );
     }
@@ -2366,7 +2373,7 @@ const CustomTooltip = ({ active, payload }: any) => {
           </div>
         </div>
       )}
-            {renderTabContent()}
+      {renderTabContent()}
 
       <nav className={`fixed bottom-0 left-0 right-0 bg-[#1a0f2e]/90 backdrop-blur-xl border-t ${theme.border} p-3 md:hidden z-40 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)]`}>
         <div className="flex justify-around items-center max-w-md mx-auto">
