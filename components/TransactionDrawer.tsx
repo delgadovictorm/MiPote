@@ -21,7 +21,7 @@ export function TransactionDrawer({
   
   const [isOpen, setIsOpen] = useState(false);
 
-  // Limpiamos SOLO el monto y la descripción al cerrar, para no perder el usuario
+  // Limpiamos SOLO el monto y la descripción al cerrar, para no perder el usuario seleccionado
   useEffect(() => {
     if (!isOpen) {
       const timer = setTimeout(() => {
@@ -61,7 +61,7 @@ export function TransactionDrawer({
       onSubmit(e);
       setIsOpen(false);
     } else {
-      onSubmit(e); 
+      onSubmit(e); // Dispara la alerta desde el componente padre
     }
   };
 
@@ -70,38 +70,38 @@ export function TransactionDrawer({
       <Drawer.Trigger asChild>{children}</Drawer.Trigger>
       <Drawer.Portal>
         <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-        <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[92vh] fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 shadow-2xl overflow-hidden">
+        <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[92vh] fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 shadow-2xl focus:outline-none">
           <Drawer.Title className="sr-only">Registrar Movimiento</Drawer.Title>
           
           {/* BOTÓN CERRAR OPCIONAL */}
           <button 
             onClick={() => setIsOpen(false)} 
-            className="absolute top-4 right-4 z-50 p-2 bg-white/5 rounded-full text-white/50 hover:text-white"
+            className="absolute top-4 right-4 z-50 p-2 bg-white/5 rounded-full text-white/50 hover:text-white cursor-pointer"
           >
             <X size={18} />
           </button>
 
-          {/* 1. ZONA DE ARRASTRE: Único lugar donde el iPhone permitirá deslizar hacia abajo */}
-          <div className="w-full flex justify-center pt-4 pb-6 bg-[#121212] cursor-grab active:cursor-grabbing touch-none">
+          {/* 1. ZONA DE ARRASTRE: Único lugar donde el iPhone desliza el panel */}
+          <div className="w-full flex justify-center pt-4 pb-4 bg-[#121212] rounded-t-[32px] shrink-0">
             <div className="w-12 h-1.5 rounded-full bg-white/20" />
           </div>
 
-          {/* 2. ZONA BLINDADA: Todo lo que está aquí adentro es inmune al bug de arrastre */}
-          <div data-vaul-no-drag className="px-4 md:px-6 flex-1 overflow-y-auto pb-20 bg-[#121212] flex flex-col touch-pan-y">
+          {/* 2. ZONA DEL FORMULARIO BLINDADA: data-vaul-no-drag bloquea el arrastre aquí */}
+          <div data-vaul-no-drag className="px-4 md:px-6 flex-1 overflow-y-auto pb-20 flex flex-col">
             
             {/* TIPO */}
             <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6 shrink-0">
               <button 
                 type="button"
                 onClick={() => {setTipo("ingreso"); setCategoria("");}} 
-                className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40 hover:text-white'}`}
+                className={`cursor-pointer flex-1 py-3 text-xs font-black rounded-xl transition-all ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40 hover:text-white'}`}
               >
                 INGRESO
               </button>
               <button 
                 type="button"
                 onClick={() => {setTipo("egreso"); setCategoria("");}} 
-                className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
+                className={`cursor-pointer flex-1 py-3 text-xs font-black rounded-xl transition-all ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
               >
                 GASTO
               </button>
@@ -117,7 +117,7 @@ export function TransactionDrawer({
                     setCategoria(cat.id);
                     setDescripcion(cat.id === 'otro' ? '' : cat.label);
                   }}
-                  className={`p-3 rounded-2xl border transition-all flex flex-col items-center gap-2 ${
+                  className={`cursor-pointer p-3 rounded-2xl border transition-all flex flex-col items-center gap-2 ${
                     categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
                   }`}
                 >
@@ -162,21 +162,21 @@ export function TransactionDrawer({
                   <button 
                     type="button" 
                     onClick={() => setMoneda('usdt')} 
-                    className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
+                    className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
                   >
                     USDT
                   </button>
                   <button 
                     type="button" 
                     onClick={() => setMoneda('bs')} 
-                    className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
+                    className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
                   >
                     BS
                   </button>
                   <button 
                     type="button" 
                     onClick={() => setMoneda('cash')} 
-                    className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
+                    className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
                   >
                     CASH
                   </button>
@@ -211,7 +211,7 @@ export function TransactionDrawer({
                         key={n} 
                         type="button"
                         onClick={() => (window as any).numCuotasCashea = n}
-                        className="py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-all focus:ring-2 ring-purple-400 tabular-nums"
+                        className="cursor-pointer py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-all focus:ring-2 ring-purple-400 tabular-nums"
                       >
                         {n}
                       </button>
@@ -234,7 +234,7 @@ export function TransactionDrawer({
             <button 
               type="button"
               onClick={handleLocalSubmit}
-              className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-5 rounded-3xl mt-8 shadow-[0_0_20px_rgba(147,51,234,0.3)] active:scale-95 transition-all text-sm uppercase tracking-widest shrink-0"
+              className="cursor-pointer w-full bg-purple-600 text-white font-black py-5 rounded-3xl mt-8 shadow-[0_0_20px_rgba(147,51,234,0.3)] active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0"
             >
               Confirmar Registro
             </button>
