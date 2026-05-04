@@ -35,6 +35,12 @@ const drawerStyles = `
       cursor: pointer;
       -webkit-user-select: none;
       user-select: none;
+      z-index: 10;
+      position: relative;
+    }
+
+    .drawer-panel button:active {
+      opacity: 0.8;
     }
 
     .drawer-panel input,
@@ -194,8 +200,9 @@ export function TransactionDrawer({
           
           {/* FONDO OSCURO */}
           <div 
-            className={`drawer-overlay absolute inset-0 bg-black/80 backdrop-blur-sm ${isOpen ? 'open' : ''}`}
+            className={`drawer-overlay absolute inset-0 bg-black/80 backdrop-blur-sm pointer-events-none ${isOpen ? 'open' : ''}`}
             onClick={() => setIsOpen(false)}
+            style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
           />
 
           {/* 🎯 CONTENEDOR DEL PANEL */}
@@ -204,7 +211,7 @@ export function TransactionDrawer({
             className={`drawer-panel fixed left-0 right-0 bg-[#121212] w-full rounded-t-[32px] h-[90dvh] flex flex-col shadow-[0_-10px_50px_rgba(0,0,0,0.8)] ${isOpen ? 'open' : ''}`}
           >
             
-            <div className="px-4 md:px-6 flex-1 overflow-y-auto pb-20 flex flex-col">
+            <div className="px-4 md:px-6 flex-1 overflow-y-auto pb-20 flex flex-col pt-0" style={{ WebkitOverflowScrolling: 'touch' }}>
               
               {/* HEADER DEL PANEL */}
               <div className="flex items-center justify-between pt-6 pb-6 sticky top-0 bg-[#121212] z-20 border-b border-white/5 mb-4">
