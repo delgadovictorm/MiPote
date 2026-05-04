@@ -66,30 +66,33 @@ export function TransactionDrawer({
 
   return (
     <>
-      {/* 1. CLONAMOS EL BOTÓN PADRE PARA QUE ABRA ESTE NUEVO PANEL */}
+      {/* BOTÓN INICIAL PARA ABRIR EL PANEL */}
       {React.cloneElement(children, { onClick: () => setIsOpen(true) })}
 
-      {/* 2. NUESTRO PANEL CREADO DESDE CERO (SIN LIBRERÍAS EXTERNAS) */}
+      {/* PANEL MANUAL DESDE CERO - SIN ANIMACIONES DE TRANSFORM PARA EVITAR EL BUG DE IOS */}
       {isOpen && (
-        <div className="fixed inset-0 z-[999] flex flex-col justify-end">
+        <div className="fixed inset-0 z-[9999] flex flex-col justify-end">
           
           {/* FONDO OSCURO (Al hacer clic, se cierra) */}
           <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300" 
-            onClick={() => setIsOpen(false)} 
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" 
+            onClick={(e) => { e.stopPropagation(); setIsOpen(false); }} 
           />
 
-          {/* CONTENEDOR DEL PANEL BLINDADO */}
-          <div className="relative bg-[#121212] w-full rounded-t-[32px] h-[95vh] flex flex-col animate-in slide-in-from-bottom duration-300 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+          {/* CONTENEDOR DEL PANEL: Usa dvh para iOS y NO tiene transformaciones de css */}
+          <div 
+            className="relative bg-[#121212] w-full rounded-t-[32px] h-[90dvh] flex flex-col animate-in fade-in duration-200 shadow-[0_-10px_50px_rgba(0,0,0,0.8)]"
+            onClick={(e) => e.stopPropagation()} // Bloquea que los clics pasen al fondo
+          >
             
             <div className="px-4 md:px-6 flex-1 overflow-y-auto pb-20 flex flex-col">
               
               {/* HEADER DEL PANEL */}
-              <div className="flex items-center justify-between pt-6 pb-6 sticky top-0 bg-[#121212] z-20">
+              <div className="flex items-center justify-between pt-6 pb-6 sticky top-0 bg-[#121212] z-20 border-b border-white/5 mb-4">
                 <h3 className="text-white font-black text-lg">Nuevo Registro</h3>
                 <button 
                   onClick={() => setIsOpen(false)} 
-                  className="p-2 bg-white/5 rounded-full text-white/50 hover:text-white transition-colors"
+                  className="p-2 bg-white/10 rounded-full text-white/70 hover:text-white hover:bg-rose-500 transition-colors"
                 >
                   <X size={20} />
                 </button>
@@ -98,14 +101,16 @@ export function TransactionDrawer({
               {/* TIPO DE REGISTRO */}
               <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6 shrink-0">
                 <button 
+                  type="button"
                   onClick={() => {setTipo("ingreso"); setCategoria("");}} 
-                  className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
+                  className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
                 >
                   INGRESO
                 </button>
                 <button 
+                  type="button"
                   onClick={() => {setTipo("egreso"); setCategoria("");}} 
-                  className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
+                  className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
                 >
                   GASTO
                 </button>
@@ -116,16 +121,17 @@ export function TransactionDrawer({
                 {categories[tipo as keyof typeof categories].map((cat) => (
                   <button
                     key={cat.id}
+                    type="button"
                     onClick={() => {
                       setCategoria(cat.id);
                       setDescripcion(cat.id === 'otro' ? '' : cat.label);
                     }}
-                    className={`p-3 rounded-2xl border transition-all flex flex-col items-center gap-2 ${
+                    className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 ${
                       categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
                     }`}
                   >
                     {cat.icon}
-                    <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
+                    <span className="text-[10px] font-bold uppercase">{cat.label}</span>
                   </button>
                 ))}
               </div>
@@ -134,7 +140,7 @@ export function TransactionDrawer({
               <div className="space-y-4 shrink-0">
                 {espacioActivo?.tipo !== 'individual' && (
                   <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5">
-                    <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest pointer-events-none">¿Quién realizó el movimiento?</label>
+                    <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest">¿Quién realizó el movimiento?</label>
                     <select 
                       value={usuario} 
                       onChange={(e) => setUsuario(e.target.value)}
@@ -151,7 +157,7 @@ export function TransactionDrawer({
                 <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 flex flex-col gap-4">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <label className="text-[9px] uppercase font-black text-white/30 block mb-1 tracking-widest pointer-events-none">Monto</label>
+                      <label className="text-[9px] uppercase font-black text-white/30 block mb-1 tracking-widest">Monto</label>
                       <input 
                         type="number" step="0.01" placeholder="0.00"
                         value={monto} onChange={(e) => setMonto(e.target.value)}
@@ -163,20 +169,23 @@ export function TransactionDrawer({
                   {/* BOTONES SEGMENTADOS PARA MONEDA */}
                   <div className="flex bg-black/40 p-1 rounded-xl w-full border border-white/5 shadow-inner">
                     <button 
+                      type="button"
                       onClick={() => setMoneda('usdt')} 
-                      className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
+                      className={`flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
                     >
                       USDT
                     </button>
                     <button 
+                      type="button"
                       onClick={() => setMoneda('bs')} 
-                      className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
+                      className={`flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
                     >
                       BS
                     </button>
                     <button 
+                      type="button"
                       onClick={() => setMoneda('cash')} 
-                      className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
+                      className={`flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
                     >
                       CASH
                     </button>
@@ -184,7 +193,7 @@ export function TransactionDrawer({
 
                   {/* CONVERSIÓN EN TIEMPO REAL */}
                   {monto && rates.bcv > 0 && moneda !== 'cash' && (
-                    <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 w-full text-center pointer-events-none">
+                    <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 w-full text-center">
                       {moneda === 'bs' ? (
                         <>
                           <div className="flex-1"><p className={`text-[9px] uppercase text-purple-400 font-bold mb-0.5`}>Equiv. BCV</p><p className="font-sans tabular-nums tracking-tight text-white font-bold text-sm">${(parseFloat(monto) / rates.bcv).toFixed(2)}</p></div>
@@ -203,14 +212,15 @@ export function TransactionDrawer({
                 </div>
 
                 {categoria === 'cashea' && (
-                  <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-2xl animate-in zoom-in-95 min-h-[100px]">
-                    <p className="text-[10px] font-black text-purple-400 uppercase mb-3 text-center pointer-events-none">¿En cuántas cuotas?</p>
+                  <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-2xl animate-in fade-in min-h-[100px]">
+                    <p className="text-[10px] font-black text-purple-400 uppercase mb-3 text-center">¿En cuántas cuotas?</p>
                     <div className="grid grid-cols-3 gap-2">
                       {[3, 6, 9].map(n => (
                         <button 
                           key={n} 
+                          type="button"
                           onClick={() => (window as any).numCuotasCashea = n}
-                          className="py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-all focus:ring-2 ring-purple-400 tabular-nums"
+                          className="py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-colors focus:ring-2 ring-purple-400 tabular-nums"
                         >
                           {n}
                         </button>
@@ -224,13 +234,14 @@ export function TransactionDrawer({
                     <input 
                       type="text" placeholder="¿En qué se fue la plata? (Ej: Pizza)"
                       value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
-                      className="w-full bg-[#1a1a1a] border border-white/5 p-5 rounded-2xl text-sm font-bold text-white outline-none focus:border-purple-500 transition-all"
+                      className="w-full bg-[#1a1a1a] border border-white/5 p-5 rounded-2xl text-sm font-bold text-white outline-none focus:border-purple-500 transition-colors"
                     />
                   </div>
                 )}
               </div>
 
               <button 
+                type="button"
                 onClick={handleLocalSubmit}
                 className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-5 rounded-3xl mt-8 shadow-[0_0_20px_rgba(147,51,234,0.3)] active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0"
               >
