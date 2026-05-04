@@ -5,13 +5,12 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { 
   ArrowDownCircle, ArrowUpCircle, Wallet, Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, Target, Home, CreditCard, Calculator, Lock, Mail, LogIn, UserPlus, Sparkles, ArrowLeft, Shield, Key, Copy, UploadCloud, Phone, Menu, LogOut, Globe, ChevronRight, Loader2,
-  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3, ChevronLeft
+  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3, ChevronLeft, ArrowRight, ListTodo
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Drawer } from "vaul";
-
 // ============================================================================
-// 1. COMPONENTE TRANSACTION DRAWER (PANTALLA COMPLETA NATIVA PARA EVITAR BUGS DE IOS)
+// 1. COMPONENTE TRANSACTION DRAWER (PANTALLA COMPLETA NATIVA PARA IOS)
 // ============================================================================
 export function TransactionDrawer({ 
   children,
@@ -25,7 +24,9 @@ export function TransactionDrawer({
   onSubmit,
   espacioActivo,
   participantes,
-  usuario, setUsuario
+  usuario, setUsuario,
+  espacios,
+  destinoTransferencia, setDestinoTransferencia
 }: any) {
   
   const [isOpen, setIsOpen] = useState(false);
@@ -35,7 +36,7 @@ export function TransactionDrawer({
     setMounted(true);
   }, []);
 
-  // Limpiamos los campos al cerrar y bloqueamos el scroll del fondo en iOS
+  // Bloqueamos el scroll del fondo en iOS
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -72,6 +73,14 @@ export function TransactionDrawer({
 
   const handleLocalSubmit = (e: any) => {
     e.preventDefault();
+    if (tipo === 'transferencia') {
+      if (!destinoTransferencia) return alert("Selecciona a qué Pote vas a mandar la plata");
+      if (!monto) return alert("Ingresa un monto válido");
+      onSubmit(e);
+      setIsOpen(false);
+      return;
+    }
+
     const isValidDesc = tipo === 'ingreso' ? true : descripcion.trim() !== "";
     const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
     
@@ -106,7 +115,7 @@ export function TransactionDrawer({
 
           <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32 bg-[#0d0714] overscroll-contain">
             
-            <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6">
+            <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6 flex-wrap gap-1">
               <button 
                 type="button"
                 onClick={() => {setTipo("ingreso"); setCategoria("");}}
@@ -121,28 +130,51 @@ export function TransactionDrawer({
               >
                 GASTO
               </button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 mb-6">
-              {categories[tipo as keyof typeof categories].map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => {
-                    setCategoria(cat.id);
-                    setDescripcion(cat.id === 'otro' ? '' : cat.label);
-                  }}
-                  className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
-                    categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
-                  }`}
+              {/* PESTAÑA TRANSFERIR SOLO SI ESTÁS EN INDIVIDUAL Y TIENES POTES */}
+              {espacios?.length > 1 && espacioActivo?.tipo === 'individual' && (
+                <button 
+                  type="button" 
+                  onClick={() => {setTipo("transferencia"); setCategoria("transferencia");}} 
+                  className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'transferencia' ? 'bg-blue-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
                 >
-                  {cat.icon}
-                  <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
+                  TRANSFERIR
                 </button>
-              ))}
+              )}
             </div>
 
-            {espacioActivo?.tipo !== 'individual' && (
+            {tipo === 'transferencia' ? (
+               <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-blue-500/30 mb-6">
+                 <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2"><ArrowRight size={14}/> Enviar dinero a un Pote</p>
+                 <select value={destinoTransferencia} onChange={(e) => setDestinoTransferencia(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer mb-4">
+                    <option value="">Selecciona el destino...</option>
+                    {espacios?.filter((e:any) => e.id !== espacioActivo.id && e.tipo !== 'individual').map((e:any) => (
+                      <option key={e.id} value={e.id}>{e.nombre}</option>
+                    ))}
+                 </select>
+                 <p className="text-xs text-white/50 leading-relaxed">El dinero se descontará de <b>{espacioActivo.nombre}</b> y se agregará automáticamente al Pote que selecciones.</p>
+               </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 mb-6">
+                {categories[tipo as keyof typeof categories].map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setCategoria(cat.id);
+                      setDescripcion(cat.id === 'otro' ? '' : cat.label);
+                    }}
+                    className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
+                      categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
+                    }`}
+                  >
+                    {cat.icon}
+                    <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {tipo !== 'transferencia' && espacioActivo?.tipo !== 'individual' && (
               <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 mb-6">
                 <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest pointer-events-none">¿Quién realizó el movimiento?</label>
                 <select 
@@ -238,9 +270,9 @@ export function TransactionDrawer({
             <button 
               type="button"
               onClick={handleLocalSubmit}
-              className="cursor-pointer w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-5 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.3)] active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0"
+              className={`cursor-pointer w-full text-white font-black py-5 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.3)] active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0 ${tipo === 'transferencia' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-purple-600 hover:bg-purple-500'}`}
             >
-              Confirmar Registro
+              {tipo === 'transferencia' ? 'Confirmar Transferencia' : 'Confirmar Registro'}
             </button>
 
           </div>
@@ -251,9 +283,8 @@ export function TransactionDrawer({
   );
 }
 
-
 // ============================================================================
-// 2. APP PRINCIPAL Y AUTENTICACIÓN (EL DEFAULT EXPORT QUE TE FALTABA)
+// APP PRINCIPAL
 // ============================================================================
 export default function MiPoteApp() {
   const [session, setSession] = useState<any>(null);
@@ -465,9 +496,7 @@ export default function MiPoteApp() {
         await supabase.from('espacio_miembros').insert([{ espacio_id: spaceFound.id, usuario_id: session.user.id, rol: 'miembro' }]);
         await supabase.from('participantes').insert([{ nombre: (perfil?.nombre || session.user.email.split('@')[0]), espacio_id: spaceFound.id }]);
         
-        setEspacios([...espacios, spaceFound]);
-        setEspacioActivo(spaceFound);
-        localStorage.setItem('mipote_last_space', spaceFound.id);
+        await cargarDatosUsuario(session.user.id);
         setShowJoinModal(false);
         setJoinCode("");
         setCurrentView('dashboard');
@@ -484,10 +513,7 @@ export default function MiPoteApp() {
       return;
     }
 
-    if (tipoModulo === 'vaca') {
-       alert("El módulo 'La Vaca' es exclusivo y estará disponible próximamente.");
-       return;
-    }
+ 
 
     setIsGuest(false);
     
@@ -508,7 +534,7 @@ export default function MiPoteApp() {
 
       if (newSpace) {
         await supabase.from('espacio_miembros').insert([{ espacio_id: newSpace.id, usuario_id: session.user.id, rol: 'admin' }]);
-        setEspacios([...espacios, newSpace]);
+        await cargarDatosUsuario(session.user.id);
         setEspacioActivo(newSpace);
         localStorage.setItem('mipote_last_space', newSpace.id);
         setCurrentView('dashboard');
@@ -516,31 +542,191 @@ export default function MiPoteApp() {
     }
   };
 
-  if (loadingAuth) return ( <div className="min-h-screen bg-[#0d0714] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div></div> );
+  // AQUÍ PEGAS LA FUNCIÓN NUEVA
+  const eliminarEspacio = async (e: React.MouseEvent, idEspacio: string, tipo: string, nombre: string) => {
+    e.stopPropagation();
+    const misBilleteras = espacios.filter((esp: any) => esp.tipo === 'individual');
+    
+    if (tipo === 'individual' && misBilleteras.length <= 1) {
+      return alert("🚨 No puedes eliminar tu única billetera principal.");
+    }
+    
+    if (!confirm(`¿Seguro que deseas eliminar "${nombre}"?`)) return;
+
+    await supabase.from('espacios').delete().eq('id', idEspacio);
+    alert("✅ Espacio eliminado. Recargando...");
+    window.location.reload();
+  };
+
+  
+
+  // ESTO YA LO TIENES EN TU CÓDIGO
+  if (loadingAuth) return ( <div className="min-h-screen bg-[#0d0714] flex items-center justify-center"><Loader2 className="w-8 h-8 text-purple-500 animate-spin"/></div> );
 
   if (currentView === 'auth') {
-    // Aquí iría todo tu código de authStage === 'welcome', 'login', etc...
-    // (Por simplicidad en este bloque de solución de renderizado, si entras aquí 
-    // y solo tenías tu landing en app/page.tsx, lo redirigimos o muestras la vista básica)
     if (authStage === 'welcome') {
       return (
-        <div className="min-h-screen bg-[#0d0714] flex flex-col items-center justify-center p-4">
-           <h1 className="text-white text-3xl font-bold mb-4">Bienvenido a Mi Pote</h1>
-           <button onClick={() => setAuthStage('login')} className="bg-purple-600 text-white px-6 py-3 rounded-xl mb-4">Iniciar Sesión</button>
-           <button onClick={() => { setIsGuest(true); setCurrentView('dashboard'); setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' }); }} className="text-emerald-400 font-bold">Entrar como invitado</button>
+        <div className="min-h-screen bg-[#0d0714] flex flex-col relative overflow-hidden animate-in fade-in duration-500">
+           <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-purple-600/20 blur-[100px] rounded-full pointer-events-none" />
+           <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-emerald-600/10 blur-[100px] rounded-full pointer-events-none" />
+
+           <div className="flex-1 flex flex-col justify-end p-8 z-10 relative mb-10 max-w-md mx-auto w-full">
+              <div className="flex justify-center mb-10">
+                 <div className="relative">
+                    <div className="absolute inset-0 bg-fuchsia-500/30 blur-[40px] rounded-full animate-pulse"></div>
+                    <img src="/pote.png" alt="Mi Pote" className="w-40 h-40 object-contain relative z-10 drop-shadow-[0_0_35px_rgba(192,38,211,0.5)] hover:scale-105 transition-transform" />
+                 </div>
+              </div>
+              <h1 className="text-[40px] md:text-5xl font-black text-white tracking-tighter mb-4 leading-tight">
+                Domina <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">tus finanzas.</span>
+              </h1>
+              <p className="text-white/60 text-sm md:text-base mb-10 max-w-sm">
+                Cuentas claras conservan amistades (y parejas). Organiza, divide y ahorra sin estrés.
+              </p>
+              
+              <div className="space-y-4">
+                <button onClick={() => setAuthStage('reg1')} className="w-full bg-white text-black font-black py-4 rounded-2xl text-base shadow-[0_0_20px_rgba(255,255,255,0.2)] active:scale-95 transition-all">Comenzar ahora</button>
+                <button onClick={() => setAuthStage('login')} className="w-full bg-[#1a0f2e] border border-white/10 text-white font-bold py-4 rounded-2xl text-base hover:bg-white/5 active:scale-95 transition-all">Ya tengo cuenta</button>
+              </div>
+              <button onClick={() => { setIsGuest(true); setCurrentView('dashboard'); setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' }); }} className="mt-8 text-emerald-400 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 mx-auto active:scale-95 transition-transform">
+                <Sparkles className="w-4 h-4"/> Entrar como Invitado
+              </button>
+           </div>
         </div>
       );
     }
+
     if (authStage === 'login') {
        return (
-        <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 items-center justify-center">
-              <form onSubmit={handleLoginUser} className="space-y-5 w-full max-w-sm">
-                <input type="email" placeholder="Correo" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 px-4 text-white" required />
-                <input type="password" placeholder="Clave" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 px-4 text-white" required />
-                <button type="submit" className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl">Iniciar Sesión</button>
+        <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+           <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+              <button onClick={() => setAuthStage('welcome')} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white/50 hover:text-white mb-8 transition-colors"><ArrowLeft className="w-5 h-5"/></button>
+              <h2 className="text-3xl font-black text-white mb-2">Bienvenido de vuelta</h2>
+              <p className="text-white/50 text-sm mb-10">Ingresa tus datos para continuar</p>
+
+              <form onSubmit={handleLoginUser} className="space-y-5 flex-1">
+                {authError && <p className="text-rose-400 text-xs text-center bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">{authError}</p>}
+                <div>
+                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Correo Electrónico</label>
+                  <div className="relative">
+                    <Mail className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Contraseña</label>
+                  <div className="relative">
+                    <Lock className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                  </div>
+                </div>
+                <div className="pt-8">
+                  <button type="submit" className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                    Iniciar Sesión <ChevronRight className="w-4 h-4"/>
+                  </button>
+                </div>
               </form>
+           </div>
         </div>
        );
+    }
+
+    if (authStage === 'reg1') {
+      return (
+       <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+          <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+             <div className="flex items-center justify-between mb-8">
+               <button onClick={() => setAuthStage('welcome')} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors"><ArrowLeft className="w-5 h-5"/></button>
+               <div className="flex gap-2">
+                  <div className="h-1.5 w-8 bg-purple-500 rounded-full"></div>
+                  <div className="h-1.5 w-8 bg-white/10 rounded-full"></div>
+               </div>
+               <div className="w-10"></div>
+             </div>
+             
+             <h2 className="text-3xl font-black text-white mb-2">Crea tu cuenta</h2>
+             <p className="text-white/50 text-sm mb-10">Ingresa tu correo y crea una contraseña segura</p>
+
+             <form onSubmit={(e) => { e.preventDefault(); setAuthStage('reg2'); }} className="space-y-5 flex-1">
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Correo Electrónico</label>
+                 <div className="relative">
+                   <Mail className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Contraseña</label>
+                 <div className="relative">
+                   <Lock className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div className="pt-8">
+                 <button type="submit" className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                   Siguiente <ChevronRight className="w-4 h-4"/>
+                 </button>
+               </div>
+             </form>
+          </div>
+       </div>
+      );
+    }
+
+    if (authStage === 'reg2') {
+      return (
+       <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+          <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+             <div className="flex items-center justify-between mb-8">
+               <button onClick={() => setAuthStage('reg1')} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors"><ArrowLeft className="w-5 h-5"/></button>
+               <div className="flex gap-2">
+                  <div className="h-1.5 w-8 bg-purple-500 rounded-full"></div>
+                  <div className="h-1.5 w-8 bg-purple-500 rounded-full"></div>
+               </div>
+               <div className="w-10"></div>
+             </div>
+             
+             <h2 className="text-3xl font-black text-white mb-2">Información personal</h2>
+             <p className="text-white/50 text-sm mb-10">¿Cómo quieres que te llamen en tus potes?</p>
+
+             <form onSubmit={handleRegisterUser} className="space-y-5 flex-1">
+               {authError && <p className="text-rose-400 text-xs text-center bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">{authError}</p>}
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Nombre o Apodo</label>
+                 <div className="relative">
+                   <UserPlus className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="text" placeholder="Ej: Víctor Delgado" value={regNombre} onChange={e => setRegNombre(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">WhatsApp (Teléfono)</label>
+                 <div className="relative">
+                   <Phone className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="tel" placeholder="Ej: 04121234567" value={telefono} onChange={e => setTelefono(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div className="pt-8">
+                 <button type="submit" className="w-full bg-emerald-500 text-black font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                   Finalizar Registro <Check className="w-4 h-4"/>
+                 </button>
+               </div>
+             </form>
+          </div>
+       </div>
+      );
+    }
+
+    if (authStage === 'loading') {
+      return (
+        <div className="min-h-screen bg-[#0d0714] flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+           <div className="relative mb-8">
+              <div className="absolute inset-0 bg-purple-500/30 blur-[30px] rounded-full animate-pulse"></div>
+              <img src="/pote.png" alt="Mi Pote" className="w-24 h-24 object-contain relative z-10 animate-bounce" />
+           </div>
+           <h2 className="text-2xl font-black text-white mb-2">Armando tu Pote...</h2>
+           <p className="text-white/50 text-sm flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Ya casi estamos listos</p>
+        </div>
+      );
     }
   }
 
@@ -549,7 +735,7 @@ export default function MiPoteApp() {
       <div className="min-h-screen bg-[#0d0714] p-4 flex flex-col items-center pt-10">
         <div className="w-full max-w-md relative">
           <button onClick={() => setCurrentView('dashboard')} className="absolute -top-10 left-0 text-purple-400 flex items-center gap-2 text-sm font-bold"><ArrowLeft className="w-4 h-4"/> Volver</button>
-          <FinanzasDashboardContent session={session} espacios={espacios} espacioActivo={espacioActivo} onSelectModule={seleccionarModulo} handleLogout={handleLogout} openJoinModal={() => setShowJoinModal(true)} openProfileModal={() => setShowProfileModal(true)} isGuest={isGuest} perfil={perfil} forceTab="calculadora" onChangeView={setCurrentView} />
+          <FinanzasDashboardContent session={session} espacios={espacios} setEspacios={setEspacios} espacioActivo={espacioActivo} setEspacioActivo={setEspacioActivo} onSelectModule={seleccionarModulo} handleLogout={handleLogout} openJoinModal={() => setShowJoinModal(true)} openProfileModal={() => setShowProfileModal(true)} isGuest={isGuest} perfil={perfil} forceTab="calculadora" onChangeView={setCurrentView} />
         </div>
       </div>
     );
@@ -676,9 +862,11 @@ export default function MiPoteApp() {
           key={`${session?.user?.id || 'guest'}-${espacioActivo?.id || 'none'}`}
           session={session} 
           espacios={espacios}
+          setEspacioActivo={setEspacioActivo}
           espacioActivo={espacioActivo} 
           onSelectModule={seleccionarModulo}
           handleLogout={handleLogout}
+          openJoinModal={() => setShowJoinModal(true)}
           openProfileModal={() => { setEditNombre(perfil?.nombre || session?.user?.email?.split('@')[0]); setShowProfileModal(true); }}
           isGuest={isGuest}
           perfil={perfil}
@@ -694,7 +882,7 @@ export default function MiPoteApp() {
 // 3. DASHBOARD PRINCIPAL - NÚCLEO DINÁMICO
 // ============================================================================
 function FinanzasDashboardContent({ 
-  session, espacios, espacioActivo, onSelectModule, handleLogout, openProfileModal, isGuest = false, perfil, onTriggerPaywall, forceTab, onChangeView
+  session, espacios, setEspacioActivo, espacioActivo, onSelectModule, handleLogout, openProfileModal, openJoinModal, isGuest = false, perfil, onTriggerPaywall, forceTab, onChangeView
 }: any) {
   const getTheme = (tipo: string) => {
     switch(tipo) {
@@ -704,6 +892,34 @@ function FinanzasDashboardContent({
     }
   };
   const theme = getTheme(espacioActivo?.tipo || 'individual');
+
+const eliminarEspacio = async (e: React.MouseEvent, idEspacio: string, tipo: string, nombre: string) => {
+    e.stopPropagation();
+    const misBilleteras = espacios.filter((esp: any) => esp.tipo === 'individual');
+    
+    if (tipo === 'individual' && misBilleteras.length <= 1) {
+      return alert("🚨 No puedes eliminar tu única billetera principal.");
+    }
+    
+    if (!confirm(`¿Seguro que deseas eliminar "${nombre}"?`)) return;
+
+    await supabase.from('espacios').delete().eq('id', idEspacio);
+    alert("✅ Espacio eliminado. Recargando...");
+    window.location.reload();
+  };
+
+  const eliminarTransaccion = async (id: string) => {
+    if(!confirm("¿Seguro que deseas eliminar este registro?")) return;
+    if (isGuest) {
+      const updatedTx = transactions.filter(t => t.id !== id);
+      setTransactions(updatedTx); 
+      localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+    } else {
+      const { error } = await supabase.from("transacciones_saas").delete().eq("id", id);
+      if (error) alert("Error: " + error.message);
+      else fetchData();
+    }
+  };
 
   const [activeTab, setActiveTab] = useState(forceTab || "inicio");
   const [isMenuOpen, setIsMenuOpen] = useState(false); 
@@ -731,13 +947,20 @@ function FinanzasDashboardContent({
   const [syncing, setSyncing] = useState(false);
   const [mesActual, setMesActual] = useState(() => new Date().toISOString().slice(0, 7));
 
-  // Modales
   const [isAddingEmergencia, setIsAddingEmergencia] = useState(false);
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [isAddingCashea, setIsAddingCashea] = useState(false);
+  
   const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
 
-  // CATEGORIAS SIN FREELANCE
+  // NUEVO: ESTADO PARA EDITAR NOMBRE DEL ESPACIO
+  const [isEditingSpaceName, setIsEditingSpaceName] = useState(false);
+  const [newSpaceName, setNewSpaceName] = useState(espacioActivo?.nombre || "");
+
+  // NUEVO: ESTADO PARA RECORDATORIOS (LISTA DE TAREAS)
+  const [recordatorios, setRecordatorios] = useState<any[]>([]);
+  const [nuevoRecordatorio, setNuevoRecordatorio] = useState("");
+
   const DEFAULT_CATEGORIES = [
     { valor: "salario", label: "Ingreso / Salario 💰" },
     { valor: "comida", label: "Comida 🍔" },
@@ -755,7 +978,6 @@ function FinanzasDashboardContent({
   const [mensajeMotivacional, setMensajeMotivacional] = useState("");
   const [toastType, setToastType] = useState("ingreso");
 
-  // CALCULADORA ESTADOS BIDIRECCIONALES
   const [calcUsd, setCalcUsd] = useState("");
   const [calcBs, setCalcBs] = useState("");
 
@@ -765,6 +987,9 @@ function FinanzasDashboardContent({
   const [categoria, setCategoria] = useState("comida");
   const [descripcion, setDescripcion] = useState("");
   const [usuario, setUsuario] = useState("");
+  
+  // NUEVO: DESTINO DE LA TRANSFERENCIA
+  const [destinoTransferencia, setDestinoTransferencia] = useState("");
 
   const getMensajes = (tipoApp: string, tipoTx: string) => {
     if (tipoApp === 'pote') {
@@ -892,15 +1117,12 @@ function FinanzasDashboardContent({
       if (data.success) {
         setRates({ bcv: data.bcv, usdt: data.usdt });
       }
-    } catch (error) {
-      console.error("Error al traer tasas:", error);
-    } finally {
-      setSyncing(false);
-    }
+    } catch (error) { console.error("Error al traer tasas:", error); } 
+    finally { setSyncing(false); }
   };
 
   const fetchData = useCallback(async () => {
-    setTransactions([]); setCuotasCashea([]); setPresupuestos([]); setPotes([]); setParticipantes([]);
+    setTransactions([]); setCuotasCashea([]); setPresupuestos([]); setPotes([]); setParticipantes([]); setRecordatorios([]);
 
     if (!espacioActivo) return;
     setLoading(true);
@@ -931,25 +1153,20 @@ function FinanzasDashboardContent({
 
         const { data: metasData } = await supabase.from("metas").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: true });
         if (metasData) setPotes(metasData);
+
+        // Cargar Recordatorios
+        const { data: recData } = await supabase.from("recordatorios").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: false });
+        if (recData) setRecordatorios(recData);
       }
-    } catch (err) {
-      console.error("Error fetch:", err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error("Error fetch:", err); } finally { setLoading(false); }
   }, [espacioActivo, isGuest]);
 
-  useEffect(() => { 
-    fetchRates(); 
-    fetchData(); 
-  }, [fetchData]);
+  useEffect(() => { fetchRates(); fetchData(); }, [fetchData]);
 
-  // Actualizador de calculadora
   useEffect(() => {
     let interval: any;
     if (activeTab === 'calculadora' || forceTab === 'calculadora') {
-      fetchRates();
-      interval = setInterval(fetchRates, 10000); 
+      fetchRates(); interval = setInterval(fetchRates, 10000); 
     }
     return () => clearInterval(interval);
   }, [activeTab, forceTab]);
@@ -958,7 +1175,99 @@ function FinanzasDashboardContent({
     if (espacioActivo?.tipo === 'individual') {
       setUsuario((perfil?.nombre || session?.user?.email?.split('@')[0]) || "Tú");
     }
-  }, [espacioActivo, session]);
+  }, [espacioActivo, session, perfil]);
+
+  const nombresParticipantes = participantes.map(p => p.nombre);
+  const filterOptions = ["Todos", ...nombresParticipantes];
+  if (espacioActivo?.tipo !== 'individual' && !filterOptions.includes("Ambos")) filterOptions.push(espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos (Div)');
+
+  const calcularMontos = (montoInput: number, monedaInput: string) => {
+    let monto_bs = 0, monto_usd_bcv = 0, monto_usd_paralelo = 0;
+    if (monedaInput === 'bs') {
+      monto_bs = montoInput; 
+      monto_usd_bcv = rates.bcv > 0 ? montoInput / rates.bcv : 0; 
+      monto_usd_paralelo = rates.usdt > 0 ? montoInput / rates.usdt : 0;
+    } else if (monedaInput === 'usdt' || monedaInput === 'usd') {
+      monto_usd_paralelo = montoInput; monto_usd_bcv = montoInput; monto_bs = montoInput * rates.usdt;
+    } else if (monedaInput === 'cash') {
+      monto_usd_paralelo = montoInput; monto_usd_bcv = montoInput; monto_bs = montoInput * rates.bcv; 
+    }
+    return { monto_bs, monto_usd_bcv, monto_usd_paralelo };
+  };
+const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.filter(tx => tx.categoria === `pote_${poteId}`).reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+  // 🔥 LÓGICA DE REGISTRO Y TRANSFERENCIAS
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    if(e) e.preventDefault();
+    if (!monto) return alert("Falta el monto");
+
+    const valorMonto = parseFloat(monto);
+    const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
+
+    if (tipo === 'transferencia') {
+       if (!destinoTransferencia) return alert("Selecciona el Pote de destino.");
+       if (isGuest) return alert("Las transferencias no están disponibles en modo invitado.");
+
+       const espacioDestino = espacios.find((esp:any) => esp.id === destinoTransferencia);
+       
+       await supabase.from("transacciones_saas").insert([{
+         descripcion: `Transferencia a ${espacioDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_out', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id
+       }]);
+
+       await supabase.from("transacciones_saas").insert([{
+         descripcion: `Aporte de ${perfil?.nombre || 'Miembro'}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_in', usuario: perfil?.nombre || "Tú", tipo: 'ingreso', espacio_id: destinoTransferencia, usuario_id: session.user.id
+       }]);
+
+       fetchData();
+       triggerToast("ingreso", "¡Transferencia enviada con éxito! 🚀");
+       return;
+    }
+
+    const isValidDesc = tipo === 'ingreso' ? true : descripcion.trim() !== "";
+    const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
+
+    if (!isValidDesc || !isValidUser || !categoria) { 
+      return alert("Verifica la categoría, el detalle y quién pagó."); 
+    }
+
+    if (categoria === 'cashea') {
+      const montoTotal = parseFloat(monto);
+      const nCuotas = (window as any).numCuotasCashea || 3; 
+      const montoCuota = montoTotal / nCuotas;
+      const cuotasParaInsertar = [];
+      const { addDays, format } = require('date-fns');
+
+      for (let i = 1; i <= nCuotas; i++) {
+        cuotasParaInsertar.push({ articulo: descripcion, monto_cuota: montoCuota, fecha_pago: format(addDays(new Date(), i * 14), 'yyyy-MM-dd'), usuario: usuario || "Tú", espacio_id: espacioActivo.id, pagado: false });
+      }
+      const { error } = await supabase.from("cashea").insert(cuotasParaInsertar);
+      if (error) alert("🚨 Error Cashea: " + error.message);
+      else { fetchData(); triggerToast("egreso", `Programadas ${nCuotas} cuotas de $${montoCuota.toFixed(2)}`); }
+      return; 
+    }
+    
+    let descFinal = descripcion; 
+    let msjAlertaEspecial = null;
+
+    if (categoria.startsWith("pote_")) {
+       const poteId = categoria.split("_")[1];
+       const poteRelacionado = potes.find(p => p.id.toString() === poteId);
+       if (poteRelacionado) descFinal = `Pote: ${poteRelacionado.nombre} - ${descripcion}`;
+    } else {
+       let labelCategoria = categoriasList.find(c => c.valor === categoria)?.label || categoria;
+       descFinal = tipo === 'ingreso' && !descripcion ? labelCategoria : `${labelCategoria} - ${descripcion}`;
+    }
+
+    if (isGuest) {
+      const newTx = { id: Date.now().toString(), descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario: usuario || "Tú", tipo, created_at: new Date().toISOString() };
+      const updatedTx = [newTx, ...transactions];
+      setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+      triggerToast(tipo, msjAlertaEspecial || undefined);
+    } else {
+      const { error } = await supabase.from("transacciones_saas").insert([{ descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario: usuario || "Tú", tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+      if (error) alert("🚨 Error: " + error.message);
+      else { fetchData(); triggerToast(tipo, msjAlertaEspecial || undefined); }
+    }
+  };
 
   const unirseConCodigoInterno = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -980,10 +1289,50 @@ function FinanzasDashboardContent({
     window.location.reload();
   };
 
-  const nombresParticipantes = participantes.map(p => p.nombre);
-  const filterOptions = ["Todos", ...nombresParticipantes];
-  if (espacioActivo?.tipo !== 'individual' && !filterOptions.includes("Ambos")) filterOptions.push(espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos (Div)');
+  // 🔥 EDITAR NOMBRE DEL ESPACIO
+  const guardarNombreEspacio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSpaceName.trim() || isGuest) return;
+    
+    const { error } = await supabase.from('espacios').update({ nombre: newSpaceName }).eq('id', espacioActivo.id);
+    if (error) {
+      alert("Error al actualizar el nombre");
+    } else {
+      setEspacioActivo({...espacioActivo, nombre: newSpaceName});
+      setIsEditingSpaceName(false);
+    }
+  };
 
+  // 🔥 LÓGICA DE RECORDATORIOS (LISTA DE TAREAS)
+  const agregarRecordatorio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevoRecordatorio.trim() || isGuest) return;
+
+    const { error } = await supabase.from('recordatorios').insert([{
+      texto: nuevoRecordatorio,
+      espacio_id: espacioActivo.id,
+      usuario_id: session.user.id
+    }]);
+
+    if (!error) {
+      setNuevoRecordatorio("");
+      fetchData();
+    }
+  };
+
+  const toggleRecordatorio = async (id: string, estadoActual: boolean) => {
+    if (isGuest) return;
+    await supabase.from('recordatorios').update({ completado: !estadoActual }).eq('id', id);
+    fetchData();
+  };
+
+  const eliminarRecordatorio = async (id: string) => {
+    if (isGuest) return;
+    await supabase.from('recordatorios').delete().eq('id', id);
+    fetchData();
+  };
+
+  // Resto de la logica...
   const verificarLimiteInvitado = () => {
     if (!isGuest) return true;
     const count = parseInt(localStorage.getItem('mipote_guest_count') || '0');
@@ -992,17 +1341,40 @@ function FinanzasDashboardContent({
     return true;
   };
 
-  const agregarParticipante = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!nuevoPart.trim() || !espacioActivo) return;
-    const { error } = await supabase.from("participantes").insert([{ nombre: nuevoPart.trim(), espacio_id: espacioActivo.id }]);
-    if (error) { alert("🚨 Error al guardar participante: " + error.message); return; }
-    setNuevoPart(""); fetchData(); 
+  const agregarCashea = async (e: React.FormEvent) => { 
+    e.preventDefault(); if(!verificarLimiteInvitado()) return; 
+    if (!casheaForm.articulo || !casheaForm.monto_cuota || !casheaForm.fecha_pago) return;
+    await supabase.from("cashea").insert([{ articulo: casheaForm.articulo, monto_cuota: parseFloat(casheaForm.monto_cuota), fecha_pago: casheaForm.fecha_pago, usuario: casheaForm.usuario || "Tú", espacio_id: espacioActivo.id }]);
+    setIsAddingCashea(false); setCasheaForm({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" }); fetchData();
   };
 
-  const eliminarParticipante = async (id: string, nombre: string) => {
-    if (!confirm(`¿Estás seguro de eliminar a ${nombre} de este espacio?`)) return;
-    await supabase.from("participantes").delete().eq("id", id);
+  const guardarPresupuesto = async (e: React.FormEvent) => { 
+    e.preventDefault(); if(!verificarLimiteInvitado()) return;
+    if (!budgetForm.categoria || !budgetForm.monto_limite) return;
+    const existente = presupuestos.find(p => p.categoria === budgetForm.categoria);
+    if (existente) await supabase.from("presupuestos").update({ monto_limite: parseFloat(budgetForm.monto_limite) }).eq("id", existente.id);
+    else await supabase.from("presupuestos").insert([{ categoria: budgetForm.categoria, monto_limite: parseFloat(budgetForm.monto_limite), espacio_id: espacioActivo.id }]);
+    setIsEditingBudget(false); setBudgetForm({ categoria: "", monto_limite: "" }); fetchData();
+  };
+
+  const eliminarPresupuesto = async (id: string) => {
+    if(!confirm("¿Eliminar este tope presupuestario?")) return;
+    await supabase.from("presupuestos").delete().eq("id", id); fetchData();
+  };
+
+  const toggleCashea = async (cuota: any) => {
+    const nuevoEstado = !cuota.pagado;
+    await supabase.from("cashea").update({ pagado: nuevoEstado }).eq("id", cuota.id);
+    if (nuevoEstado) {
+      if (confirm(`¿Descontar $${cuota.monto_cuota} del balance de ${cuota.usuario} por el pago de Cashea?\n\n(Se aplicará arbitraje BCV vs Paralelo)`)) {
+        const costo_bs = cuota.monto_cuota * rates.bcv;
+        const costo_real_usdt = rates.usdt > 0 ? costo_bs / rates.usdt : cuota.monto_cuota;
+        await supabase.from("transacciones_saas").insert([{
+          descripcion: `Pago Cashea: ${cuota.articulo}`, monto_original: cuota.monto_cuota, moneda_original: "usd", monto_bs: costo_bs, monto_usd_bcv: cuota.monto_cuota, monto_usd_paralelo: costo_real_usdt, categoria: "cashea", usuario: cuota.usuario, tipo: "egreso", espacio_id: espacioActivo.id, usuario_id: session.user.id
+        }]);
+        triggerToast("egreso");
+      } else { await supabase.from("cashea").update({ pagado: false }).eq("id", cuota.id); }
+    }
     fetchData();
   };
 
@@ -1027,103 +1399,8 @@ function FinanzasDashboardContent({
     setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" });
   };
 
-  const calcularMontos = (montoInput: number, monedaInput: string) => {
-    let monto_bs = 0, monto_usd_bcv = 0, monto_usd_paralelo = 0;
-    
-    if (monedaInput === 'bs') {
-      monto_bs = montoInput; 
-      monto_usd_bcv = rates.bcv > 0 ? montoInput / rates.bcv : 0; 
-      monto_usd_paralelo = rates.usdt > 0 ? montoInput / rates.usdt : 0;
-    } else if (monedaInput === 'usdt' || monedaInput === 'usd') {
-      monto_usd_paralelo = montoInput; 
-      monto_usd_bcv = montoInput; 
-      monto_bs = montoInput * rates.usdt;
-    } else if (monedaInput === 'cash') {
-      monto_usd_paralelo = montoInput; 
-      monto_usd_bcv = montoInput; 
-      monto_bs = montoInput * rates.bcv; 
-    }
-    return { monto_bs, monto_usd_bcv, monto_usd_paralelo };
-  };
-
-  const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.filter(tx => tx.categoria === `pote_${poteId}`).reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
-
-  const handleManualSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validación ajustada para no exigir descripción si es ingreso
-    const isValidDesc = tipo === 'ingreso' ? true : descripcion.trim() !== "";
-    const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
-
-    if (!isValidDesc || !isValidUser || !monto || !categoria) { 
-      alert("Falta información. Verifica el monto, la categoría, el detalle y quién pagó."); 
-      return; 
-    }
-
-    if (categoria === 'cashea') {
-      const montoTotal = parseFloat(monto);
-      const nCuotas = (window as any).numCuotasCashea || 3; 
-      const montoCuota = montoTotal / nCuotas;
-      
-      const cuotasParaInsertar = [];
-      const { addDays, format } = require('date-fns');
-
-      for (let i = 1; i <= nCuotas; i++) {
-        cuotasParaInsertar.push({
-          articulo: descripcion,
-          monto_cuota: montoCuota,
-          fecha_pago: format(addDays(new Date(), i * 14), 'yyyy-MM-dd'),
-          usuario: usuario || "Tú",
-          espacio_id: espacioActivo.id,
-          pagado: false
-        });
-      }
-
-      const { error } = await supabase.from("cashea").insert(cuotasParaInsertar);
-      
-      if (error) alert("🚨 Error Cashea: " + error.message);
-      else {
-        fetchData();
-        triggerToast("egreso", `¡Brutal! Programadas ${nCuotas} cuotas de $${montoCuota.toFixed(2)}`);
-      }
-      return; 
-    }
-
-    const valorMonto = parseFloat(monto);
-    const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
-    
-    let descFinal = descripcion; 
-    let msjAlertaEspecial = null;
-
-    if (categoria.startsWith("pote_")) {
-       const poteRelacionado = potes.find(p => p.id.toString() === categoria.split("_")[1]);
-       if (poteRelacionado) {
-         descFinal = `Pote: ${poteRelacionado.nombre} - ${descripcion}`;
-         if (tipo === 'ingreso') {
-           const ahorradoActual = getPoteAhorrado(poteRelacionado.id, poteRelacionado.nombre);
-           const nuevoAhorrado = ahorradoActual + monto_usd_paralelo;
-           const pct = (nuevoAhorrado / poteRelacionado.monto_objetivo) * 100;
-           if (pct >= 80 && pct < 100) msjAlertaEspecial = "¡Ponte las pilas, ya casi llegas a la meta! 🚀🔥";
-         }
-       }
-    } else {
-       let labelCategoria = categoriasList.find(c => c.valor === categoria)?.label || categoria;
-       // Si es ingreso y no hay desc, usar la categoria como detalle
-       descFinal = tipo === 'ingreso' && !descripcion ? labelCategoria : `${labelCategoria} - ${descripcion}`;
-    }
-
-    if (isGuest) {
-      const newTx = { id: Date.now().toString(), descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario: usuario || "Tú", tipo, created_at: new Date().toISOString() };
-      const updatedTx = [newTx, ...transactions];
-      setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
-      triggerToast(tipo, msjAlertaEspecial || undefined);
-    } else {
-      const { error } = await supabase.from("transacciones_saas").insert([{
-        descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario: usuario || "Tú", tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id
-      }]);
-      if (error) alert("🚨 Error: " + error.message);
-      else { fetchData(); triggerToast(tipo, msjAlertaEspecial || undefined); }
-    }
+  const eliminarPote = async (id: string) => {
+    await supabase.from("metas").delete().eq("id", id); fetchData();
   };
 
   const handleEmergenciaSubmit = async (e: React.FormEvent) => {
@@ -1151,83 +1428,38 @@ function FinanzasDashboardContent({
     setIsAddingEmergencia(false);
   };
 
-  const eliminarTransaccion = async (id: string) => {
-    if(!confirm("¿Seguro que deseas eliminar este registro?")) return;
-    if (isGuest) {
-      const updatedTx = transactions.filter(t => t.id !== id);
-      setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
-    } else {
-      await supabase.from("transacciones_saas").delete().eq("id", id); fetchData();
-    }
+  const agregarParticipante = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!nuevoPart.trim() || !espacioActivo) return;
+    const { error } = await supabase.from("participantes").insert([{ nombre: nuevoPart.trim(), espacio_id: espacioActivo.id }]);
+    if (error) { alert("🚨 Error al guardar participante: " + error.message); return; }
+    setNuevoPart(""); fetchData(); 
   };
 
-  const eliminarPote = async (id: string) => {
-    await supabase.from("metas").delete().eq("id", id); fetchData();
-  };
-
-  const toggleCashea = async (cuota: any) => {
-    const nuevoEstado = !cuota.pagado;
-    await supabase.from("cashea").update({ pagado: nuevoEstado }).eq("id", cuota.id);
-    if (nuevoEstado) {
-      if (confirm(`¿Descontar $${cuota.monto_cuota} del balance de ${cuota.usuario} por el pago de Cashea?\n\n(Se aplicará arbitraje BCV vs Paralelo)`)) {
-        const costo_bs = cuota.monto_cuota * rates.bcv;
-        const costo_real_usdt = rates.usdt > 0 ? costo_bs / rates.usdt : cuota.monto_cuota;
-        await supabase.from("transacciones_saas").insert([{
-          descripcion: `Pago Cashea: ${cuota.articulo}`, monto_original: cuota.monto_cuota, moneda_original: "usd", monto_bs: costo_bs, monto_usd_bcv: cuota.monto_cuota, monto_usd_paralelo: costo_real_usdt, categoria: "cashea", usuario: cuota.usuario, tipo: "egreso", espacio_id: espacioActivo.id, usuario_id: session.user.id
-        }]);
-        triggerToast("egreso");
-      } else { await supabase.from("cashea").update({ pagado: false }).eq("id", cuota.id); }
-    }
+  const eliminarParticipante = async (id: string, nombre: string) => {
+    if (!confirm(`¿Estás seguro de eliminar a ${nombre} de este espacio?`)) return;
+    await supabase.from("participantes").delete().eq("id", id);
     fetchData();
-  };
-
-  const guardarPresupuesto = async (e: React.FormEvent) => { 
-    e.preventDefault(); if(!verificarLimiteInvitado()) return;
-    if (!budgetForm.categoria || !budgetForm.monto_limite) return;
-    const existente = presupuestos.find(p => p.categoria === budgetForm.categoria);
-    if (existente) await supabase.from("presupuestos").update({ monto_limite: parseFloat(budgetForm.monto_limite) }).eq("id", existente.id);
-    else await supabase.from("presupuestos").insert([{ categoria: budgetForm.categoria, monto_limite: parseFloat(budgetForm.monto_limite), espacio_id: espacioActivo.id }]);
-    setIsEditingBudget(false); setBudgetForm({ categoria: "", monto_limite: "" }); fetchData();
-  };
-  
-  const eliminarPresupuesto = async (id: string) => {
-    if(!confirm("¿Eliminar este tope presupuestario?")) return;
-    await supabase.from("presupuestos").delete().eq("id", id); fetchData();
-  };
-
-  const agregarCashea = async (e: React.FormEvent) => { 
-    e.preventDefault(); if(!verificarLimiteInvitado()) return; 
-    if (!casheaForm.articulo || !casheaForm.monto_cuota || !casheaForm.fecha_pago) return;
-    await supabase.from("cashea").insert([{ articulo: casheaForm.articulo, monto_cuota: parseFloat(casheaForm.monto_cuota), fecha_pago: casheaForm.fecha_pago, usuario: casheaForm.usuario || "Tú", espacio_id: espacioActivo.id }]);
-    setIsAddingCashea(false); setCasheaForm({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" }); fetchData();
   };
 
   const getSaldosAislados = (userName?: string) => {
     let bs = 0, usdt = 0, cash = 0;
-    
     transactions.forEach(tx => {
       if (tx.categoria.startsWith("pote_") || tx.categoria === 'emergencia') return; 
-      
       let fraction = 0;
       const txUser = tx.usuario?.trim();
       const targetUser = userName?.trim();
 
-      if (!userName || userName === 'ALL' || espacioActivo?.tipo === 'individual') {
-          fraction = 1;
-      } else {
-          if (txUser === targetUser || (txUser === 'Tú' && targetUser === (perfil?.nombre || session?.user?.email?.split('@')[0]))) {
-              fraction = 1;
-          } else if (txUser === 'Ambos' || txUser === 'Todos (Div)') {
-              const divisor = espacioActivo?.tipo === 'vaca' ? Math.max(participantes.length, 1) : 2;
-              fraction = 1 / divisor;
-          }
+      if (!userName || userName === 'ALL' || espacioActivo?.tipo === 'individual') fraction = 1;
+      else {
+          if (txUser === targetUser || (txUser === 'Tú' && targetUser === (perfil?.nombre || session?.user?.email?.split('@')[0]))) fraction = 1;
+          else if (txUser === 'Ambos' || txUser === 'Todos (Div)') fraction = 1 / (espacioActivo?.tipo === 'vaca' ? Math.max(participantes.length, 1) : 2);
       }
 
       if (fraction > 0) {
         const montoNominal = tx.monto_original || tx.monto_usd_paralelo || 0;
         const signo = tx.tipo === "ingreso" ? 1 : -1;
         const valorReal = montoNominal * signo * fraction;
-        
         const monedaEstricta = tx.moneda_original || (montoNominal > 1000 ? 'bs' : 'usd');
 
         if (monedaEstricta === 'bs') bs += valorReal;
@@ -1235,7 +1467,6 @@ function FinanzasDashboardContent({
         else usdt += valorReal;
       }
     });
-    
     return { bs, usdt, cash };
   };
 
@@ -1243,56 +1474,56 @@ function FinanzasDashboardContent({
      const saldos = getSaldosAislados('ALL');
      const bsEnDolaresParalelo = rates.usdt > 0 ? saldos.bs / rates.usdt : 0;
      const bsEnDolaresBCV = rates.bcv > 0 ? saldos.bs / rates.bcv : 0;
-     return {
-        paralelo: saldos.usdt + saldos.cash + bsEnDolaresParalelo,
-        bcv: saldos.usdt + saldos.cash + bsEnDolaresBCV
-     };
+     return { paralelo: saldos.usdt + saldos.cash + bsEnDolaresParalelo, bcv: saldos.usdt + saldos.cash + bsEnDolaresBCV };
   };
 
   const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
   const transaccionesFiltradas = transaccionesDelMes.filter(tx => filtroHistorial === "Todos" || tx.usuario === filtroHistorial);
 
-  const gastosDelMes = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
-  
-  const datosCategoriasMap = gastosDelMes.reduce((acc, tx) => {
-    let catName = tx.categoria.startsWith('pote_') ? 'Extracción Potes' : 
-                  tx.categoria === 'emergencia' ? 'Emergencias 🚨' : 
-                  (categoriasList.find(c => c.valor === tx.categoria)?.label || tx.categoria);
-    acc[catName] = (acc[catName] || 0) + (tx.monto_usd_paralelo || 0);
-    return acc;
-  }, {} as Record<string, number>);
-
-  const dataGraficoTorta = Object.keys(datosCategoriasMap).map(key => ({ name: key, value: datosCategoriasMap[key] })).sort((a, b) => b.value - a.value);
-  const COLORS = [theme.stroke, '#ec4899', '#f97316', '#eab308', '#10b981', '#0ea5e9', '#6366f1', '#d946ef'];
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
+  const renderTabContent = () => {
+    
+    // 🔥 NUEVA PESTAÑA: RECORDATORIOS
+    if (activeTab === 'recordatorios') {
       return (
-        <div className="bg-[#1a0f2e] border border-purple-500/30 p-3 rounded-xl shadow-xl">
-          <p className="text-white font-bold text-xs mb-1">{payload[0].name || payload[0].payload.name}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-xs font-sans tabular-nums tracking-tight" style={{ color: entry.color }}>{entry.dataKey}: ${entry.value.toFixed(2)} USDT</p>
-          ))}
+        <div className="space-y-6">
+          <div className={`relative overflow-hidden bg-gradient-to-br ${theme.card} to-[#1a0f2e] border ${theme.border} p-6 md:p-8 rounded-3xl shadow-xl flex flex-col items-center text-center mt-6`}>
+            <ListTodo className={`w-12 h-12 ${theme.text} mb-4`} />
+            <p className="text-xl font-black text-white uppercase tracking-widest mb-2">Lista de Tareas</p>
+            <p className="text-xs text-white/50 mt-2 max-w-md">Anoten aquí lo que falta por comprar, mercado o pagos pendientes en este pote.</p>
+          </div>
+
+          <form onSubmit={agregarRecordatorio} className="flex gap-2 bg-[#1a1a1a] p-2 rounded-2xl border border-white/5 shadow-xl">
+            <input 
+              type="text" value={nuevoRecordatorio} onChange={(e) => setNuevoRecordatorio(e.target.value)}
+              placeholder="Ej: Comprar el botellón de agua..."
+              className="flex-1 bg-transparent text-white px-4 py-3 text-sm outline-none"
+            />
+            <button type="submit" className={`p-3 rounded-xl ${theme.primary} text-white shadow-lg active:scale-95 transition-transform`}>
+              <Plus className="w-5 h-5"/>
+            </button>
+          </form>
+
+          <div className="space-y-3 mt-6">
+            {recordatorios.length === 0 ? (
+              <p className="text-center text-white/30 text-sm italic">No hay tareas pendientes en este pote.</p>
+            ) : recordatorios.map(rec => (
+              <div key={rec.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-colors ${rec.completado ? 'bg-white/5 border-transparent opacity-50' : 'bg-[#1a0f2e] border-white/10'}`}>
+                <div className="flex items-center gap-4 flex-1 cursor-pointer" onClick={() => toggleRecordatorio(rec.id, rec.completado)}>
+                  <div className={`w-6 h-6 rounded-md flex items-center justify-center border ${rec.completado ? `bg-emerald-500 border-emerald-500 text-black` : 'border-white/30 text-transparent'}`}>
+                    <Check size={14} />
+                  </div>
+                  <p className={`text-sm font-bold flex-1 ${rec.completado ? 'text-white/50 line-through' : 'text-white'}`}>{rec.texto}</p>
+                </div>
+                <button onClick={() => eliminarRecordatorio(rec.id)} className="p-2 text-white/30 hover:text-rose-500 transition-colors">
+                  <Trash2 size={16}/>
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
-    return null;
-  };
 
-  // LOGICA BIDIRECCIONAL CALCULADORA
-  const handleCalcUsd = (val: string) => {
-    setCalcUsd(val);
-    const num = parseFloat(val) || 0;
-    setCalcBs((num * rates.usdt).toFixed(2));
-  };
-
-  const handleCalcBs = (val: string) => {
-    setCalcBs(val);
-    const num = parseFloat(val) || 0;
-    setCalcUsd(rates.usdt > 0 ? (num / rates.usdt).toFixed(2) : "0.00");
-  };
-
-  const renderTabContent = () => {
     if (activeTab === 'calculadora' || forceTab === 'calculadora') {
       return (
         <div className={`bg-[#1a0f2e] border ${theme.border} p-6 rounded-[2rem] shadow-xl w-full max-w-md mx-auto mt-6 md:mt-10 animate-in zoom-in-95`}>
@@ -1384,7 +1615,7 @@ function FinanzasDashboardContent({
                   
                   <form onSubmit={handleEmergenciaSubmit} className="flex flex-col gap-4">
                     <div className="flex gap-2">
-                      <select value={tipo} onChange={(e) => setTipo(e.target.value)} data-vaul-no-drag className={`flex-1 border rounded-xl p-4 text-sm font-black outline-none cursor-pointer ${tipo === 'ingreso' ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/30 border-rose-500/50 text-rose-400'}`}>
+                      <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={`flex-1 border rounded-xl p-4 text-sm font-black outline-none cursor-pointer ${tipo === 'ingreso' ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/30 border-rose-500/50 text-rose-400'}`}>
                         <option value="ingreso">AGREGAR FONDO 💰</option><option value="egreso">RETIRO 💸</option>
                       </select>
                       
@@ -1393,7 +1624,7 @@ function FinanzasDashboardContent({
                           👤 {(perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado"}
                         </div>
                       ) : (
-                        <select required value={usuario} onChange={(e) => setUsuario(e.target.value)} data-vaul-no-drag className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white outline-none cursor-pointer appearance-none`}>
+                        <select required value={usuario} onChange={(e) => setUsuario(e.target.value)} className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white outline-none cursor-pointer appearance-none`}>
                           <option value="">¿Quién aporta?</option>
                           {nombresParticipantes.map(u => <option key={u} value={u}>{u}</option>)}
                           {nombresParticipantes.length > 0 && <option value={espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos (Div)'}>{espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos'}</option>}
@@ -1401,11 +1632,11 @@ function FinanzasDashboardContent({
                       )}
                     </div>
                     
-                    <input type="text" required placeholder="Detalle (Ej: Reparación carro)" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-5 text-sm font-bold text-white outline-none focus:border-[#3b82f6]`} />
+                    <input type="text" required placeholder="Detalle (Ej: Reparación carro)" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-5 text-sm font-bold text-white outline-none focus:border-[#3b82f6]`} />
 
                     <div className="flex gap-2 min-h-[80px]">
-                      <input type="number" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Monto" data-vaul-no-drag className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-[#3b82f6]`} />
-                      <select value={moneda} onChange={(e) => setMoneda(e.target.value)} data-vaul-no-drag className={`w-24 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none`}>
+                      <input type="number" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Monto" className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-[#3b82f6]`} />
+                      <select value={moneda} onChange={(e) => setMoneda(e.target.value)} className={`w-24 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none`}>
                         <option value="usd">USD</option><option value="bs">BS</option>
                       </select>
                     </div>
@@ -1450,7 +1681,8 @@ function FinanzasDashboardContent({
     }
 
     if (activeTab === 'pagos') {
-      const gastosPorCategoriaValor = gastosDelMes.reduce((acc, tx) => {
+      const gastosDelMesCalculados = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
+      const gastosPorCategoriaValor = gastosDelMesCalculados.reduce((acc, tx) => {
         acc[tx.categoria] = (acc[tx.categoria] || 0) + (tx.monto_usd_paralelo || 0);
         return acc;
       }, {} as Record<string, number>);
@@ -1467,7 +1699,6 @@ function FinanzasDashboardContent({
       return (
         <div className="space-y-4 md:space-y-6 mt-6">
           
-          {/* GRÁFICA DE EGRESOS EN PRESUPUESTO */}
           {transaccionesDelMes.length > 0 && (
             <div className={`bg-[#1a0f2e] border ${theme.border} p-4 md:p-6 rounded-3xl shadow-xl flex flex-col min-h-[300px]`}>
               <h3 className="text-xs md:text-sm font-bold text-white mb-4 flex items-center gap-2">
@@ -1510,14 +1741,14 @@ function FinanzasDashboardContent({
                     <form onSubmit={guardarPresupuesto} className="flex flex-col gap-4">
                       <div>
                         <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Categoría a limitar</label>
-                        <select value={budgetForm.categoria} onChange={e => setBudgetForm({...budgetForm, categoria: e.target.value})} data-vaul-no-drag className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-rose-500" required>
+                        <select value={budgetForm.categoria} onChange={e => setBudgetForm({...budgetForm, categoria: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-rose-500" required>
                           <option value="" className="bg-[#1a0f2e]">Selecciona Categoría...</option>
                           {categoriasList.map(c => <option key={c.id || c.valor} value={c.valor} className="bg-[#1a0f2e]">{c.label}</option>)}
                         </select>
                       </div>
                       <div className="min-h-[80px]">
                         <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Máximo ($)</label>
-                        <input type="number" step="0.01" placeholder="0.00" value={budgetForm.monto_limite} onChange={e => setBudgetForm({...budgetForm, monto_limite: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-rose-500`} required />
+                        <input type="number" step="0.01" placeholder="0.00" value={budgetForm.monto_limite} onChange={e => setBudgetForm({...budgetForm, monto_limite: e.target.value})} className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-rose-500`} required />
                       </div>
                       <button type="submit" className="w-full bg-rose-500 text-black font-black py-5 rounded-3xl uppercase tracking-widest text-sm shadow-[0_0_20px_rgba(244,63,94,0.3)] mt-6 active:scale-95 transition-transform">Guardar Límite</button>
                     </form>
@@ -1570,21 +1801,21 @@ function FinanzasDashboardContent({
                     <form onSubmit={agregarCashea} className="flex flex-col gap-4">
                       <div>
                         <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿Qué compraste?</label>
-                        <input type="text" placeholder="Ej: Zapatos Nike" value={casheaForm.articulo} onChange={e => setCasheaForm({...casheaForm, articulo: e.target.value})} data-vaul-no-drag className="w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-sm font-bold text-white outline-none focus:border-purple-500" required />
+                        <input type="text" placeholder="Ej: Zapatos Nike" value={casheaForm.articulo} onChange={e => setCasheaForm({...casheaForm, articulo: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-sm font-bold text-white outline-none focus:border-purple-500" required />
                       </div>
                       <div className="flex gap-4 items-start min-h-[80px]">
                         <div className="w-1/2">
                           <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Cuota ($)</label>
-                          <input type="number" step="0.01" placeholder="0.00" value={casheaForm.monto_cuota} onChange={e => setCasheaForm({...casheaForm, monto_cuota: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-2xl text-white font-sans tabular-nums tracking-tight font-black outline-none focus:border-purple-500`} required />
+                          <input type="number" step="0.01" placeholder="0.00" value={casheaForm.monto_cuota} onChange={e => setCasheaForm({...casheaForm, monto_cuota: e.target.value})} className={`w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-2xl text-white font-sans tabular-nums tracking-tight font-black outline-none focus:border-purple-500`} required />
                         </div>
                         <div className="w-1/2">
                           <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Fecha de Pago</label>
-                          <input type="date" value={casheaForm.fecha_pago} onChange={e => setCasheaForm({...casheaForm, fecha_pago: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-sm font-bold text-white outline-none focus:border-purple-500 h-[64px]`} required />
+                          <input type="date" value={casheaForm.fecha_pago} onChange={e => setCasheaForm({...casheaForm, fecha_pago: e.target.value})} className={`w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-sm font-bold text-white outline-none focus:border-purple-500 h-[64px]`} required />
                         </div>
                       </div>
                       <div>
                         <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Responsable</label>
-                        <select required value={casheaForm.usuario} onChange={e => setCasheaForm({...casheaForm, usuario: e.target.value})} data-vaul-no-drag className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-purple-500`}>
+                        <select required value={casheaForm.usuario} onChange={e => setCasheaForm({...casheaForm, usuario: e.target.value})} className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-purple-500`}>
                           <option value="">¿Quién debe pagar?</option>
                           {espacioActivo?.tipo === 'individual' ? <option value={(perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado"}>Tú</option> : nombresParticipantes.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
@@ -1619,6 +1850,306 @@ function FinanzasDashboardContent({
                 </div>
               ))}
             </div>
+          </div>
+
+        </div>
+      );
+    }
+
+    if (activeTab === 'inicio') {
+      const nombreUsuario = (perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado";
+      const saldoPrincipal = getSaldosAislados(nombreUsuario); 
+      const patrimonioTotal = getPatrimonioNeto();
+
+      return (
+        <div className="space-y-6">
+          
+          <div className="mt-2 mb-4">
+             <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#1a0f2e] to-black/40 border border-white/5 rounded-[2rem] shadow-2xl">
+                <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-1 flex items-center gap-2"><Globe className="w-3 h-3"/> Patrimonio Neto Total</p>
+                <p className="text-5xl font-black text-white tracking-tighter tabular-nums font-sans text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-200">
+                  $<AnimatedNum value={patrimonioTotal.paralelo} format="usd" />
+                </p>
+                <div className="flex gap-4 mt-3">
+                   <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
+                     Paralelo: $<AnimatedNum value={patrimonioTotal.paralelo} format="usd" />
+                   </p>
+                   <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
+                     BCV: $<AnimatedNum value={patrimonioTotal.bcv} format="usd" />
+                   </p>
+                </div>
+             </div>
+          </div>
+
+          <div className="mb-6">
+            <div className={`bg-[#1a1a1a] border border-[#333] p-6 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[220px]`}>
+               <div className="flex justify-between items-start mb-4">
+                  <p className="text-white/80 font-bold text-sm">Tu Liquidez ({activeWallet.toUpperCase()})</p>
+                  <Wallet className="w-6 h-6 text-white/30" />
+               </div>
+               
+               <div className="mb-6">
+                  {activeWallet === 'usdt' && (
+                     <div className="animate-in fade-in">
+                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
+                         $<AnimatedNum value={saldoPrincipal.usdt} format="usd" />
+                       </p>
+                       <p className="text-emerald-400 text-xs font-bold mt-2">
+                         Eqv: Bs. <AnimatedNum value={saldoPrincipal.usdt * rates.usdt} format="bs" /> (Paralelo)
+                       </p>
+                     </div>
+                  )}
+                  {activeWallet === 'bs' && (
+                     <div className="animate-in fade-in">
+                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
+                         Bs. <AnimatedNum value={saldoPrincipal.bs} format="bs" />
+                       </p>
+                       <p className="text-blue-400 text-xs font-bold mt-2">
+                         Eqv: $<AnimatedNum value={rates.bcv > 0 ? saldoPrincipal.bs / rates.bcv : 0} format="usd" /> (Tasa BCV)
+                       </p>
+                     </div>
+                  )}
+                  {activeWallet === 'cash' && (
+                     <div className="animate-in fade-in">
+                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
+                         $<AnimatedNum value={saldoPrincipal.cash} format="usd" />
+                       </p>
+                       <p className="text-amber-400 text-xs font-bold mt-2 uppercase">Monto Físico Exacto</p>
+                     </div>
+                  )}
+               </div>
+
+               <div className="flex bg-black/40 p-1 rounded-xl w-max border border-white/5 shadow-inner">
+                 <button onClick={() => setActiveWallet('usdt')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'usdt' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>USDT</button>
+                 <button onClick={() => setActiveWallet('bs')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'bs' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>BS</button>
+                 <button onClick={() => setActiveWallet('cash')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'cash' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>CASH</button>
+               </div>
+            </div>
+          </div>
+
+          {espacioActivo?.tipo !== 'individual' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+              {participantes.map(p => {
+                const saldoP = getSaldosAislados(p.nombre);
+                return (
+                  <div key={p.id} className="bg-[#1a0f2e] border border-white/5 p-4 rounded-2xl shadow-lg flex flex-col hover:border-white/10 transition-colors">
+                     <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest mb-3 border-b border-white/5 pb-2">{p.nombre}</p>
+                     <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs font-bold"><span className="text-emerald-400">USDT:</span> <span className="text-white font-sans tabular-nums tracking-tight">$<AnimatedNum value={saldoP.usdt} /></span></div>
+                        <div className="flex justify-between text-xs font-bold"><span className="text-blue-400">BS:</span> <span className="text-white font-sans tabular-nums tracking-tight">Bs. <AnimatedNum value={saldoP.bs} format="bs" /></span></div>
+                        <div className="flex justify-between text-xs font-bold"><span className="text-amber-400">CASH:</span> <span className="text-white font-sans tabular-nums tracking-tight">$<AnimatedNum value={saldoP.cash} /></span></div>
+                     </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {espacioActivo?.tipo !== 'individual' && espacioActivo?.codigo_invitacion && (
+             <div className="bg-[#1a0f2e] border border-fuchsia-500/30 p-5 rounded-[2rem] shadow-[0_0_20px_rgba(192,38,211,0.1)] mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] text-fuchsia-400 font-bold uppercase tracking-widest flex items-center gap-2 mb-1">
+                     <Key className="w-3 h-3"/> Invita a este espacio
+                  </p>
+                  <p className="text-xs text-white/50">Copia este código y compártelo.</p>
+                </div>
+                <button onClick={() => {navigator.clipboard.writeText(espacioActivo.codigo_invitacion); alert("Código copiado al portapapeles");}} className="w-full sm:w-auto bg-black/40 hover:bg-black/60 border border-white/10 p-3 rounded-xl text-xl text-white font-black tracking-[0.2em] transition-colors flex items-center justify-center gap-2 font-sans tabular-nums cursor-pointer">
+                  {espacioActivo.codigo_invitacion} <Copy className="w-4 h-4 text-white/30 ml-1"/>
+                </button>
+             </div>
+          )}
+
+          {espacioActivo?.tipo === 'individual' && !isGuest && (
+             <div className="bg-black/40 border border-white/5 p-5 rounded-[2rem] mb-6">
+                <p className="text-[10px] text-white/50 font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
+                   <Users className="w-3 h-3"/> ¿Te invitaron a un espacio?
+                </p>
+                <div className="flex gap-2">
+                  <input type="text" value={joinCodeInput} onChange={(e)=>setJoinCodeInput(e.target.value.toUpperCase())} placeholder="Código (Ej: X7K9P2)" className="flex-1 bg-[#1a0f2e] border border-white/10 rounded-xl p-3 text-sm text-white font-bold outline-none uppercase tracking-widest" maxLength={6} />
+                  <button onClick={unirseConCodigoInterno} className={`px-4 py-3 rounded-xl ${theme.primary} text-white font-bold text-xs uppercase tracking-widest`}>Unirse</button>
+                </div>
+             </div>
+          )}
+
+          <div className="space-y-4">
+            <div className="flex justify-between items-center px-2">
+              <h2 className={`text-base font-black ${theme.text} uppercase tracking-widest flex items-center gap-2`}>
+                <img src="/pote.png" alt="pote" className="w-6 h-6 object-contain drop-shadow-md" /> Mis Potes
+              </h2>
+              <button onClick={() => { setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true); }} className={`flex items-center gap-1 bg-emerald-500 text-black px-4 py-2 rounded-full text-xs font-black shadow-lg active:scale-95 transition-all hover:bg-emerald-400`}>
+                <Plus className="w-4 h-4"/> Nueva Meta
+              </button>
+            </div>
+
+            <Drawer.Root open={isAddingPote} onOpenChange={setIsAddingPote}>
+              <Drawer.Portal>
+                <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
+                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[75vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#10b981]">
+                  <Drawer.Title className="sr-only">Registrar Nueva Meta</Drawer.Title>
+                  <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+                    <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+                    <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Nueva Meta</h3>
+                    
+                    <form onSubmit={guardarPote} className="flex flex-col gap-4">
+                      <div className="flex flex-col gap-4">
+                        <div>
+                          <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿Para qué estamos ahorrando?</label>
+                          <select 
+                            value={poteForm.tipo} 
+                            onChange={(e) => setPoteForm({...poteForm, tipo: e.target.value})} 
+                            className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-emerald-500`}
+                          >
+                            {POTE_OPCIONES.map(opt => <option key={opt} value={opt} className="bg-[#121212]">{opt}</option>)}
+                          </select>
+                        </div>
+
+                        {poteForm.tipo === "Personalizado ✍️" && (
+                          <div className="animate-in fade-in slide-in-from-top-2">
+                             <input 
+                               type="text" placeholder="Ej: Viaje a Margarita" 
+                               value={poteForm.nombreCustom} onChange={(e) => setPoteForm({...poteForm, nombreCustom: e.target.value})} 
+                               className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-emerald-500`} 
+                               required 
+                             />
+                          </div>
+                        )}
+
+                        <div className="min-h-[80px]">
+                          <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Objetivo ($)</label>
+                          <input 
+                            type="number" step="0.01" placeholder="0.00" 
+                            value={poteForm.monto_objetivo} onChange={(e) => setPoteForm({...poteForm, monto_objetivo: e.target.value})} 
+                            className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-emerald-500`} 
+                            required 
+                          />
+                        </div>
+                      </div>
+                      <button type="submit" className={`w-full bg-emerald-500 text-black font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(16,185,129,0.3)] mt-6 active:scale-95 transition-transform`}>Guardar Meta</button>
+                    </form>
+                  </div>
+                </Drawer.Content>
+              </Drawer.Portal>
+            </Drawer.Root>
+
+            {potes.map(pote => {
+              const ahorrado = getPoteAhorrado(pote.id, pote.nombre);
+              const porcentaje = Math.min((ahorrado / pote.monto_objetivo) * 100, 100);
+              
+              return (
+                <div key={pote.id} className={`bg-[#1a0f2e] border-2 border-emerald-500/30 p-5 md:p-6 rounded-[2rem] shadow-[0_0_15px_rgba(16,185,129,0.1)] relative overflow-hidden group hover:border-emerald-500/60 transition-colors`}>
+                  {porcentaje >= 100 && (
+                    <div className="absolute inset-0 bg-emerald-600/90 backdrop-blur-sm flex flex-col items-center justify-center z-20 text-center p-4">
+                      <span className="text-3xl mb-1">🎉</span>
+                      <h3 className="text-white font-black text-lg">¡Meta Alcanzada!</h3>
+                      <p className="text-emerald-100 text-[10px] mb-3">Lograron ahorrar ${pote.monto_objetivo}.</p>
+                      <button onClick={() => eliminarPote(pote.id)} className="bg-white text-emerald-600 font-bold px-4 py-2 rounded-xl text-xs shadow-lg active:scale-95 transition-transform">Eliminar Pote</button>
+                    </div>
+                  )}
+
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h2 className="text-base md:text-lg font-black text-white flex items-center gap-2">{pote.nombre} <span className={`text-emerald-400 text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20`}>META: ${pote.monto_objetivo} USDT</span></h2>
+                        <p className={`text-xs text-white/50 mt-1`}>Faltan $<AnimatedNum value={Math.max(pote.monto_objetivo - ahorrado, 0)} /> USD</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <span className={`text-sm md:text-base font-black text-emerald-400`}><AnimatedNum value={porcentaje} format="pct"/></span>
+                        {porcentaje < 100 && (
+                          <div className="flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => eliminarPote(pote.id)} className="p-1.5 bg-rose-500/20 text-rose-400 rounded-lg hover:bg-rose-500 hover:text-white transition-colors"><Trash2 className="w-3.5 h-3.5"/></button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className={`h-3 w-full bg-black/60 rounded-full border border-white/5 p-0.5 mt-2`}>
+                      <div className={`h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]`} style={{ width: `${porcentaje}%`, transition: 'width 1s ease-in-out' }}></div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="mb-8 mt-6 flex gap-3">
+            <div className="flex-1">
+              <TransactionDrawer
+                  tipo={tipo} setTipo={setTipo}
+                  categoria={categoria} setCategoria={setCategoria}
+                  monto={monto} setMonto={setMonto}
+                  moneda={moneda} setMoneda={setMoneda}
+                  descripcion={descripcion} setDescripcion={setDescripcion}
+                  rates={rates} theme={theme} onSubmit={handleManualSubmit}
+                  espacios={espacios} espacioActivo={espacioActivo} 
+                  participantes={participantes} usuario={usuario} setUsuario={setUsuario}
+                  destinoTransferencia={destinoTransferencia} setDestinoTransferencia={setDestinoTransferencia}
+                >
+                  <button type="button" className="w-full bg-[#1a1a1a] border border-[#333] hover:border-emerald-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group h-full">
+                    <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-emerald-500 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] group-hover:scale-110 transition-transform`}>
+                      <Plus className="w-6 h-6 md:w-8 md:h-8 text-black" />
+                    </div>
+                    <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Nuevo Registro</span>
+                  </button>
+              </TransactionDrawer>
+            </div>
+            
+            <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="w-1/4 max-w-[100px] bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group">
+              <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform`}>
+                <Calculator className="w-5 h-5 md:w-7 md:h-7 text-blue-400" />
+              </div>
+              <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Cálculo</span>
+            </button>
+
+            {/* BOTÓN GESTIONAR INTEGRANTES (SÓLO SI NO ES INDIVIDUAL) */}
+            {espacioActivo?.tipo !== 'individual' && (
+               <>
+                 <button onClick={() => setIsManageUsersOpen(true)} className="w-1/4 max-w-[100px] bg-[#1a1a1a] border border-[#333] hover:border-purple-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group">
+                   <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.2)] group-hover:scale-110 transition-transform`}>
+                     <Users className="w-5 h-5 md:w-7 md:h-7 text-purple-400" />
+                   </div>
+                   <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Miembros</span>
+                 </button>
+
+                 <Drawer.Root open={isManageUsersOpen} onOpenChange={setIsManageUsersOpen}>
+                    <Drawer.Portal>
+                      <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
+                      <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#A855F7]">
+                        <Drawer.Title className="sr-only">Gestionar Integrantes</Drawer.Title>
+                        <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+                          <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+                          <h3 className="text-xl font-black text-white mb-6 text-center">Gestionar Integrantes</h3>
+                          
+                          <div className="flex flex-wrap gap-2 mb-6">
+                            {participantes.length === 0 ? (
+                              <p className="text-xs text-white/20 italic text-center w-full">No hay miembros agregados...</p>
+                            ) : (
+                              participantes.map((p: any) => (
+                                <div key={p.id} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-white/5 bg-[#1a1a1a] text-white group hover:border-rose-500/50 transition-colors">
+                                  {p.nombre}
+                                  <button onClick={() => eliminarParticipante(p.id, p.nombre)} className="text-white/20 hover:text-rose-500 transition-colors">
+                                    <X size={16} />
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" placeholder="Nombre del integrante..." 
+                              value={nuevoPart} onChange={(e) => setNuevoPart(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && agregarParticipante()}
+                              className="flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#A855F7] transition-all"
+                            />
+                            <button onClick={agregarParticipante} className={`p-4 rounded-xl ${theme.primary} text-white shadow-lg active:scale-95 transition-all`}>
+                              <UserPlus size={20} />
+                            </button>
+                          </div>
+                        </div>
+                      </Drawer.Content>
+                    </Drawer.Portal>
+                  </Drawer.Root>
+               </>
+            )}
           </div>
 
           <div className="mt-6">
@@ -1676,320 +2207,8 @@ function FinanzasDashboardContent({
         </div>
       );
     }
-
-    if (activeTab === 'inicio') {
-      const nombreUsuario = (perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado";
-      const saldoPrincipal = getSaldosAislados(nombreUsuario); 
-      const patrimonioTotal = getPatrimonioNeto();
-
-      return (
-        <div className="space-y-6">
-          
-          {/* 0. PATRIMONIO NETO GLOBAL */}
-          <div className="mt-2 mb-4">
-             <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#1a0f2e] to-black/40 border border-white/5 rounded-[2rem] shadow-2xl">
-                <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-1 flex items-center gap-2"><Globe className="w-3 h-3"/> Patrimonio Neto Total</p>
-                
-                <p className="text-5xl font-black text-white tracking-tighter tabular-nums font-sans text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-200">
-                  $<AnimatedNum value={patrimonioTotal.paralelo} format="usd" />
-                </p>
-                
-                <div className="flex gap-4 mt-3">
-                   <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
-                     Paralelo: $<AnimatedNum value={patrimonioTotal.paralelo} format="usd" />
-                   </p>
-                   <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
-                     BCV: $<AnimatedNum value={patrimonioTotal.bcv} format="usd" />
-                   </p>
-                </div>
-             </div>
-          </div>
-
-          {/* 1. TARJETA PRINCIPAL (TU BALANCE AISLADO) */}
-          <div className="mb-6">
-            <div className={`bg-[#1a1a1a] border border-[#333] p-6 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[220px]`}>
-               <div className="flex justify-between items-start mb-4">
-                  <p className="text-white/80 font-bold text-sm">Tu Liquidez ({activeWallet.toUpperCase()})</p>
-                  <Wallet className="w-6 h-6 text-white/30" />
-               </div>
-               
-               <div className="mb-6">
-                  {activeWallet === 'usdt' && (
-                     <div className="animate-in fade-in">
-                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
-                         $<AnimatedNum value={saldoPrincipal.usdt} format="usd" />
-                       </p>
-                       <p className="text-emerald-400 text-xs font-bold mt-2">
-                         Eqv: Bs. <AnimatedNum value={saldoPrincipal.usdt * rates.usdt} format="bs" /> (Paralelo)
-                       </p>
-                     </div>
-                  )}
-                  {activeWallet === 'bs' && (
-                     <div className="animate-in fade-in">
-                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
-                         Bs. <AnimatedNum value={saldoPrincipal.bs} format="bs" />
-                       </p>
-                       <p className="text-blue-400 text-xs font-bold mt-2">
-                         Eqv: $<AnimatedNum value={rates.bcv > 0 ? saldoPrincipal.bs / rates.bcv : 0} format="usd" /> (Tasa BCV)
-                       </p>
-                     </div>
-                  )}
-                  {activeWallet === 'cash' && (
-                     <div className="animate-in fade-in">
-                       <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
-                         $<AnimatedNum value={saldoPrincipal.cash} format="usd" />
-                       </p>
-                       <p className="text-amber-400 text-xs font-bold mt-2 uppercase">Monto Físico Exacto</p>
-                     </div>
-                  )}
-               </div>
-
-               {/* PESTAÑAS */}
-               <div className="flex bg-black/40 p-1 rounded-xl w-max border border-white/5 shadow-inner">
-                 <button onClick={() => setActiveWallet('usdt')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'usdt' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>USDT</button>
-                 <button onClick={() => setActiveWallet('bs')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'bs' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>BS</button>
-                 <button onClick={() => setActiveWallet('cash')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'cash' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>CASH</button>
-               </div>
-            </div>
-          </div>
-
-          {/* 1.1. BALANCES DE LOS PARTICIPANTES (Solo en vaca o pote) */}
-          {espacioActivo?.tipo !== 'individual' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-              {participantes.map(p => {
-                const saldoP = getSaldosAislados(p.nombre);
-                return (
-                  <div key={p.id} className="bg-[#1a0f2e] border border-white/5 p-4 rounded-2xl shadow-lg flex flex-col hover:border-white/10 transition-colors">
-                     <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest mb-3 border-b border-white/5 pb-2">{p.nombre}</p>
-                     <div className="space-y-1.5">
-                        <div className="flex justify-between text-xs font-bold"><span className="text-emerald-400">USDT:</span> <span className="text-white font-sans tabular-nums tracking-tight">$<AnimatedNum value={saldoP.usdt} /></span></div>
-                        <div className="flex justify-between text-xs font-bold"><span className="text-blue-400">BS:</span> <span className="text-white font-sans tabular-nums tracking-tight">Bs. <AnimatedNum value={saldoP.bs} format="bs" /></span></div>
-                        <div className="flex justify-between text-xs font-bold"><span className="text-amber-400">CASH:</span> <span className="text-white font-sans tabular-nums tracking-tight">$<AnimatedNum value={saldoP.cash} /></span></div>
-                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* CÓDIGO DE INVITACIÓN DIRECTO EN EL INICIO (SOLO COMPARTIDO) */}
-          {espacioActivo?.tipo !== 'individual' && espacioActivo?.codigo_invitacion && (
-             <div className="bg-[#1a0f2e] border border-fuchsia-500/30 p-5 rounded-[2rem] shadow-[0_0_20px_rgba(192,38,211,0.1)] mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
-                  <p className="text-[10px] text-fuchsia-400 font-bold uppercase tracking-widest flex items-center gap-2 mb-1">
-                     <Key className="w-3 h-3"/> Invita a este espacio
-                  </p>
-                  <p className="text-xs text-white/50">Copia este código y compártelo.</p>
-                </div>
-                <button onClick={() => {navigator.clipboard.writeText(espacioActivo.codigo_invitacion); alert("Código copiado al portapapeles");}} className="w-full sm:w-auto bg-black/40 hover:bg-black/60 border border-white/10 p-3 rounded-xl text-xl text-white font-black tracking-[0.2em] transition-colors flex items-center justify-center gap-2 font-sans tabular-nums cursor-pointer">
-                  {espacioActivo.codigo_invitacion} <Copy className="w-4 h-4 text-white/30 ml-1"/>
-                </button>
-             </div>
-          )}
-
-          {/* UNIRSE A UN ESPACIO (DENTRO DEL INICIO) */}
-          {espacioActivo?.tipo === 'individual' && !isGuest && (
-             <div className="bg-black/40 border border-white/5 p-5 rounded-[2rem] mb-6">
-                <p className="text-[10px] text-white/50 font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
-                   <Users className="w-3 h-3"/> ¿Te invitaron a un espacio?
-                </p>
-                <div className="flex gap-2">
-                  <input type="text" value={joinCodeInput} onChange={(e)=>setJoinCodeInput(e.target.value.toUpperCase())} placeholder="Código (Ej: X7K9P2)" className="flex-1 bg-[#1a0f2e] border border-white/10 rounded-xl p-3 text-sm text-white font-bold outline-none uppercase tracking-widest" maxLength={6} />
-                  <button onClick={unirseConCodigoInterno} className={`px-4 py-3 rounded-xl ${theme.primary} text-white font-bold text-xs uppercase tracking-widest`}>Unirse</button>
-                </div>
-             </div>
-          )}
-
-          {/* 2. MIS POTES (METAS CON DRAWER TÁCTIL) */}
-          <div className="space-y-4">
-            <div className="flex justify-between items-center px-2">
-              <h2 className={`text-base font-black ${theme.text} uppercase tracking-widest flex items-center gap-2`}>
-                <img src="/pote.png" alt="pote" className="w-6 h-6 object-contain drop-shadow-md" /> Mis Potes
-              </h2>
-              <button onClick={() => { setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true); }} className={`flex items-center gap-1 bg-emerald-500 text-black px-4 py-2 rounded-full text-xs font-black shadow-lg active:scale-95 transition-all hover:bg-emerald-400`}>
-                <Plus className="w-4 h-4"/> Nueva Meta
-              </button>
-            </div>
-
-            <Drawer.Root open={isAddingPote} onOpenChange={setIsAddingPote}>
-              <Drawer.Portal>
-                <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[75vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#10b981]">
-                  <Drawer.Title className="sr-only">Registrar Nueva Meta</Drawer.Title>
-                  <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
-                    <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-                    <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Nueva Meta</h3>
-                    
-                    <form onSubmit={guardarPote} className="flex flex-col gap-4">
-                      <div className="flex flex-col gap-4">
-                        <div>
-                          <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿Para qué estamos ahorrando?</label>
-                          <select 
-                            value={poteForm.tipo} 
-                            onChange={(e) => setPoteForm({...poteForm, tipo: e.target.value})} 
-                            data-vaul-no-drag
-                            className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-emerald-500`}
-                          >
-                            {POTE_OPCIONES.map(opt => <option key={opt} value={opt} className="bg-[#121212]">{opt}</option>)}
-                          </select>
-                        </div>
-
-                        {poteForm.tipo === "Personalizado ✍️" && (
-                          <div className="animate-in fade-in slide-in-from-top-2">
-                             <input 
-                               type="text" placeholder="Ej: Viaje a Margarita" 
-                               value={poteForm.nombreCustom} onChange={(e) => setPoteForm({...poteForm, nombreCustom: e.target.value})} 
-                               data-vaul-no-drag
-                               className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-emerald-500`} 
-                               required 
-                             />
-                          </div>
-                        )}
-
-                        <div className="min-h-[80px]">
-                          <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Objetivo ($)</label>
-                          <input 
-                            type="number" step="0.01" placeholder="0.00" 
-                            value={poteForm.monto_objetivo} onChange={(e) => setPoteForm({...poteForm, monto_objetivo: e.target.value})} 
-                            data-vaul-no-drag
-                            className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-emerald-500`} 
-                            required 
-                          />
-                        </div>
-                      </div>
-                      <button type="submit" className={`w-full bg-emerald-500 text-black font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(16,185,129,0.3)] mt-6 active:scale-95 transition-transform`}>Guardar Meta</button>
-                    </form>
-                  </div>
-                </Drawer.Content>
-              </Drawer.Portal>
-            </Drawer.Root>
-
-            {potes.map(pote => {
-              const ahorrado = getPoteAhorrado(pote.id, pote.nombre);
-              const porcentaje = Math.min((ahorrado / pote.monto_objetivo) * 100, 100);
-              
-              return (
-                <div key={pote.id} className={`bg-[#1a0f2e] border-2 border-emerald-500/30 p-5 md:p-6 rounded-[2rem] shadow-[0_0_15px_rgba(16,185,129,0.1)] relative overflow-hidden group hover:border-emerald-500/60 transition-colors`}>
-                  {porcentaje >= 100 && (
-                    <div className="absolute inset-0 bg-emerald-600/90 backdrop-blur-sm flex flex-col items-center justify-center z-20 text-center p-4">
-                      <span className="text-3xl mb-1">🎉</span>
-                      <h3 className="text-white font-black text-lg">¡Meta Alcanzada!</h3>
-                      <p className="text-emerald-100 text-[10px] mb-3">Lograron ahorrar ${pote.monto_objetivo}.</p>
-                      <button onClick={() => eliminarPote(pote.id)} className="bg-white text-emerald-600 font-bold px-4 py-2 rounded-xl text-xs shadow-lg active:scale-95 transition-transform">Eliminar Pote</button>
-                    </div>
-                  )}
-
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h2 className="text-base md:text-lg font-black text-white flex items-center gap-2">{pote.nombre} <span className={`text-emerald-400 text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20`}>META: ${pote.monto_objetivo} USDT</span></h2>
-                        <p className={`text-xs text-white/50 mt-1`}>Faltan $<AnimatedNum value={Math.max(pote.monto_objetivo - ahorrado, 0)} /> USD</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <span className={`text-sm md:text-base font-black text-emerald-400`}><AnimatedNum value={porcentaje} format="pct"/></span>
-                        {porcentaje < 100 && (
-                          <div className="flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => eliminarPote(pote.id)} className="p-1.5 bg-rose-500/20 text-rose-400 rounded-lg hover:bg-rose-500 hover:text-white transition-colors"><Trash2 className="w-3.5 h-3.5"/></button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className={`h-3 w-full bg-black/60 rounded-full border border-white/5 p-0.5 mt-2`}>
-                      <div className={`h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]`} style={{ width: `${porcentaje}%`, transition: 'width 1s ease-in-out' }}></div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* 3. BOTÓN DE REGISTRO RÁPIDO, CALCULADORA E INTEGRANTES */}
-          <div className="mb-8 mt-6 flex gap-3">
-            <div className="flex-1">
-              <TransactionDrawer
-                  tipo={tipo} setTipo={setTipo}
-                  categoria={categoria} setCategoria={setCategoria}
-                  monto={monto} setMonto={setMonto}
-                  moneda={moneda} setMoneda={setMoneda}
-                  descripcion={descripcion} setDescripcion={setDescripcion}
-                  rates={rates} theme={theme} onSubmit={handleManualSubmit}
-                  espacioActivo={espacioActivo} participantes={participantes}
-                  usuario={usuario} setUsuario={setUsuario}
-                >
-                  <button type="button" className="w-full bg-[#1a1a1a] border border-[#333] hover:border-emerald-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group h-full">
-                    <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-emerald-500 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] group-hover:scale-110 transition-transform`}>
-                      <Plus className="w-6 h-6 md:w-8 md:h-8 text-black" />
-                    </div>
-                    <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Nuevo Registro</span>
-                  </button>
-              </TransactionDrawer>
-            </div>
-            
-            <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="w-1/4 max-w-[100px] bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group">
-              <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform`}>
-                <Calculator className="w-5 h-5 md:w-7 md:h-7 text-blue-400" />
-              </div>
-              <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Cálculo</span>
-            </button>
-
-            {/* BOTÓN GESTIONAR INTEGRANTES (SÓLO SI NO ES INDIVIDUAL) */}
-            {espacioActivo?.tipo !== 'individual' && (
-               <>
-                 <button onClick={() => setIsManageUsersOpen(true)} className="w-1/4 max-w-[100px] bg-[#1a1a1a] border border-[#333] hover:border-purple-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group">
-                   <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.2)] group-hover:scale-110 transition-transform`}>
-                     <Users className="w-5 h-5 md:w-7 md:h-7 text-purple-400" />
-                   </div>
-                   <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Miembros</span>
-                 </button>
-
-                 <Drawer.Root open={isManageUsersOpen} onOpenChange={setIsManageUsersOpen}>
-                    <Drawer.Portal>
-                      <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-                      <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#A855F7]">
-                        <Drawer.Title className="sr-only">Gestionar Integrantes</Drawer.Title>
-                        <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
-                          <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-                          <h3 className="text-xl font-black text-white mb-6 text-center">Gestionar Integrantes</h3>
-                          
-                          <div className="flex flex-wrap gap-2 mb-6">
-                            {participantes.length === 0 ? (
-                              <p className="text-xs text-white/20 italic text-center w-full">No hay miembros agregados...</p>
-                            ) : (
-                              participantes.map((p: any) => (
-                                <div key={p.id} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-white/5 bg-[#1a1a1a] text-white group hover:border-rose-500/50 transition-colors">
-                                  {p.nombre}
-                                  <button onClick={() => eliminarParticipante(p.id, p.nombre)} className="text-white/20 hover:text-rose-500 transition-colors">
-                                    <X size={16} />
-                                  </button>
-                                </div>
-                              ))
-                            )}
-                          </div>
-
-                          <div className="flex gap-2">
-                            <input 
-                              type="text" placeholder="Nombre del integrante..." 
-                              value={nuevoPart} onChange={(e) => setNuevoPart(e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && agregarParticipante()}
-                              data-vaul-no-drag
-                              className="flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#A855F7] transition-all"
-                            />
-                            <button onClick={agregarParticipante} className={`p-4 rounded-xl ${theme.primary} text-white shadow-lg active:scale-95 transition-all`}>
-                              <UserPlus size={20} />
-                            </button>
-                          </div>
-                        </div>
-                      </Drawer.Content>
-                    </Drawer.Portal>
-                  </Drawer.Root>
-               </>
-            )}
-          </div>
-        </div>
-      );
-    }
     
-    return <div className="p-10 text-center text-white/50">Cambia de pestaña en la barra de navegación para ver este contenido.</div>;
+    return <div className="p-10 text-center text-white/50">Selecciona otra pestaña</div>;
   }
 
   return (
@@ -2000,16 +2219,29 @@ function FinanzasDashboardContent({
         </div>
       )}
 
-      {/* HEADER */}
+      {/* HEADER DINÁMICO PARA EDITAR NOMBRE */}
       <div className="flex items-center justify-between p-4 mb-2">
         <div className="flex items-center gap-3">
           <button onClick={() => setIsMenuOpen(true)} className="p-2 text-white hover:text-purple-400 bg-transparent rounded-xl transition-colors">
             <Menu className="w-8 h-8" /> 
           </button>
           <div className="flex flex-col">
-             <h1 className="text-xl font-black text-white tracking-wide leading-tight flex items-center gap-2">
-                 {espacioActivo?.nombre || "Mi Billetera"} 
-             </h1>
+             <div className="text-xl font-black text-white tracking-wide leading-tight flex items-center gap-2">
+                 {isEditingSpaceName ? (
+                   <form onSubmit={guardarNombreEspacio} className="flex items-center gap-2">
+                     <input type="text" value={newSpaceName} onChange={(e) => setNewSpaceName(e.target.value)} className="bg-black/50 border border-purple-500/50 rounded px-2 py-1 outline-none text-sm w-32" autoFocus />
+                     <button type="submit" className="bg-emerald-500 text-black p-1 rounded"><Check size={14}/></button>
+                     <button type="button" onClick={() => setIsEditingSpaceName(false)} className="bg-rose-500 text-black p-1 rounded"><X size={14}/></button>
+                   </form>
+                 ) : (
+                   <>
+                     {espacioActivo?.nombre || "Mi Billetera"} 
+                     {espacioActivo?.tipo !== 'individual' && !isGuest && (
+                       <button onClick={() => {setNewSpaceName(espacioActivo.nombre); setIsEditingSpaceName(true);}} className="text-white/30 hover:text-white transition-colors ml-1"><Edit2 size={14}/></button>
+                     )}
+                   </>
+                 )}
+             </div>
              <div className="flex items-center gap-2 mt-0.5">
                 <span className={`text-[9px] uppercase tracking-widest ${theme.text} ${theme.lightBg} px-2 py-0.5 rounded-md font-bold`}>{espacioActivo?.tipo || "Individual"}</span>
              </div>
@@ -2024,35 +2256,58 @@ function FinanzasDashboardContent({
         </div>
       </div>
 
-      {/* EL MENÚ LATERAL */}
+      {/* EL MENÚ LATERAL MEJORADO (CON BOTONES DE ELIMINAR Y VACA DESBLOQUEADA) */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-[200] flex">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)}></div>
           <div className="relative w-3/4 max-w-xs bg-[#121212] border-r border-[#333] h-full flex flex-col p-6 animate-in slide-in-from-left">
-            <div className="flex justify-between items-center mb-8">
-              <img src="/pote.png" alt="Mi Pote" className="w-12 h-12 object-contain" />
+            <div className="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
+              <img src="/pote.png" alt="Mi Pote" className="w-10 h-10 object-contain" />
               <button onClick={() => setIsMenuOpen(false)} className="text-white/50 hover:text-white"><X className="w-6 h-6"/></button>
             </div>
             
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-4">Mis Espacios</p>
-            <div className="space-y-3 flex-1">
-              <button onClick={() => { setIsMenuOpen(false); onSelectModule('individual'); }} className="w-full flex items-center gap-3 p-3 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/30 hover:bg-purple-500/20 font-bold text-sm transition-colors text-left">
-                <Wallet className="w-5 h-5"/> Mi Billetera
-              </button>
-              <button onClick={() => { setIsMenuOpen(false); onSelectModule('pote'); }} className="w-full flex items-center gap-3 p-3 rounded-xl bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/30 hover:bg-fuchsia-500/20 font-bold text-sm transition-colors text-left">
-                <img src="/pote.png" className="w-5 h-5 opacity-80" /> Mi Pote
-              </button>
+            <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-3">Tus Billeteras</p>
+            <div className="space-y-2 mb-6">
+              {espacios.filter((e:any) => e.tipo === 'individual').map((e:any) => (
+                <div key={e.id} className="flex gap-1">
+                  <button onClick={() => { setIsMenuOpen(false); onSelectModule('individual', e.id); }} className={`flex-1 flex items-center gap-3 p-3 rounded-xl font-bold text-sm text-left transition-colors ${espacioActivo?.id === e.id ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-[#1a1a1a] text-white/70 hover:bg-white/10'}`}>
+                    <Wallet className="w-4 h-4 shrink-0"/> <span className="truncate">{e.nombre}</span>
+                  </button>
+                  <button onClick={(event) => eliminarEspacio(event, e.id, e.tipo, e.nombre)} className="p-3 bg-[#1a1a1a] rounded-xl text-white/30 hover:text-rose-500 hover:bg-rose-500/10 transition-colors">
+                    <Trash2 className="w-4 h-4"/>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-3">Potes y Vacas</p>
+            <div className="space-y-2 flex-1 overflow-y-auto">
+              {espacios.filter((e:any) => e.tipo !== 'individual').map((e:any) => (
+                <div key={e.id} className="flex gap-1">
+                  <button onClick={() => { setIsMenuOpen(false); onSelectModule(e.tipo, e.id); }} className={`flex-1 flex items-center gap-3 p-3 rounded-xl font-bold text-sm text-left transition-colors ${espacioActivo?.id === e.id ? (e.tipo === 'vaca' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/30') : 'bg-[#1a1a1a] text-white/70 hover:bg-white/10'}`}>
+                    {e.tipo === 'vaca' ? <Users className="w-4 h-4 shrink-0" /> : <img src="/pote.png" className="w-4 h-4 opacity-80 shrink-0" />} 
+                    <span className="truncate">{e.nombre}</span>
+                  </button>
+                  <button onClick={(event) => eliminarEspacio(event, e.id, e.tipo, e.nombre)} className="p-3 bg-[#1a1a1a] rounded-xl text-white/30 hover:text-rose-500 hover:bg-rose-500/10 transition-colors">
+                    <Trash2 className="w-4 h-4"/>
+                  </button>
+                </div>
+              ))}
               
-              <div className="relative">
-                <button onClick={() => { setIsMenuOpen(false); onSelectModule('vaca'); }} className="w-full flex items-center justify-between p-3 rounded-xl bg-gray-800/50 text-gray-500 border border-gray-700/50 font-bold text-sm text-left opacity-60 cursor-not-allowed">
-                  <span className="flex items-center gap-3"><Users className="w-5 h-5"/> La Vaca</span>
-                  <Lock className="w-4 h-4"/>
+              <div className="pt-4 border-t border-white/5 space-y-2 mt-4">
+                <button onClick={() => { setIsMenuOpen(false); onSelectModule('pote'); }} className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/10 font-bold text-xs text-left transition-colors">
+                  <Plus className="w-3 h-3"/> Crear Pote
                 </button>
-                <div className="absolute -top-2 right-2 bg-amber-500 text-black text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Próximamente</div>
+                <button onClick={() => { setIsMenuOpen(false); onSelectModule('vaca'); }} className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-bold text-xs text-left transition-colors">
+                  <Plus className="w-3 h-3"/> Crear Vaca
+                </button>
+                <button onClick={() => { setIsMenuOpen(false); openJoinModal(); }} className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-blue-500/30 text-blue-400 hover:bg-blue-500/10 font-bold text-xs text-left transition-colors">
+                  <Key className="w-3 h-3"/> Unirse con código
+                </button>
               </div>
             </div>
             
-            <div className="pt-4 border-t border-white/5 space-y-2">
+            <div className="pt-4 border-t border-white/5 space-y-2 mt-2">
                 <button onClick={() => { setIsMenuOpen(false); openProfileModal(); }} className="w-full flex items-center gap-3 p-3 rounded-xl text-white/70 hover:bg-white/10 text-sm font-bold transition-colors">
                     <Edit2 className="w-4 h-4"/> Editar Perfil
                 </button>
@@ -2063,13 +2318,18 @@ function FinanzasDashboardContent({
           </div>
         </div>
       )}
-
-      {renderTabContent()}
+            {renderTabContent()}
 
       <nav className={`fixed bottom-0 left-0 right-0 bg-[#1a0f2e]/90 backdrop-blur-xl border-t ${theme.border} p-3 md:hidden z-40 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)]`}>
         <div className="flex justify-around items-center max-w-md mx-auto">
           <NavButton icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
           <NavButton icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
+          
+          {/* NUEVA PESTAÑA DE RECORDATORIOS (SÓLO PARA POTES) */}
+          {espacioActivo?.tipo !== 'individual' && (
+            <NavButton icon={<ListTodo />} label="Recordatorios" active={activeTab === 'recordatorios'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('recordatorios'); } }} theme={theme} />
+          )}
+
           {espacioActivo?.tipo !== 'vaca' && (
             <NavButton icon={<Shield />} label="Reserva" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
           )}
@@ -2079,6 +2339,9 @@ function FinanzasDashboardContent({
       <nav className="hidden md:flex justify-center mt-8 space-x-4">
         <NavButtonDesktop icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
         <NavButtonDesktop icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
+        {espacioActivo?.tipo !== 'individual' && (
+          <NavButtonDesktop icon={<ListTodo />} label="Recordatorios" active={activeTab === 'recordatorios'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('recordatorios'); } }} theme={theme} />
+        )}
         {espacioActivo?.tipo !== 'vaca' && (
           <NavButtonDesktop icon={<Shield />} label="Por si acaso" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
         )}
