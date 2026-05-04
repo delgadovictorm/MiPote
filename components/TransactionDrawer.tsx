@@ -55,12 +55,30 @@ export function TransactionDrawer({
       { id: "comida", label: "Comida", icon: <ShoppingCart size={18} /> },
       { id: "cashea", label: "Cashea", icon: <DollarSign size={18} /> },
       { id: "internet", label: "Internet", icon: <Wifi size={18} /> },
+      { id: "abono_pote", label: "Abonar a Pote 🍯", icon: <Plus size={18} /> },
       { id: "mascotas", label: "Mascotas", icon: <Dog size={18} /> },
       { id: "condominio", label: "Condominio", icon: <Home size={18} /> },
       { id: "regalos", label: "Regalos", icon: <Gift size={18} /> },
       { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
     ]
   };
+
+  {/* SELECTOR DE POTE DESTINO - SOLO SI ELIGE ABONAR */}
+  {categoria === 'abono_pote' && (
+    <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-emerald-500/30 mb-6 animate-in zoom-in-95">
+      <label className="text-[9px] uppercase font-black text-emerald-400 block mb-2 tracking-widest">¿A qué meta enviamos el dinero?</label>
+      <select 
+        value={destinoTransferencia} 
+        onChange={(e) => setDestinoTransferencia(e.target.value)}
+        className="w-full bg-transparent text-white font-bold outline-none appearance-none cursor-pointer"
+      >
+        <option value="" className="bg-[#121212]">Seleccionar Pote...</option>
+        {potes.map((p: any) => (
+          <option key={p.id} value={p.id} className="bg-[#121212]">{p.nombre}</option>
+        ))}
+      </select>
+    </div>
+  )}
 
   const handleLocalSubmit = (e: any) => {
     e.preventDefault();

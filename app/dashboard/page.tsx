@@ -1196,31 +1196,45 @@ const eliminarEspacio = async (e: React.MouseEvent, idEspacio: string, tipo: str
   };
 const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.filter(tx => tx.categoria === `pote_${poteId}`).reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
   // 🔥 LÓGICA DE REGISTRO Y TRANSFERENCIAS
-  const handleManualSubmit = async (e: React.FormEvent) => {
-    if(e) e.preventDefault();
-    if (!monto) return alert("Falta el monto");
+ const handleManualSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  const valorMonto = parseFloat(monto);
+  const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
 
-    const valorMonto = parseFloat(monto);
-    const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
+  // LOGICA DE ABONO (EL CORAZÓN DEL CAMBIO)
+  if (categoria === 'abono_pote') {
+    if (!destinoTransferencia) return alert("Selecciona un Pote");
 
-    if (tipo === 'transferencia') {
-       if (!destinoTransferencia) return alert("Selecciona el Pote de destino.");
-       if (isGuest) return alert("Las transferencias no están disponibles en modo invitado.");
+    // 1. REGISTRO EN LA BILLETERA (Gasto que resta balance)
+    await supabase.from("transacciones_saas").insert([{
+      descripcion: `Abono a meta: ${potes.find(p => p.id === destinoTransferencia)?.nombre}`,
+      monto_original: valorMonto,
+      moneda_original: moneda,
+      monto_bs, monto_usd_bcv, monto_usd_paralelo,
+      categoria: 'transferencia_salida', // Categoría interna para no duplicar gasto en gráficas
+      usuario: usuario || "Tú",
+      tipo: 'egreso', 
+      espacio_id: espacioActivo.id, // ID de tu billetera
+      usuario_id: session.user.id
+    }]);
 
-       const espacioDestino = espacios.find((esp:any) => esp.id === destinoTransferencia);
-       
-       await supabase.from("transacciones_saas").insert([{
-         descripcion: `Transferencia a ${espacioDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_out', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id
-       }]);
+    // 2. REGISTRO EN EL POTE (Ingreso que suma a la meta)
+    await supabase.from("transacciones_saas").insert([{
+      descripcion: `Abono desde Billetera`,
+      monto_original: valorMonto,
+      moneda_original: moneda,
+      monto_bs, monto_usd_bcv, monto_usd_paralelo,
+      categoria: `pote_${destinoTransferencia}`, // ESTO es lo que hace que la barra de progreso suba
+      usuario: usuario || "Tú",
+      tipo: 'ingreso',
+      espacio_id: destinoTransferencia, // ID del pote destino
+      usuario_id: session.user.id
+    }]);
 
-       await supabase.from("transacciones_saas").insert([{
-         descripcion: `Aporte de ${perfil?.nombre || 'Miembro'}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_in', usuario: perfil?.nombre || "Tú", tipo: 'ingreso', espacio_id: destinoTransferencia, usuario_id: session.user.id
-       }]);
-
-       fetchData();
-       triggerToast("ingreso", "¡Transferencia enviada con éxito! 🚀");
-       return;
-    }
+    fetchData();
+    triggerToast("ingreso", "¡Abono realizado con éxito! 🍯");
+    return;
+  }
 
     const isValidDesc = tipo === 'ingreso' ? true : descripcion.trim() !== "";
     const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
@@ -1470,18 +1484,51 @@ const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.fil
     return { bs, usdt, cash };
   };
 
-  const getPatrimonioNeto = () => {
-     const saldos = getSaldosAislados('ALL');
-     const bsEnDolaresParalelo = rates.usdt > 0 ? saldos.bs / rates.usdt : 0;
-     const bsEnDolaresBCV = rates.bcv > 0 ? saldos.bs / rates.bcv : 0;
-     return { paralelo: saldos.usdt + saldos.cash + bsEnDolaresParalelo, bcv: saldos.usdt + saldos.cash + bsEnDolaresBCV };
+const getPatrimonioNeto = () => {
+  // El patrimonio es el saldo neto de TODAS las transacciones que existen a tu nombre
+  // No importa en qué espacio estén.
+  const saldos = getSaldosAislados('ALL'); 
+  
+  const bsEnDolaresParalelo = rates.usdt > 0 ? saldos.bs / rates.usdt : 0;
+  
+  return {
+    paralelo: saldos.usdt + saldos.cash + bsEnDolaresParalelo,
+    bcv: saldos.usdt + saldos.cash + (rates.bcv > 0 ? saldos.bs / rates.bcv : 0)
   };
+};
 
   const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
   const transaccionesFiltradas = transaccionesDelMes.filter(tx => filtroHistorial === "Todos" || tx.usuario === filtroHistorial);
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-[#1a0f2e] border border-purple-500/30 p-3 rounded-xl shadow-xl">
+        <p className="text-white font-bold text-xs mb-1">{payload[0].name}</p>
+        <p className="text-xs font-sans tabular-nums text-purple-400">
+          ${payload[0].value.toFixed(2)} USDT
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
 
   const renderTabContent = () => {
-    
+    const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
+  const transaccionesFiltradas = transaccionesDelMes.filter(tx => filtroHistorial === "Todos" || tx.usuario === filtroHistorial);
+  const gastosDelMesCalculados = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
+
+  const datosCategoriasMap = gastosDelMesCalculados.reduce((acc, tx) => {
+    let catName = tx.categoria.startsWith('pote_') ? 'Extracción Potes' : 
+                  tx.categoria === 'emergencia' ? 'Emergencias 🚨' : 
+                  (categoriasList.find(c => c.valor === tx.categoria)?.label || tx.categoria);
+    acc[catName] = (acc[catName] || 0) + (tx.monto_usd_paralelo || 0);
+    return acc;
+  }, {} as Record<string, number>);
+
+  const dataGraficoTorta = Object.keys(datosCategoriasMap).map(key => ({ name: key, value: datosCategoriasMap[key] })).sort((a, b) => b.value - a.value);
+  const COLORS = [theme.stroke, '#ec4899', '#f97316', '#eab308', '#10b981', '#0ea5e9', '#6366f1', '#d946ef'];
+  // --- FIN DEL BLOQUE A PEGAR ---
     // 🔥 NUEVA PESTAÑA: RECORDATORIOS
     if (activeTab === 'recordatorios') {
       return (
@@ -2057,6 +2104,7 @@ const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.fil
                         {porcentaje < 100 && (
                           <div className="flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => eliminarPote(pote.id)} className="p-1.5 bg-rose-500/20 text-rose-400 rounded-lg hover:bg-rose-500 hover:text-white transition-colors"><Trash2 className="w-3.5 h-3.5"/></button>
+                            
                           </div>
                         )}
                       </div>
