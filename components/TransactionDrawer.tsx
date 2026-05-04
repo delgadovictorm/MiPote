@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { TrendingUp, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3, X } from "lucide-react";
 
-// ✅ ESTILOS CSS OPTIMIZADOS PARA iOS 18 PWA
 const drawerStyles = `
   @supports (height: 100dvh) {
     .drawer-overlay {
@@ -27,17 +26,15 @@ const drawerStyles = `
       bottom: 0;
     }
 
-    /* 🔥 FIX PARA iOS 18 */
     .drawer-panel * {
       touch-action: manipulation !important;
-      -webkit-user-select: none;
-      user-select: none;
     }
 
     .drawer-panel button {
       pointer-events: auto !important;
-      -webkit-appearance: none;
+      cursor: pointer;
       -webkit-user-select: none;
+      user-select: none;
     }
 
     .drawer-panel input,
@@ -49,7 +46,6 @@ const drawerStyles = `
   }
 `;
 
-// Inyectar estilos en el documento
 if (typeof document !== 'undefined') {
   const style = document.createElement('style');
   style.textContent = drawerStyles;
@@ -75,6 +71,7 @@ export function TransactionDrawer({
 }: any) {
   
   const [isOpen, setIsOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Limpiamos los campos al cerrar
   useEffect(() => {
@@ -87,6 +84,72 @@ export function TransactionDrawer({
       return () => clearTimeout(timer);
     }
   }, [isOpen, setMonto, setDescripcion, setCategoria]);
+
+  // 🔥 EVENT LISTENERS NATIVOS PARA iOS PWA
+  useEffect(() => {
+    if (!isOpen || !panelRef.current) return;
+
+    const panel = panelRef.current;
+
+    // Helper para agregar listeners a todos los botones
+    const attachButtonListeners = () => {
+      const buttons = panel.querySelectorAll('button');
+      
+      buttons.forEach(button => {
+        // Prevenir listeners duplicados
+        button.removeEventListener('touchend', handleButtonTouchEnd);
+        button.removeEventListener('mousedown', handleButtonMouseDown);
+        
+        button.addEventListener('touchend', handleButtonTouchEnd, { passive: false });
+        button.addEventListener('mousedown', handleButtonMouseDown, { passive: false });
+      });
+    };
+
+    const handleButtonTouchEnd = (e: any) => {
+      e.preventDefault();
+      const button = e.currentTarget;
+      const action = button.dataset.action;
+      const value = button.dataset.value;
+      
+      if (action === 'close') setIsOpen(false);
+      else if (action === 'tipo') { setTipo(value); setCategoria(""); }
+      else if (action === 'categoria') { 
+        const label = button.dataset.label;
+        setCategoria(value); 
+        setDescripcion(value === 'otro' ? '' : label);
+      }
+      else if (action === 'moneda') setMoneda(value);
+      else if (action === 'cuota') (window as any).numCuotasCashea = parseInt(value);
+    };
+
+    const handleButtonMouseDown = (e: any) => {
+      const button = e.currentTarget;
+      const action = button.dataset.action;
+      const value = button.dataset.value;
+      
+      if (action === 'close') setIsOpen(false);
+      else if (action === 'tipo') { setTipo(value); setCategoria(""); }
+      else if (action === 'categoria') { 
+        const label = button.dataset.label;
+        setCategoria(value); 
+        setDescripcion(value === 'otro' ? '' : label);
+      }
+      else if (action === 'moneda') setMoneda(value);
+      else if (action === 'cuota') (window as any).numCuotasCashea = parseInt(value);
+    };
+
+    // Agregar listeners al abrir
+    attachButtonListeners();
+
+    // Cleanup
+    return () => {
+      const buttons = panel.querySelectorAll('button');
+      buttons.forEach(button => {
+        button.removeEventListener('touchend', handleButtonTouchEnd);
+        button.removeEventListener('mousedown', handleButtonMouseDown);
+      });
+    };
+  }, [isOpen, setTipo, setCategoria, setDescripcion, setMonto]);
 
   const categories = {
     ingreso: [
@@ -137,6 +200,7 @@ export function TransactionDrawer({
 
           {/* 🎯 CONTENEDOR DEL PANEL */}
           <div 
+            ref={panelRef}
             className={`drawer-panel fixed left-0 right-0 bg-[#121212] w-full rounded-t-[32px] h-[90dvh] flex flex-col shadow-[0_-10px_50px_rgba(0,0,0,0.8)] ${isOpen ? 'open' : ''}`}
           >
             
@@ -146,7 +210,7 @@ export function TransactionDrawer({
               <div className="flex items-center justify-between pt-6 pb-6 sticky top-0 bg-[#121212] z-20 border-b border-white/5 mb-4">
                 <h3 className="text-white font-black text-lg">Nuevo Registro</h3>
                 <button 
-                  onClick={() => setIsOpen(false)}
+                  data-action="close"
                   className="p-2 bg-white/10 rounded-full text-white/70 hover:text-white hover:bg-rose-500 transition-colors"
                 >
                   <X size={20} />
@@ -157,14 +221,16 @@ export function TransactionDrawer({
               <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6 shrink-0">
                 <button 
                   type="button"
-                  onClick={() => {setTipo("ingreso"); setCategoria("");}}
+                  data-action="tipo"
+                  data-value="ingreso"
                   className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
                 >
                   INGRESO
                 </button>
                 <button 
                   type="button"
-                  onClick={() => {setTipo("egreso"); setCategoria("");}}
+                  data-action="tipo"
+                  data-value="egreso"
                   className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
                 >
                   GASTO
@@ -177,10 +243,9 @@ export function TransactionDrawer({
                   <button
                     key={cat.id}
                     type="button"
-                    onClick={() => {
-                      setCategoria(cat.id);
-                      setDescripcion(cat.id === 'otro' ? '' : cat.label);
-                    }}
+                    data-action="categoria"
+                    data-value={cat.id}
+                    data-label={cat.label}
                     className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 ${
                       categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
                     }`}
@@ -226,21 +291,24 @@ export function TransactionDrawer({
                   <div className="flex bg-black/40 p-1 rounded-xl w-full border border-white/5 shadow-inner">
                     <button 
                       type="button"
-                      onClick={() => setMoneda('usdt')}
+                      data-action="moneda"
+                      data-value="usdt"
                       className={`flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
                     >
                       USDT
                     </button>
                     <button 
                       type="button"
-                      onClick={() => setMoneda('bs')}
+                      data-action="moneda"
+                      data-value="bs"
                       className={`flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
                     >
                       BS
                     </button>
                     <button 
                       type="button"
-                      onClick={() => setMoneda('cash')}
+                      data-action="moneda"
+                      data-value="cash"
                       className={`flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
                     >
                       CASH
@@ -275,7 +343,8 @@ export function TransactionDrawer({
                         <button 
                           key={n} 
                           type="button"
-                          onClick={() => (window as any).numCuotasCashea = n}
+                          data-action="cuota"
+                          data-value={n}
                           className="py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-colors focus:ring-2 ring-purple-400 tabular-nums"
                         >
                           {n}
