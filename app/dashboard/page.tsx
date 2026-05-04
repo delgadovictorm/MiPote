@@ -695,7 +695,7 @@ export default function MiPoteApp() {
                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Nombre o Apodo</label>
                  <div className="relative">
                    <UserPlus className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                   <input type="text" placeholder="Ej: Víctor Delgado" value={regNombre} onChange={e => setRegNombre(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                   <input type="text" placeholder="Ej: Pedro Peréz" value={regNombre} onChange={e => setRegNombre(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
                  </div>
                </div>
                <div>
@@ -765,7 +765,7 @@ export default function MiPoteApp() {
             <div className="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-purple-500/20"><UserPlus className="w-8 h-8 text-purple-400" /></div>
             <h3 className="text-xl font-black text-white mb-2">Tu Perfil</h3>
             <p className="text-sm text-purple-300 mb-6">¿Cómo quieres que te llamen en tus potes y vacas?</p>
-            <input type="text" value={editNombre} onChange={(e)=>setEditNombre(e.target.value)} placeholder="Ej: Víctor Delgado" className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-4 text-center text-lg font-bold text-white mb-4 outline-none focus:border-purple-400" required />
+            <input type="text" value={editNombre} onChange={(e)=>setEditNombre(e.target.value)} placeholder="Ej: Pedro Peréz" className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-4 text-center text-lg font-bold text-white mb-4 outline-none focus:border-purple-400" required />
             <button type="submit" className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3.5 rounded-xl shadow-lg transition-transform active:scale-95">GUARDAR NOMBRE</button>
           </form>
         </div>
@@ -830,7 +830,7 @@ export default function MiPoteApp() {
 
                 <div>
                   <label className="text-xs text-white/50 font-bold uppercase tracking-widest">Referencia / Alias</label>
-                  <input type="text" required value={referencia} onChange={e=>setReferencia(e.target.value)} placeholder="Ej: Pago de Victor o 1459" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none mt-1 focus:border-amber-500 transition-colors" />
+                  <input type="text" required value={referencia} onChange={e=>setReferencia(e.target.value)} placeholder="Ej: Pago de Carlos o 1459" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none mt-1 focus:border-amber-500 transition-colors" />
                 </div>
 
                 <div>
