@@ -27,22 +27,24 @@ const drawerStyles = `
       bottom: 0;
     }
 
-    /* 🔥 FIX CRÍTICO PARA iOS 18 */
-    .drawer-panel button {
-      touch-action: manipulation;
+    /* 🔥 FIX PARA iOS 18 */
+    .drawer-panel * {
+      touch-action: manipulation !important;
       -webkit-user-select: none;
       user-select: none;
-      pointer-events: auto !important;
     }
 
-    .drawer-panel input {
-      touch-action: manipulation;
+    .drawer-panel button {
       pointer-events: auto !important;
+      -webkit-appearance: none;
+      -webkit-user-select: none;
     }
 
+    .drawer-panel input,
     .drawer-panel select {
-      touch-action: manipulation;
       pointer-events: auto !important;
+      -webkit-user-select: text;
+      user-select: text;
     }
   }
 `;
@@ -118,44 +120,24 @@ export function TransactionDrawer({
     }
   };
 
-  // 🔥 FUNCIÓN HELPER PARA iOS 18 - Maneja tanto click como touch
-  const handleTouchButton = (callback: () => void) => {
-    return (e: any) => {
-      e.preventDefault();
-      e.stopPropagation();
-      callback();
-    };
-  };
-
   return (
     <>
       {/* BOTÓN INICIAL PARA ABRIR EL PANEL */}
-      {React.cloneElement(children, { 
-        onTouchEnd: handleTouchButton(() => setIsOpen(true)),
-        onClick: () => setIsOpen(true)
-      })}
+      {React.cloneElement(children, { onClick: () => setIsOpen(true) })}
 
-      {/* 🔧 CONTENEDOR PRINCIPAL - Sin transform, usando bottom/fixed */}
+      {/* 🔧 CONTENEDOR PRINCIPAL */}
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex flex-col justify-end overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] flex flex-col justify-end overflow-hidden">
           
-          {/* FONDO OSCURO - Solo transición de opacidad */}
+          {/* FONDO OSCURO */}
           <div 
             className={`drawer-overlay absolute inset-0 bg-black/80 backdrop-blur-sm ${isOpen ? 'open' : ''}`}
-            onTouchEnd={(e) => { 
-              e.stopPropagation(); 
-              setIsOpen(false); 
-            }}
-            onClick={(e) => { 
-              e.stopPropagation(); 
-              setIsOpen(false); 
-            }} 
+            onClick={() => setIsOpen(false)}
           />
 
-          {/* 🎯 CONTENEDOR DEL PANEL - bottom en lugar de transform */}
+          {/* 🎯 CONTENEDOR DEL PANEL */}
           <div 
             className={`drawer-panel fixed left-0 right-0 bg-[#121212] w-full rounded-t-[32px] h-[90dvh] flex flex-col shadow-[0_-10px_50px_rgba(0,0,0,0.8)] ${isOpen ? 'open' : ''}`}
-            onClick={(e) => e.stopPropagation()}
           >
             
             <div className="px-4 md:px-6 flex-1 overflow-y-auto pb-20 flex flex-col">
@@ -164,7 +146,6 @@ export function TransactionDrawer({
               <div className="flex items-center justify-between pt-6 pb-6 sticky top-0 bg-[#121212] z-20 border-b border-white/5 mb-4">
                 <h3 className="text-white font-black text-lg">Nuevo Registro</h3>
                 <button 
-                  onTouchEnd={handleTouchButton(() => setIsOpen(false))}
                   onClick={() => setIsOpen(false)}
                   className="p-2 bg-white/10 rounded-full text-white/70 hover:text-white hover:bg-rose-500 transition-colors"
                 >
@@ -176,7 +157,6 @@ export function TransactionDrawer({
               <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6 shrink-0">
                 <button 
                   type="button"
-                  onTouchEnd={handleTouchButton(() => {setTipo("ingreso"); setCategoria("");})}
                   onClick={() => {setTipo("ingreso"); setCategoria("");}}
                   className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
                 >
@@ -184,7 +164,6 @@ export function TransactionDrawer({
                 </button>
                 <button 
                   type="button"
-                  onTouchEnd={handleTouchButton(() => {setTipo("egreso"); setCategoria("");})}
                   onClick={() => {setTipo("egreso"); setCategoria("");}}
                   className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
                 >
@@ -198,10 +177,6 @@ export function TransactionDrawer({
                   <button
                     key={cat.id}
                     type="button"
-                    onTouchEnd={handleTouchButton(() => {
-                      setCategoria(cat.id);
-                      setDescripcion(cat.id === 'otro' ? '' : cat.label);
-                    })}
                     onClick={() => {
                       setCategoria(cat.id);
                       setDescripcion(cat.id === 'otro' ? '' : cat.label);
@@ -224,7 +199,6 @@ export function TransactionDrawer({
                     <select 
                       value={usuario} 
                       onChange={(e) => setUsuario(e.target.value)}
-                      onTouchEnd={(e) => e.stopPropagation()}
                       className="w-full bg-transparent text-white font-bold outline-none appearance-none cursor-pointer"
                       required
                     >
@@ -243,7 +217,6 @@ export function TransactionDrawer({
                         type="number" step="0.01" placeholder="0.00"
                         value={monto} 
                         onChange={(e) => setMonto(e.target.value)}
-                        onTouchEnd={(e) => e.stopPropagation()}
                         className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums tracking-tight font-sans"
                       />
                     </div>
@@ -253,7 +226,6 @@ export function TransactionDrawer({
                   <div className="flex bg-black/40 p-1 rounded-xl w-full border border-white/5 shadow-inner">
                     <button 
                       type="button"
-                      onTouchEnd={handleTouchButton(() => setMoneda('usdt'))}
                       onClick={() => setMoneda('usdt')}
                       className={`flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
                     >
@@ -261,7 +233,6 @@ export function TransactionDrawer({
                     </button>
                     <button 
                       type="button"
-                      onTouchEnd={handleTouchButton(() => setMoneda('bs'))}
                       onClick={() => setMoneda('bs')}
                       className={`flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
                     >
@@ -269,7 +240,6 @@ export function TransactionDrawer({
                     </button>
                     <button 
                       type="button"
-                      onTouchEnd={handleTouchButton(() => setMoneda('cash'))}
                       onClick={() => setMoneda('cash')}
                       className={`flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}
                     >
@@ -305,7 +275,6 @@ export function TransactionDrawer({
                         <button 
                           key={n} 
                           type="button"
-                          onTouchEnd={handleTouchButton(() => (window as any).numCuotasCashea = n)}
                           onClick={() => (window as any).numCuotasCashea = n}
                           className="py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-colors focus:ring-2 ring-purple-400 tabular-nums"
                         >
@@ -322,7 +291,6 @@ export function TransactionDrawer({
                       type="text" placeholder="¿En qué se fue la plata? (Ej: Pizza)"
                       value={descripcion} 
                       onChange={(e) => setDescripcion(e.target.value)}
-                      onTouchEnd={(e) => e.stopPropagation()}
                       className="w-full bg-[#1a1a1a] border border-white/5 p-5 rounded-2xl text-sm font-bold text-white outline-none focus:border-purple-500 transition-colors"
                     />
                   </div>
@@ -331,7 +299,6 @@ export function TransactionDrawer({
 
               <button 
                 type="button"
-                onTouchEnd={handleTouchButton(handleLocalSubmit)}
                 onClick={handleLocalSubmit}
                 className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-5 rounded-3xl mt-8 shadow-[0_0_20px_rgba(147,51,234,0.3)] active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0"
               >
