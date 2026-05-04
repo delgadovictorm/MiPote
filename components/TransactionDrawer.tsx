@@ -73,7 +73,12 @@ export function TransactionDrawer({
         <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[95vh] fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 shadow-2xl outline-none">
           <Drawer.Title className="sr-only">Registrar Movimiento</Drawer.Title>
           
-          <div className="px-4 md:px-6 flex-1 overflow-y-auto pb-20 bg-[#121212] flex flex-col rounded-t-[32px]">
+          {/* LA CURA PARA EL IPHONE: style={{ WebkitTransform: 'translateZ(0)' }} */}
+          {/* Esto obliga a iOS a recalcular dónde están los botones después de la animación */}
+          <div 
+            className="px-4 md:px-6 flex-1 overflow-y-auto pb-20 bg-[#121212] flex flex-col rounded-t-[32px]"
+            style={{ transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)' }}
+          >
             
             {/* HEADER DEL PANEL */}
             <div className="flex items-center justify-between pt-6 pb-6 sticky top-0 bg-[#121212] z-20">
@@ -119,7 +124,7 @@ export function TransactionDrawer({
                   }`}
                 >
                   {cat.icon}
-                  <span className="text-[10px] font-bold uppercase">{cat.label}</span>
+                  <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
                 </button>
               ))}
             </div>
