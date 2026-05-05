@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { 
   ArrowDownCircle, ArrowUpCircle, Wallet, Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, Target, Home, CreditCard, Calculator, Lock, Mail, LogIn, UserPlus, Sparkles, ArrowLeft, Shield, Key, Copy, UploadCloud, Phone, Menu, LogOut, Globe, ChevronRight, Loader2,
-  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3, ChevronLeft, ArrowRight, ListTodo
+  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3, ChevronLeft, ArrowRight, ListTodo, ChevronDown, ArrowLeftRight
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Drawer } from "vaul";
@@ -60,13 +60,13 @@ export function TransactionDrawer({
       { id: "inversiones", label: "Inversiones", icon: <TrendingUp size={18} /> },
       { id: "ventas", label: "Ventas", icon: <ShoppingCart size={18} /> },
       { id: "tigritos", label: "Tigritos", icon: <Rocket size={18} /> },
+      { id: "abono_pote", label: "Abonar a Meta 🍯", icon: <Plus size={18} /> },
       { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
     ],
     egreso: [
       { id: "comida", label: "Comida", icon: <ShoppingCart size={18} /> },
-      { id: "internet", label: "Internet", icon: <Wifi size={18} /> },
-      { id: "abono_pote", label: "Abonar a Pote 🍯", icon: <Plus size={18} /> },
       { id: "cashea", label: "Cashea", icon: <DollarSign size={18} /> },
+      { id: "internet", label: "Internet", icon: <Wifi size={18} /> },
       { id: "mascotas", label: "Mascotas", icon: <Dog size={18} /> },
       { id: "condominio", label: "Condominio", icon: <Home size={18} /> },
       { id: "regalos", label: "Regalos", icon: <Gift size={18} /> },
@@ -76,13 +76,13 @@ export function TransactionDrawer({
 
   const handleLocalSubmit = (e: any) => {
     e.preventDefault();
+    if (tipo === 'transferencia' && !destinoTransferencia) return alert("Selecciona a qué espacio vas a transferir");
+    if (categoria === 'abono_pote' && !destinoTransferencia) return alert("Selecciona a qué Meta vas a mandar la plata");
     
-    if (categoria === 'abono_pote' && !destinoTransferencia) return alert("Selecciona a qué Pote vas a mandar la plata");
-
-    const isValidDesc = (tipo === 'ingreso' || categoria === 'abono_pote') ? true : descripcion.trim() !== "";
+    const isValidDesc = (tipo === 'ingreso' || categoria === 'abono_pote' || tipo === 'transferencia') ? true : descripcion.trim() !== "";
     const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
     
-    if (monto && categoria && isValidDesc && isValidUser) {
+    if (monto && (categoria || tipo === 'transferencia') && isValidDesc && isValidUser) {
       onSubmit(e);
       setIsOpen(false);
     } else {
@@ -94,7 +94,6 @@ export function TransactionDrawer({
     <>
       {React.cloneElement(children, { onClick: () => setIsOpen(true) })}
 
-      {/* PORTAL: Pantalla Completa Nativa */}
       {mounted && isOpen && createPortal(
         <div className="fixed inset-0 z-[99999] bg-[#0d0714] w-full h-[100dvh] flex flex-col animate-in slide-in-from-bottom-8 fade-in duration-200">
           
@@ -128,32 +127,54 @@ export function TransactionDrawer({
               >
                 GASTO
               </button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 mb-6">
-              {categories[tipo as keyof typeof categories].map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => {
-                    setCategoria(cat.id);
-                    setDescripcion(cat.id === 'otro' || cat.id === 'abono_pote' ? '' : cat.label);
-                  }}
-                  className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
-                    categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
-                  }`}
+              {espacios?.length > 1 && espacioActivo?.tipo === 'individual' && (
+                <button 
+                  type="button" 
+                  onClick={() => {setTipo("transferencia"); setCategoria("transferencia");}} 
+                  className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'transferencia' ? 'bg-blue-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
                 >
-                  {cat.icon}
-                  <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
+                  TRANSFERIR
                 </button>
-              ))}
+              )}
             </div>
 
-            {categoria === 'abono_pote' && (
+            {tipo === 'transferencia' ? (
+               <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-blue-500/30 mb-6 animate-in zoom-in-95">
+                 <label className="text-[10px] text-blue-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2"><ArrowRight size={14}/> Enviar dinero a un Espacio</label>
+                 <select value={destinoTransferencia} onChange={(e) => setDestinoTransferencia(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer mb-4">
+                    <option value="">Selecciona Pote o Vaca destino...</option>
+                    {espacios?.filter((e:any) => e.id !== espacioActivo.id && e.tipo !== 'individual').map((e:any) => (
+                      <option key={e.id} value={e.id}>{e.nombre}</option>
+                    ))}
+                 </select>
+                 <p className="text-xs text-white/50 leading-relaxed">El dinero se descontará de <b>{espacioActivo.nombre}</b> y se enviará al espacio compartido.</p>
+               </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 mb-6">
+                {categories[tipo as keyof typeof categories].map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setCategoria(cat.id);
+                      setDescripcion(cat.id === 'otro' || cat.id === 'abono_pote' ? '' : cat.label);
+                    }}
+                    className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
+                      categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
+                    }`}
+                  >
+                    {cat.icon}
+                    <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {categoria === 'abono_pote' && tipo !== 'transferencia' && (
                <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-emerald-500/30 mb-6 animate-in zoom-in-95">
                  <label className="text-[10px] text-emerald-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2">¿A qué meta enviamos el dinero?</label>
                  <select value={destinoTransferencia} onChange={(e) => setDestinoTransferencia(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer mb-2">
-                    <option value="">Selecciona el destino...</option>
+                    <option value="">Selecciona la meta destino...</option>
                     {potes?.map((p:any) => (
                       <option key={p.id} value={p.id}>{p.nombre}</option>
                     ))}
@@ -161,7 +182,7 @@ export function TransactionDrawer({
                </div>
             )}
 
-            {espacioActivo?.tipo !== 'individual' && (
+            {espacioActivo?.tipo !== 'individual' && tipo !== 'transferencia' && (
               <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 mb-6">
                 <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest pointer-events-none">¿Quién realizó el movimiento?</label>
                 <select 
@@ -225,7 +246,7 @@ export function TransactionDrawer({
               )}
             </div>
 
-            {categoria === 'cashea' && (
+            {categoria === 'cashea' && tipo !== 'transferencia' && (
               <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-2xl mb-6">
                 <p className="text-[10px] font-black text-purple-400 uppercase mb-3 text-center pointer-events-none">¿En cuántas cuotas?</p>
                 <div className="grid grid-cols-3 gap-2">
@@ -243,7 +264,7 @@ export function TransactionDrawer({
               </div>
             )}
 
-            {tipo === 'egreso' && categoria !== 'abono_pote' && (
+            {tipo === 'egreso' && categoria !== 'abono_pote' && tipo !== 'transferencia' && (
               <div className="mb-6">
                 <input 
                   type="text" placeholder="¿En qué se fue la plata? (Ej: Pizza)"
@@ -257,9 +278,9 @@ export function TransactionDrawer({
             <button 
               type="button"
               onClick={handleLocalSubmit}
-              className={`cursor-pointer w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-5 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.3)] active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0`}
+              className={`cursor-pointer w-full text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0 ${tipo === 'transferencia' ? 'bg-blue-600 hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.3)]' : 'bg-purple-600 hover:bg-purple-500 shadow-[0_0_20px_rgba(147,51,234,0.3)]'}`}
             >
-              Confirmar Registro
+              {tipo === 'transferencia' ? 'Confirmar Transferencia' : 'Confirmar Registro'}
             </button>
 
           </div>
@@ -888,7 +909,12 @@ function FinanzasDashboardContent({
   };
 
   const [activeTab, setActiveTab] = useState(forceTab || "inicio");
-  const [isMenuOpen, setIsMenuOpen] = useState(false); 
+  
+  // NAV STATES
+  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false); 
+  const [isSpacesMenuOpen, setIsSpacesMenuOpen] = useState(false); 
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); 
+
   const [activeWallet, setActiveWallet] = useState<'usdt'|'bs'|'cash'>('usdt'); 
   const [filtroHistorial, setFiltroHistorial] = useState("Todos");
 
@@ -898,6 +924,7 @@ function FinanzasDashboardContent({
   const [presupuestos, setPresupuestos] = useState<any[]>([]);
   const [potes, setPotes] = useState<any[]>([]);
   const [participantes, setParticipantes] = useState<any[]>([]);
+  const [gastosFijos, setGastosFijos] = useState<any[]>([]);
   
   const [isAddingPote, setIsAddingPote] = useState(false);
   const POTE_OPCIONES = espacioActivo?.tipo === 'vaca' 
@@ -916,6 +943,7 @@ function FinanzasDashboardContent({
   const [isAddingEmergencia, setIsAddingEmergencia] = useState(false);
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [isAddingCashea, setIsAddingCashea] = useState(false);
+  const [isAddingFijo, setIsAddingFijo] = useState(false);
   
   const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
 
@@ -939,13 +967,14 @@ function FinanzasDashboardContent({
 
   const [casheaForm, setCasheaForm] = useState({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" });
   const [budgetForm, setBudgetForm] = useState({ categoria: "", monto_limite: "" });
+  const [fijoForm, setFijoForm] = useState({ descripcion: "", monto: "", dia_pago: "1" });
 
   const [showToast, setShowToast] = useState(false);
   const [mensajeMotivacional, setMensajeMotivacional] = useState("");
   const [toastType, setToastType] = useState("ingreso");
 
-  const [calcUsd, setCalcUsd] = useState("");
-  const [calcBs, setCalcBs] = useState("");
+  const [calcAmount, setCalcAmount] = useState("");
+  const [calcCurrency, setCalcCurrency] = useState("usd");
 
   const [monto, setMonto] = useState("");
   const [moneda, setMoneda] = useState("usd");
@@ -958,7 +987,7 @@ function FinanzasDashboardContent({
   const [destinoTransferencia, setDestinoTransferencia] = useState("");
 
   const handleCalcUsd = (val: string) => {
-    setCalcUsd(val);
+    setCalcAmount(val);
     const num = parseFloat(val) || 0;
     setCalcBs((num * rates.usdt).toFixed(2));
   };
@@ -966,7 +995,7 @@ function FinanzasDashboardContent({
   const handleCalcBs = (val: string) => {
     setCalcBs(val);
     const num = parseFloat(val) || 0;
-    setCalcUsd(rates.usdt > 0 ? (num / rates.usdt).toFixed(2) : "0.00");
+    setCalcAmount(rates.usdt > 0 ? (num / rates.usdt).toFixed(2) : "0.00");
   };
 
   const getMensajes = (tipoApp: string, tipoTx: string) => {
@@ -1100,12 +1129,16 @@ function FinanzasDashboardContent({
   };
 
   const fetchData = useCallback(async () => {
-    setTransactions([]); setCuotasCashea([]); setPresupuestos([]); setPotes([]); setParticipantes([]); setRecordatorios([]);
+    setTransactions([]); setCuotasCashea([]); setPresupuestos([]); setPotes([]); setParticipantes([]); setRecordatorios([]); setGastosFijos([]);
 
     if (!espacioActivo) return;
     setLoading(true);
     
     try {
+      // CARGAR GASTOS FIJOS DESDE LOCALSTORAGE (Fallback seguro)
+      const savedFijos = localStorage.getItem(`gastos_fijos_${espacioActivo.id}`);
+      if (savedFijos) setGastosFijos(JSON.parse(savedFijos));
+
       if (isGuest) {
         setTransactions(JSON.parse(localStorage.getItem('mipote_guest_tx') || '[]'));
         setPotes(JSON.parse(localStorage.getItem('mipote_guest_potes') || '[]'));
@@ -1172,7 +1205,13 @@ function FinanzasDashboardContent({
     return { monto_bs, monto_usd_bcv, monto_usd_paralelo };
   };
 
-  const getPoteAhorrado = (poteId: string, poteNombre: string) => transactions.filter(tx => tx.categoria === `pote_${poteId}`).reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+  const getPoteAhorrado = (poteId: string, poteNombre: string) => {
+    if (espacioActivo?.tipo === 'vaca') {
+      const saldos = getSaldosAislados('ALL');
+      return saldos.usdt + saldos.cash + (rates.usdt > 0 ? saldos.bs / rates.usdt : 0);
+    }
+    return transactions.filter(tx => tx.categoria === `pote_${poteId}`).reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+  };
 
   // 🔥 LÓGICA DE REGISTRO Y TRANSFERENCIAS
   const handleManualSubmit = async (e: React.FormEvent) => {
@@ -1180,9 +1219,32 @@ function FinanzasDashboardContent({
     const valorMonto = parseFloat(monto);
     const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
 
-    // LOGICA DE ABONO (EL CORAZÓN DEL CAMBIO)
+    // 1. TRANSFERENCIA A OTRO ESPACIO (VACAS / POTES EXTERNOS)
+    if (tipo === 'transferencia') {
+      if (!destinoTransferencia) return alert("Selecciona el espacio destino");
+      const destSpace = espacios.find((sp:any) => sp.id === destinoTransferencia);
+      
+      if (isGuest) {
+        const tx1 = { id: Date.now().toString() + "_out", descripcion: `Transferencia a: ${destSpace?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', created_at: new Date().toISOString() };
+        const updatedTx = [tx1, ...transactions];
+        setTransactions(updatedTx);
+        localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+      } else {
+        await supabase.from("transacciones_saas").insert([{
+          descripcion: `Transferencia a: ${destSpace?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id
+        }]);
+        await supabase.from("transacciones_saas").insert([{
+          descripcion: `Transferencia recibida de: Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_entrada', usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: destinoTransferencia, usuario_id: session.user.id
+        }]);
+      }
+      fetchData();
+      triggerToast("egreso", "¡Transferencia enviada con éxito! 💸");
+      return;
+    }
+
+    // 2. ABONO A META INTERNA (EL CORAZÓN DEL CAMBIO)
     if (categoria === 'abono_pote') {
-      if (!destinoTransferencia) return alert("Selecciona un Pote");
+      if (!destinoTransferencia) return alert("Selecciona la meta");
       const poteDestino = potes.find((p:any) => p.id === destinoTransferencia);
       
       if (isGuest) {
@@ -1192,35 +1254,15 @@ function FinanzasDashboardContent({
         setTransactions(updatedTx);
         localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
       } else {
-        // 1. REGISTRO EN LA BILLETERA (Gasto que resta balance)
         await supabase.from("transacciones_saas").insert([{
-          descripcion: `Abono a meta: ${poteDestino?.nombre}`,
-          monto_original: valorMonto,
-          moneda_original: moneda,
-          monto_bs, monto_usd_bcv, monto_usd_paralelo,
-          categoria: 'transferencia_salida', // Categoría interna para no duplicar gasto en gráficas
-          usuario: usuario || "Tú",
-          tipo: 'egreso', 
-          espacio_id: espacioActivo.id, // ID de tu billetera
-          usuario_id: session.user.id
+          descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id
         }]);
-
-        // 2. REGISTRO EN EL POTE (Ingreso que suma a la meta)
         await supabase.from("transacciones_saas").insert([{
-          descripcion: `Abono desde Billetera`,
-          monto_original: valorMonto,
-          moneda_original: moneda,
-          monto_bs, monto_usd_bcv, monto_usd_paralelo,
-          categoria: `pote_${destinoTransferencia}`, // ESTO es lo que hace que la barra de progreso suba
-          usuario: usuario || "Tú",
-          tipo: 'ingreso',
-          espacio_id: destinoTransferencia, // ID del pote destino
-          usuario_id: session.user.id
+          descripcion: `Abono recibido desde Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: espacioActivo.id, usuario_id: session.user.id
         }]);
       }
-
       fetchData();
-      triggerToast("ingreso", "¡Abono realizado con éxito! 🍯");
+      triggerToast("ingreso", "¡Abono sumado a tu meta! 🍯");
       return;
     }
 
@@ -1355,6 +1397,30 @@ function FinanzasDashboardContent({
   const eliminarPresupuesto = async (id: string) => {
     if(!confirm("¿Eliminar este tope presupuestario?")) return;
     await supabase.from("presupuestos").delete().eq("id", id); fetchData();
+  };
+
+  const guardarGastoFijo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fijoForm.descripcion || !fijoForm.monto) return;
+    const newFijo = { id: Date.now().toString(), pagado: false, ...fijoForm };
+    const updated = [...gastosFijos, newFijo];
+    setGastosFijos(updated);
+    localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
+    setIsAddingFijo(false);
+    setFijoForm({ descripcion: "", monto: "", dia_pago: "1" });
+  };
+
+  const toggleGastoFijo = (id: string) => {
+    const updated = gastosFijos.map(gf => gf.id === id ? { ...gf, pagado: !gf.pagado } : gf);
+    setGastosFijos(updated);
+    localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
+  };
+
+  const eliminarGastoFijo = (id: string) => {
+    if(!confirm("¿Eliminar este gasto fijo?")) return;
+    const updated = gastosFijos.filter(gf => gf.id !== id);
+    setGastosFijos(updated);
+    localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
   };
 
   const toggleCashea = async (cuota: any) => {
@@ -1503,7 +1569,8 @@ function FinanzasDashboardContent({
     const transaccionesFiltradas = transaccionesDelMes.filter(tx => filtroHistorial === "Todos" || tx.usuario === filtroHistorial);
     const gastosDelMesCalculados = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
 
-    const datosCategoriasMap = gastosDelMesCalculados.reduce((acc, tx) => {
+    // 🔥 MAPEO DE GASTOS PARA GRÁFICO SEGURO
+    const gastosPorCategoriaValor = gastosDelMesCalculados.reduce((acc, tx) => {
       let catName = tx.categoria.startsWith('pote_') ? 'Extracción Potes' : 
                     tx.categoria === 'emergencia' ? 'Emergencias 🚨' : 
                     (categoriasList.find(c => c.valor === tx.categoria)?.label || tx.categoria);
@@ -1511,7 +1578,7 @@ function FinanzasDashboardContent({
       return acc;
     }, {} as Record<string, number>);
 
-    const dataGraficoTorta = Object.keys(datosCategoriasMap).map(key => ({ name: key, value: datosCategoriasMap[key] })).sort((a, b) => b.value - a.value);
+    const dataGraficoTorta = Object.keys(gastosPorCategoriaValor).map(key => ({ name: key, value: gastosPorCategoriaValor[key] })).sort((a, b) => b.value - a.value);
     const COLORS = [theme.stroke, '#ec4899', '#f97316', '#eab308', '#10b981', '#0ea5e9', '#6366f1', '#d946ef'];
     
     // 🔥 NUEVA PESTAÑA: RECORDATORIOS
@@ -1560,67 +1627,41 @@ function FinanzasDashboardContent({
       return (
         <div className={`bg-[#1a0f2e] border ${theme.border} p-6 rounded-[2rem] shadow-xl w-full max-w-md mx-auto mt-6 md:mt-10 animate-in zoom-in-95`}>
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-black text-white flex items-center gap-3"><Calculator className={`w-6 h-6 ${theme.text}`} /> Calculadora </h2>
+            <h2 className="text-xl font-black text-white flex items-center gap-3"><Calculator className={`w-6 h-6 ${theme.text}`} /> Simulador de Compras</h2>
             <button onClick={fetchRates} className={`${theme.lightBg} ${theme.text} p-2 rounded-xl active:scale-95`}><RefreshCw size={16} className={syncing ? 'animate-spin' : ''}/></button>
           </div>
-          <div className="space-y-6">
-            <div className={`bg-black/40 p-5 rounded-3xl border border-white/5 shadow-inner`}>
-              <label className={`text-[10px] uppercase text-white/50 font-bold tracking-widest block mb-2`}>Monto en Dólares ($)</label>
-              <div className="flex items-center gap-3">
-                <span className="text-2xl font-black text-white/30">$</span>
-                <input 
-                  type="number" step="0.01" placeholder="0.00" 
-                  value={calcUsd} 
-                  onChange={(e) => handleCalcUsd(e.target.value)} 
-                  className="flex-1 bg-transparent text-4xl font-black text-white outline-none tabular-nums tracking-tight font-sans w-full" 
-                />
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-4 border-t border-white/5 pt-4">
-                <div><p className="text-[8px] text-blue-400 uppercase font-black">Bs. BCV</p><p className="text-sm font-bold text-white">Bs. {(parseFloat(calcUsd || '0') * rates.bcv).toFixed(2)}</p></div>
-                <div><p className="text-[8px] text-emerald-400 uppercase font-black">Bs. Paralelo</p><p className="text-sm font-bold text-white">Bs. {(parseFloat(calcUsd || '0') * rates.usdt).toFixed(2)}</p></div>
-              </div>
-            </div>
-            
-            <div className="flex justify-center -my-3 relative z-10">
-               <div className={`bg-[#1a0f2e] p-2 rounded-full border ${theme.border}`}>
-                  <ArrowDownCircle className={`w-6 h-6 ${theme.text} opacity-50`} />
-               </div>
-            </div>
 
-            <div className={`bg-black/40 p-5 rounded-3xl border border-white/5 shadow-inner`}>
-              <label className={`text-[10px] uppercase text-white/50 font-bold tracking-widest block mb-2`}>Monto en Bolívares (Bs)</label>
-              <div className="flex items-center gap-3">
-                <span className="text-2xl font-black text-white/30">Bs.</span>
-                <input 
-                  type="number" step="0.01" placeholder="0.00" 
-                  value={calcBs} 
-                  onChange={(e) => handleCalcBs(e.target.value)} 
-                  className="flex-1 bg-transparent text-4xl font-black text-white outline-none tabular-nums tracking-tight font-sans w-full" 
-                />
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-4 border-t border-white/5 pt-4">
-                <div><p className="text-[8px] text-blue-400 uppercase font-black">$ BCV</p><p className="text-sm font-bold text-white">$ {(rates.bcv > 0 ? parseFloat(calcBs || '0') / rates.bcv : 0).toFixed(2)}</p></div>
-                <div><p className="text-[8px] text-emerald-400 uppercase font-black">$ Paralelo</p><p className="text-sm font-bold text-white">$ {(rates.usdt > 0 ? parseFloat(calcBs || '0') / rates.usdt : 0).toFixed(2)}</p></div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
-              <div className="text-center">
-                <p className="text-[10px] uppercase text-white/30 font-bold mb-1">Tasa BCV</p>
-                <p className="text-sm font-black text-white font-sans tabular-nums tracking-tight">Bs. {rates.bcv.toFixed(2)}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-[10px] uppercase text-white/30 font-bold mb-1">Tasa Paralelo</p>
-                <p className="text-sm font-black text-white font-sans tabular-nums tracking-tight">Bs. {rates.usdt.toFixed(2)}</p>
-              </div>
-            </div>
-            
-            {forceTab === 'calculadora' && (
-              <button onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 mt-4">
-                <ArrowLeft className="w-4 h-4"/> Volver al Inicio
-              </button>
-            )}
+          <div className="bg-[#121212] p-5 rounded-[1.5rem] border border-white/5 mb-6 shadow-inner">
+             <label className="text-[10px] uppercase text-purple-400 font-bold tracking-widest block mb-4">Ingresa el monto a pagar</label>
+             <div className="flex gap-3">
+               <input type="number" value={calcAmount} onChange={e => setCalcAmount(e.target.value)} className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums font-sans" placeholder="0.00" />
+               <select value={calcCurrency} onChange={e => setCalcCurrency(e.target.value)} className="bg-[#1a1a1a] border border-[#333] text-xs font-bold text-white rounded-xl px-3 outline-none cursor-pointer h-12">
+                 <option value="usd">Dólares ($)</option>
+                 <option value="bs">Bolívares (Bs)</option>
+               </select>
+             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+             <div className="bg-[#121212] p-5 rounded-[1.5rem] border border-white/5 flex flex-col items-center justify-center text-center">
+                <p className="text-[10px] uppercase text-purple-400 font-bold tracking-widest mb-2">Tasa BCV</p>
+                <p className="text-xl font-black text-white tabular-nums font-sans">
+                   {calcCurrency === 'usd' ? `Bs. ${(parseFloat(calcAmount||'0') * rates.bcv).toFixed(2)}` : `$ ${(parseFloat(calcAmount||'0') / rates.bcv).toFixed(2)}`}
+                </p>
+             </div>
+             <div className="bg-[#121212] p-5 rounded-[1.5rem] border border-white/5 flex flex-col items-center justify-center text-center">
+                <p className="text-[10px] uppercase text-purple-400 font-bold tracking-widest mb-2">Tasa Paralelo</p>
+                <p className="text-xl font-black text-white tabular-nums font-sans">
+                   {calcCurrency === 'usd' ? `Bs. ${(parseFloat(calcAmount||'0') * rates.usdt).toFixed(2)}` : `$ ${(parseFloat(calcAmount||'0') / rates.usdt).toFixed(2)}`}
+                </p>
+             </div>
+          </div>
+            
+          {forceTab === 'calculadora' && (
+            <button onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 mt-6">
+              <ArrowLeft className="w-4 h-4"/> Volver al Inicio
+            </button>
+          )}
         </div>
       );
     }
@@ -1723,7 +1764,7 @@ function FinanzasDashboardContent({
     if (activeTab === 'pagos') {
       const presupuestosPorCategoria = presupuestos.map(p => {
         const gastoActual = gastosPorCategoriaValor[p.categoria] || 0;
-        const porcentaje = Math.min((gastoActual / p.monto_limite) * 100, 100);
+        const porcentaje = p.monto_limite > 0 ? Math.min((gastoActual / p.monto_limite) * 100, 100) : 0;
         const isOver = gastoActual > p.monto_limite;
         const barColor = isOver ? 'bg-rose-600' : porcentaje > 80 ? 'bg-rose-500' : porcentaje > 50 ? 'bg-amber-500' : 'bg-emerald-500';
         let catLabel = p.categoria === 'cashea' ? 'Cashea' : p.categoria === 'otro' ? 'Otro' : categoriasList.find(c => c.valor === p.categoria)?.label || p.categoria;
@@ -1766,8 +1807,8 @@ function FinanzasDashboardContent({
 
             <Drawer.Root open={isEditingBudget} onOpenChange={setIsEditingBudget}>
               <Drawer.Portal>
-                <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-rose-500">
+                <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
+                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-rose-500">
                   <Drawer.Title className="sr-only">Nuevo Límite</Drawer.Title>
                   <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
                     <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
@@ -1808,12 +1849,72 @@ function FinanzasDashboardContent({
                       </span>
                     </div>
                     <div className="h-2 md:h-2.5 w-full bg-black/50 rounded-full overflow-hidden border border-white/5">
-                      <div className={`h-full rounded-full transition-all duration-1000 ${p.barColor}`} style={{ width: `${p.porcentaje}%` }}></div>
+                      <div className={`h-full rounded-full transition-all duration-1000 ${p.barColor}`} style={{ width: `${p.porcentaje || 0}%` }}></div>
                     </div>
                     {p.isOver && <p className="text-[8px] md:text-[9px] text-rose-400 text-right uppercase tracking-widest mt-0.5">Límite Excedido</p>}
                   </div>
                 ))
               )}
+            </div>
+          </div>
+
+          <div className={`bg-[#1a0f2e] border ${theme.border} p-4 md:p-5 rounded-3xl`}>
+            <div className="flex justify-between items-center mb-3 md:mb-4">
+              <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2"><Home className={`w-3.5 h-3.5 md:w-4 md:h-4 ${theme.text}`}/> Gastos Fijos</h3>
+              <button onClick={() => setIsAddingFijo(true)} className={`flex items-center gap-1 ${theme.lightBg} ${theme.text} px-3 py-1.5 rounded-lg text-[10px] font-black transition-colors`}><Plus className="w-3 h-3"/> Nuevo Fijo</button>
+            </div>
+
+            <Drawer.Root open={isAddingFijo} onOpenChange={setIsAddingFijo}>
+              <Drawer.Portal>
+                <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
+                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[70vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-emerald-500">
+                  <Drawer.Title className="sr-only">Registrar Gasto Fijo</Drawer.Title>
+                  <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+                    <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+                    <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Gasto Fijo</h3>
+                    
+                    <form onSubmit={guardarGastoFijo} className="flex flex-col gap-4">
+                      <div>
+                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Descripción (Ej: Condominio, Internet)</label>
+                        <input type="text" placeholder="Ej: Condominio Mensual" value={fijoForm.descripcion} onChange={e => setFijoForm({...fijoForm, descripcion: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-sm font-bold text-white outline-none focus:border-emerald-500" required />
+                      </div>
+                      <div className="flex gap-4 items-start min-h-[80px]">
+                        <div className="w-1/2">
+                          <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto ($)</label>
+                          <input type="number" step="0.01" placeholder="0.00" value={fijoForm.monto} onChange={e => setFijoForm({...fijoForm, monto: e.target.value})} className={`w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-2xl text-white font-sans tabular-nums tracking-tight font-black outline-none focus:border-emerald-500`} required />
+                        </div>
+                        <div className="w-1/2">
+                          <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Día de Pago (1 al 31)</label>
+                          <input type="number" min="1" max="31" value={fijoForm.dia_pago} onChange={e => setFijoForm({...fijoForm, dia_pago: e.target.value})} className={`w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-2xl text-white font-sans tabular-nums tracking-tight font-black outline-none focus:border-emerald-500`} required />
+                        </div>
+                      </div>
+                      <button type="submit" className={`w-full bg-emerald-500 text-black font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(16,185,129,0.3)] mt-6 active:scale-95 transition-transform`}>Guardar Fijo</button>
+                    </form>
+                  </div>
+                </Drawer.Content>
+              </Drawer.Portal>
+            </Drawer.Root>
+
+            <div className="space-y-2">
+              {gastosFijos.length === 0 ? (
+                <p className="text-[10px] md:text-xs text-white/50 italic px-2">No hay gastos fijos configurados.</p>
+              ) : gastosFijos.map((gf:any) => (
+                <div key={gf.id} className={`group flex items-center justify-between p-3 md:p-4 rounded-2xl border ${gf.pagado ? 'bg-emerald-900/20 border-emerald-500/30' : `bg-black/40 ${theme.border}`}`}>
+                  <div className="flex items-center gap-2.5 md:gap-3 cursor-pointer" onClick={() => toggleGastoFijo(gf.id)}>
+                    {gf.pagado ? <CheckSquare className="text-emerald-400 w-5 h-5"/> : <Square className={`${theme.text} w-5 h-5`}/>}
+                    <div>
+                      <p className="text-xs md:text-sm font-bold text-white">{gf.descripcion}</p>
+                      <p className={`text-[10px] text-white/40 mt-0.5`}>Se paga los días {gf.dia_pago}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-sans tabular-nums tracking-tight font-black ${gf.pagado ? 'text-emerald-400/50' : 'text-rose-400'}`}>${parseFloat(gf.monto).toFixed(2)}</span>
+                    <button onClick={(e) => { e.stopPropagation(); eliminarGastoFijo(gf.id); }} className="p-2 md:p-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-white/30 hover:text-rose-500 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1825,8 +1926,8 @@ function FinanzasDashboardContent({
 
             <Drawer.Root open={isAddingCashea} onOpenChange={setIsAddingCashea}>
               <Drawer.Portal>
-                <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[80vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-purple-500">
+                <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
+                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[80vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-purple-500">
                   <Drawer.Title className="sr-only">Registrar Cuota Cashea</Drawer.Title>
                   <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
                     <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
@@ -1948,25 +2049,141 @@ function FinanzasDashboardContent({
       return (
         <div className="space-y-6">
           
-          <div className="mt-2 mb-4">
-             <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#1a0f2e] to-black/40 border border-white/5 rounded-[2rem] shadow-2xl">
-                <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-1 flex items-center gap-2">
-                  <Globe className="w-3 h-3"/> {espacioActivo?.tipo === 'individual' ? 'Patrimonio Neto Total' : 'Balance Total del Espacio'}
-                </p>
-                <p className="text-5xl font-black text-white tracking-tighter tabular-nums font-sans text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-200">
-                  $<AnimatedNum value={patrimonioTotal.paralelo} format="usd" />
-                </p>
-                <div className="flex gap-4 mt-3">
-                   <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
-                     Paralelo: $<AnimatedNum value={patrimonioTotal.paralelo} format="usd" />
-                   </p>
-                   <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
-                     BCV: $<AnimatedNum value={patrimonioTotal.bcv} format="usd" />
-                   </p>
-                </div>
-             </div>
-          </div>
+          {/* HEADER PRINCIPAL (PATRIMONIO O VACA) */}
+          {espacioActivo?.tipo === 'vaca' ? (
+            <div className="mt-2 mb-4">
+               {potes.length === 0 ? (
+                 <div className="bg-emerald-500/10 border border-emerald-500/30 p-8 rounded-[2rem] text-center shadow-lg">
+                   <Target className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
+                   <h3 className="text-xl font-black text-white mb-2">Define la meta de la Vaca</h3>
+                   <p className="text-sm text-white/50 mb-6">¿Para qué estamos reuniendo plata y cuánto necesitamos?</p>
+                   <button onClick={() => {setPoteForm({ id: null, tipo: "Personalizado ✍️", nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true);}} className="bg-emerald-500 text-black font-black px-6 py-3 rounded-full hover:bg-emerald-400 active:scale-95 transition-all">Definir Meta</button>
+                 </div>
+               ) : (
+                 <div onClick={() => setIsBalanceModalOpen(true)} className="cursor-pointer flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#1a0f2e] to-black/40 border border-emerald-500/30 rounded-[2rem] shadow-2xl transition-transform active:scale-95">
+                    <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-1 flex items-center gap-2">
+                      <Target className="w-3 h-3"/> Meta Vaca: {potes[0].nombre}
+                    </p>
+                    <p className={`text-5xl font-black tracking-tighter tabular-nums font-sans drop-shadow-md ${patrimonioTotal.paralelo < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {patrimonioTotal.paralelo < 0 ? '-' : ''}$<AnimatedNum value={Math.abs(patrimonioTotal.paralelo)} format="usd" />
+                    </p>
+                    <div className="flex gap-4 mt-3">
+                       <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
+                         Tasa BCV: Bs. {rates.bcv.toFixed(2)}
+                       </p>
+                       <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
+                         Paralelo: Bs. {rates.usdt.toFixed(2)}
+                       </p>
+                    </div>
+                    <p className="text-[9px] text-white/30 uppercase mt-4 flex items-center gap-1"><ArrowDownCircle size={10}/> Toque para ver detalle</p>
+                 </div>
+               )}
+            </div>
+          ) : (
+            <div className="mt-2 mb-4">
+               <div onClick={() => setIsBalanceModalOpen(true)} className="cursor-pointer flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#1a0f2e] to-black/40 border border-white/5 rounded-[2rem] shadow-2xl transition-transform active:scale-95">
+                  <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-1 flex items-center gap-2">
+                    <Globe className="w-3 h-3"/> {espacioActivo?.tipo === 'individual' ? 'Patrimonio Neto Total' : 'Balance Total del Espacio'}
+                  </p>
+                  <p className="text-5xl font-black text-white tracking-tighter tabular-nums font-sans text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-200">
+                    $<AnimatedNum value={patrimonioTotal.paralelo} format="usd" />
+                  </p>
+                  <div className="flex gap-4 mt-3">
+                     <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
+                       Tasa BCV: Bs. {rates.bcv.toFixed(2)}
+                     </p>
+                     <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
+                       Paralelo: Bs. {rates.usdt.toFixed(2)}
+                     </p>
+                  </div>
+                  <p className="text-[9px] text-white/30 uppercase mt-4 flex items-center gap-1"><ArrowDownCircle size={10}/> Toque para ver detalle</p>
+               </div>
+            </div>
+          )}
 
+          <Drawer.Root open={isBalanceModalOpen} onOpenChange={setIsBalanceModalOpen}>
+            <Drawer.Portal>
+              <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
+              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[55vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-purple-500">
+                <Drawer.Title className="sr-only">Detalle de Liquidez</Drawer.Title>
+                <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+                  <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+                  <h3 className="text-xl font-black text-white mb-6 text-center">Detalle de Liquidez</h3>
+                  
+                  {espacioActivo?.tipo === 'individual' ? (
+                    // VISTA PARA TU BILLETERA INDIVIDUAL (Mantiene el detalle por moneda)
+                    <div className="space-y-3">
+                      <div className="bg-[#1a1a1a] p-4 rounded-2xl flex justify-between items-center border border-white/5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center"><DollarSign className="text-purple-400 w-5 h-5"/></div>
+                          <div><p className="text-sm font-bold text-white">Dólares Digitales</p><p className="text-[10px] text-white/40 uppercase">Zinli, Binance, etc.</p></div>
+                        </div>
+                        <p className="text-xl font-black text-white font-sans">${saldoPrincipal.usdt.toFixed(2)}</p>
+                      </div>
+
+                      <div className="bg-[#1a1a1a] p-4 rounded-2xl flex justify-between items-center border border-white/5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center"><Wallet className="text-blue-400 w-5 h-5"/></div>
+                          <div><p className="text-sm font-bold text-white">Bolívares</p><p className="text-[10px] text-white/40 uppercase">Pago Móvil, Bancos</p></div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl font-black text-white font-sans">Bs. {saldoPrincipal.bs.toFixed(2)}</p>
+                          <p className="text-[10px] text-blue-400 font-bold">Eqv: ${(rates.bcv > 0 ? saldoPrincipal.bs / rates.bcv : 0).toFixed(2)}</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#1a1a1a] p-4 rounded-2xl flex justify-between items-center border border-white/5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center"><CheckSquare className="text-amber-400 w-5 h-5"/></div>
+                          <div><p className="text-sm font-bold text-white">Efectivo</p><p className="text-[10px] text-white/40 uppercase">Cash Físico</p></div>
+                        </div>
+                        <p className="text-xl font-black text-white font-sans">${saldoPrincipal.cash.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    // VISTA PARA POTES Y VACAS (Detalle por participante con el diseño de filas)
+                    <div className="space-y-3">
+                      {/* 1. FILA DEL PATRIMONIO GLOBAL */}
+                      <div className="bg-emerald-900/20 p-4 rounded-2xl flex justify-between items-center border border-emerald-500/30">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center"><Globe className="text-emerald-400 w-5 h-5"/></div>
+                          <div>
+                            <p className="text-sm font-bold text-emerald-400">Balance Global</p>
+                            <p className="text-[10px] text-emerald-400/50 uppercase">Total en este espacio</p>
+                          </div>
+                        </div>
+                        <p className="text-xl font-black text-emerald-400 font-sans">${patrimonioTotal.paralelo.toFixed(2)}</p>
+                      </div>
+
+                      {/* 2. FILAS DE LOS INTEGRANTES */}
+                      {participantes.map((p: any) => {
+                        const saldoP = getSaldosAislados(p.nombre);
+                        const totalP = saldoP.usdt + saldoP.cash + (rates.usdt > 0 ? saldoP.bs / rates.usdt : 0);
+                        
+                        return (
+                          <div key={p.id} className="bg-[#1a1a1a] p-4 rounded-2xl flex justify-between items-center border border-white/5 transition-colors hover:border-purple-500/30">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center"><Users className="text-purple-400 w-5 h-5"/></div>
+                              <div>
+                                <p className="text-sm font-bold text-white">{p.nombre}</p>
+                                <p className="text-[9px] text-white/40 uppercase mt-0.5 tracking-wider">
+                                  USDT: ${saldoP.usdt.toFixed(2)} • BS: {saldoP.bs.toFixed(2)} • CASH: ${saldoP.cash.toFixed(2)}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="text-xl font-black text-white font-sans">${totalP.toFixed(2)}</p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                </div>
+              </Drawer.Content>
+            </Drawer.Portal>
+          </Drawer.Root>
+
+          {/* LIQUIDEZ INDIVIDUAL (SOLO EN BILLETERA) */}
           {espacioActivo?.tipo === 'individual' && (
             <div className="mb-6">
               <div className={`bg-[#1a1a1a] border border-[#333] p-6 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[220px]`}>
@@ -2015,170 +2232,78 @@ function FinanzasDashboardContent({
             </div>
           )}
 
-          {espacioActivo?.tipo !== 'individual' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-              {participantes.map(p => {
-                const saldoP = getSaldosAislados(p.nombre);
+          {/* MIS POTES (NO SE MUESTRA EN VACA) */}
+          {espacioActivo?.tipo !== 'vaca' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center px-2">
+                <h2 className={`text-base font-black ${theme.text} uppercase tracking-widest flex items-center gap-2`}>
+                  <img src="/pote.png" alt="pote" className="w-6 h-6 object-contain drop-shadow-md" /> Mis Potes
+                </h2>
+              </div>
+
+              {potes.map(pote => {
+                const ahorrado = getPoteAhorrado(pote.id, pote.nombre);
+                const porcentaje = Math.min((ahorrado / pote.monto_objetivo) * 100, 100);
+                
                 return (
-                  <div key={p.id} className="bg-[#1a0f2e] border border-white/5 p-4 rounded-2xl shadow-lg flex flex-col hover:border-white/10 transition-colors">
-                     <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest mb-3 border-b border-white/5 pb-2">{p.nombre}</p>
-                     <div className="space-y-1.5">
-                        <div className="flex justify-between text-xs font-bold"><span className="text-emerald-400">USDT:</span> <span className="text-white font-sans tabular-nums tracking-tight">$<AnimatedNum value={saldoP.usdt} /></span></div>
-                        <div className="flex justify-between text-xs font-bold"><span className="text-blue-400">BS:</span> <span className="text-white font-sans tabular-nums tracking-tight">Bs. <AnimatedNum value={saldoP.bs} format="bs" /></span></div>
-                        <div className="flex justify-between text-xs font-bold"><span className="text-amber-400">CASH:</span> <span className="text-white font-sans tabular-nums tracking-tight">$<AnimatedNum value={saldoP.cash} /></span></div>
-                     </div>
+                  <div key={pote.id} className={`bg-[#1a0f2e] border-2 border-emerald-500/30 p-5 md:p-6 rounded-[2rem] shadow-[0_0_15px_rgba(16,185,129,0.1)] relative overflow-hidden group hover:border-emerald-500/60 transition-colors`}>
+                    {porcentaje >= 100 && (
+                      <div className="absolute inset-0 bg-emerald-600/90 backdrop-blur-sm flex flex-col items-center justify-center z-20 text-center p-4">
+                        <span className="text-3xl mb-1">🎉</span>
+                        <h3 className="text-white font-black text-lg">¡Meta Alcanzada!</h3>
+                        <p className="text-emerald-100 text-[10px] mb-3">Lograron ahorrar ${pote.monto_objetivo}.</p>
+                        <button onClick={() => eliminarPote(pote.id)} className="bg-white text-emerald-600 font-bold px-4 py-2 rounded-xl text-xs shadow-lg active:scale-95 transition-transform">Eliminar Pote</button>
+                      </div>
+                    )}
+
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h2 className="text-base md:text-lg font-black text-white flex items-center gap-2">{pote.nombre} <span className={`text-emerald-400 text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20`}>META: ${pote.monto_objetivo} USDT</span></h2>
+                          <p className={`text-xs text-white/50 mt-1`}>Faltan $<AnimatedNum value={Math.max(pote.monto_objetivo - ahorrado, 0)} /> USD</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <span className={`text-sm md:text-base font-black text-emerald-400`}><AnimatedNum value={porcentaje} format="pct"/></span>
+                        </div>
+                      </div>
+                      <div className={`h-3 w-full bg-black/60 rounded-full border border-white/5 p-0.5 mt-2`}>
+                        <div className={`h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]`} style={{ width: `${porcentaje}%`, transition: 'width 1s ease-in-out' }}></div>
+                      </div>
+                      
+                      <div className="flex gap-2 mt-4">
+                        {porcentaje < 100 && (
+                          <button 
+                            onClick={() => {
+                              setTipo("ingreso"); 
+                              setCategoria("abono_pote"); 
+                              setDestinoTransferencia(pote.id); 
+                              const trigger = document.getElementById('nuevo-registro-trigger'); 
+                              if (trigger) trigger.click(); 
+                            }} 
+                            className="w-10 h-10 bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center rounded-full shadow-lg shadow-emerald-500/20 active:scale-90 transition-all"
+                          >
+                            <Plus size={20} strokeWidth={3} />
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => eliminarPote(pote.id)} 
+                          className="w-10 h-10 bg-white/5 hover:bg-rose-500/20 text-white/30 hover:text-rose-500 flex items-center justify-center rounded-full border border-white/5 transition-colors"
+                        >
+                          <Trash2 size={18}/>
+                        </button>
+                      </div>
+
+                    </div>
                   </div>
                 )
               })}
             </div>
           )}
 
-          {espacioActivo?.tipo !== 'individual' && espacioActivo?.codigo_invitacion && (
-             <div className="bg-[#1a0f2e] border border-fuchsia-500/30 p-5 rounded-[2rem] shadow-[0_0_20px_rgba(192,38,211,0.1)] mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
-                  <p className="text-[10px] text-fuchsia-400 font-bold uppercase tracking-widest flex items-center gap-2 mb-1">
-                     <Key className="w-3 h-3"/> Invita a este espacio
-                  </p>
-                  <p className="text-xs text-white/50">Copia este código y compártelo.</p>
-                </div>
-                <button onClick={() => {navigator.clipboard.writeText(espacioActivo.codigo_invitacion); alert("Código copiado al portapapeles");}} className="w-full sm:w-auto bg-black/40 hover:bg-black/60 border border-white/10 p-3 rounded-xl text-xl text-white font-black tracking-[0.2em] transition-colors flex items-center justify-center gap-2 font-sans tabular-nums cursor-pointer">
-                  {espacioActivo.codigo_invitacion} <Copy className="w-4 h-4 text-white/30 ml-1"/>
-                </button>
-             </div>
-          )}
-
-          {espacioActivo?.tipo === 'individual' && !isGuest && (
-             <div className="bg-black/40 border border-white/5 p-5 rounded-[2rem] mb-6">
-                <p className="text-[10px] text-white/50 font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
-                   <Users className="w-3 h-3"/> ¿Te invitaron a un espacio?
-                </p>
-                <div className="flex gap-2">
-                  <input type="text" value={joinCodeInput} onChange={(e)=>setJoinCodeInput(e.target.value.toUpperCase())} placeholder="Código (Ej: X7K9P2)" className="flex-1 bg-[#1a0f2e] border border-white/10 rounded-xl p-3 text-sm text-white font-bold outline-none uppercase tracking-widest" maxLength={6} />
-                  <button onClick={unirseConCodigoInterno} className={`px-4 py-3 rounded-xl ${theme.primary} text-white font-bold text-xs uppercase tracking-widest`}>Unirse</button>
-                </div>
-             </div>
-          )}
-
-          <div className="space-y-4">
-            <div className="flex justify-between items-center px-2">
-              <h2 className={`text-base font-black ${theme.text} uppercase tracking-widest flex items-center gap-2`}>
-                <img src="/pote.png" alt="pote" className="w-6 h-6 object-contain drop-shadow-md" /> Mis Potes
-              </h2>
-              <button onClick={() => { setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true); }} className={`flex items-center gap-1 bg-emerald-500 text-black px-4 py-2 rounded-full text-xs font-black shadow-lg active:scale-95 transition-all hover:bg-emerald-400`}>
-                <Plus className="w-4 h-4"/> Nueva Meta
-              </button>
-            </div>
-
-            <Drawer.Root open={isAddingPote} onOpenChange={setIsAddingPote}>
-              <Drawer.Portal>
-                <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[75vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#10b981]">
-                  <Drawer.Title className="sr-only">Registrar Nueva Meta</Drawer.Title>
-                  <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
-                    <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-                    <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Nueva Meta</h3>
-                    
-                    <form onSubmit={guardarPote} className="flex flex-col gap-4">
-                      <div className="flex flex-col gap-4">
-                        <div>
-                          <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿Para qué estamos ahorrando?</label>
-                          <select 
-                            value={poteForm.tipo} 
-                            onChange={(e) => setPoteForm({...poteForm, tipo: e.target.value})} 
-                            className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-emerald-500`}
-                          >
-                            {POTE_OPCIONES.map(opt => <option key={opt} value={opt} className="bg-[#121212]">{opt}</option>)}
-                          </select>
-                        </div>
-
-                        {poteForm.tipo === "Personalizado ✍️" && (
-                          <div className="animate-in fade-in slide-in-from-top-2">
-                             <input 
-                               type="text" placeholder="Ej: Viaje a Margarita" 
-                               value={poteForm.nombreCustom} onChange={(e) => setPoteForm({...poteForm, nombreCustom: e.target.value})} 
-                               className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-emerald-500`} 
-                               required 
-                             />
-                          </div>
-                        )}
-
-                        <div className="min-h-[80px]">
-                          <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Objetivo ($)</label>
-                          <input 
-                            type="number" step="0.01" placeholder="0.00" 
-                            value={poteForm.monto_objetivo} onChange={(e) => setPoteForm({...poteForm, monto_objetivo: e.target.value})} 
-                            className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-emerald-500`} 
-                            required 
-                          />
-                        </div>
-                      </div>
-                      <button type="submit" className={`w-full bg-emerald-500 text-black font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(16,185,129,0.3)] mt-6 active:scale-95 transition-transform`}>Guardar Meta</button>
-                    </form>
-                  </div>
-                </Drawer.Content>
-              </Drawer.Portal>
-            </Drawer.Root>
-
-            {potes.map(pote => {
-              const ahorrado = getPoteAhorrado(pote.id, pote.nombre);
-              const porcentaje = Math.min((ahorrado / pote.monto_objetivo) * 100, 100);
-              
-              return (
-                <div key={pote.id} className={`bg-[#1a0f2e] border-2 border-emerald-500/30 p-5 md:p-6 rounded-[2rem] shadow-[0_0_15px_rgba(16,185,129,0.1)] relative overflow-hidden group hover:border-emerald-500/60 transition-colors`}>
-                  {porcentaje >= 100 && (
-                    <div className="absolute inset-0 bg-emerald-600/90 backdrop-blur-sm flex flex-col items-center justify-center z-20 text-center p-4">
-                      <span className="text-3xl mb-1">🎉</span>
-                      <h3 className="text-white font-black text-lg">¡Meta Alcanzada!</h3>
-                      <p className="text-emerald-100 text-[10px] mb-3">Lograron ahorrar ${pote.monto_objetivo}.</p>
-                      <button onClick={() => eliminarPote(pote.id)} className="bg-white text-emerald-600 font-bold px-4 py-2 rounded-xl text-xs shadow-lg active:scale-95 transition-transform">Eliminar Pote</button>
-                    </div>
-                  )}
-
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h2 className="text-base md:text-lg font-black text-white flex items-center gap-2">{pote.nombre} <span className={`text-emerald-400 text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20`}>META: ${pote.monto_objetivo} USDT</span></h2>
-                        <p className={`text-xs text-white/50 mt-1`}>Faltan $<AnimatedNum value={Math.max(pote.monto_objetivo - ahorrado, 0)} /> USD</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <span className={`text-sm md:text-base font-black text-emerald-400`}><AnimatedNum value={porcentaje} format="pct"/></span>
-                      </div>
-                    </div>
-                    <div className={`h-3 w-full bg-black/60 rounded-full border border-white/5 p-0.5 mt-2`}>
-                      <div className={`h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]`} style={{ width: `${porcentaje}%`, transition: 'width 1s ease-in-out' }}></div>
-                    </div>
-                    
-                    <div className="flex gap-2 mt-4">
-                      {porcentaje < 100 && (
-                        <button 
-                          onClick={() => {
-                            setTipo("egreso"); 
-                            setCategoria("abono_pote"); 
-                            setDestinoTransferencia(pote.id); 
-                            const trigger = document.getElementById('nuevo-registro-trigger'); 
-                            if (trigger) trigger.click(); 
-                          }} 
-                          className="w-10 h-10 bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center rounded-full shadow-lg shadow-emerald-500/20 active:scale-90 transition-all"
-                        >
-                          <Plus size={20} strokeWidth={3} />
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => eliminarPote(pote.id)} 
-                        className="w-10 h-10 bg-white/5 hover:bg-rose-500/20 text-white/30 hover:text-rose-500 flex items-center justify-center rounded-full border border-white/5 transition-colors"
-                      >
-                        <Trash2 size={18}/>
-                      </button>
-                    </div>
-
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="mb-8 mt-6 flex gap-3">
-            <div className="flex-1">
+          {/* CAJON DE ACCIONES PRINCIPALES */}
+          <div className="mb-6 mt-6 flex gap-3 h-[100px]">
+            {/* BOTON 1: NUEVO REGISTRO */}
+            <div className="flex-[2] h-full">
               <TransactionDrawer
                   tipo={tipo} setTipo={setTipo}
                   categoria={categoria} setCategoria={setCategoria}
@@ -2190,40 +2315,50 @@ function FinanzasDashboardContent({
                   participantes={participantes} usuario={usuario} setUsuario={setUsuario}
                   destinoTransferencia={destinoTransferencia} setDestinoTransferencia={setDestinoTransferencia}
                 >
-                  <button id="nuevo-registro-trigger" type="button" className="w-full bg-[#1a1a1a] border border-[#333] hover:border-emerald-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group h-full">
-                    <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-emerald-500 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] group-hover:scale-110 transition-transform`}>
-                      <Plus className="w-6 h-6 md:w-8 md:h-8 text-black" />
+                  <button id="nuevo-registro-trigger" type="button" className="w-full h-full bg-[#1a1a1a] border border-[#333] hover:border-emerald-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
+                    <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-emerald-500 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] group-hover:scale-110 transition-transform`}>
+                      <Plus className="w-5 h-5 md:w-6 md:h-6 text-black" />
                     </div>
-                    <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Nuevo Registro</span>
+                    <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider">Nuevo Registro</span>
                   </button>
               </TransactionDrawer>
             </div>
             
-            <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="w-1/4 max-w-[100px] bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group">
-              <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform`}>
-                <Calculator className="w-5 h-5 md:w-7 md:h-7 text-blue-400" />
-              </div>
-              <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Cálculo</span>
-            </button>
+            {/* BOTON 2: NUEVA META (O CALCULADORA EN VACA) */}
+            {espacioActivo?.tipo !== 'vaca' ? (
+              <button onClick={() => { setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true); }} className="flex-1 h-full bg-[#1a1a1a] border border-[#333] hover:border-fuchsia-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
+                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-fuchsia-500/10 border border-fuchsia-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(192,38,211,0.2)] group-hover:scale-110 transition-transform`}>
+                  <Target className="w-4 h-4 md:w-5 md:h-5 text-fuchsia-400" />
+                </div>
+                <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider text-center">Nueva Meta</span>
+              </button>
+            ) : (
+              <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="flex-1 h-full bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
+                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform`}>
+                  <Calculator className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+                </div>
+                <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider text-center leading-tight">Simulador<br/>Compras</span>
+              </button>
+            )}
 
-            {/* BOTÓN GESTIONAR INTEGRANTES (SÓLO SI NO ES INDIVIDUAL) */}
-            {espacioActivo?.tipo !== 'individual' && (
+            {/* BOTON 3: AÑADIR MIEMBRO (O CALCULADORA EN BILLETERA) */}
+            {espacioActivo?.tipo !== 'individual' ? (
                <>
-                 <button onClick={() => setIsManageUsersOpen(true)} className="w-1/4 max-w-[100px] bg-[#1a1a1a] border border-[#333] hover:border-purple-500/50 py-4 md:py-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 md:gap-3 transition-colors shadow-lg active:scale-95 group">
-                   <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.2)] group-hover:scale-110 transition-transform`}>
-                     <Users className="w-5 h-5 md:w-7 md:h-7 text-purple-400" />
+                 <button onClick={() => setIsManageUsersOpen(true)} className="flex-1 h-full bg-[#1a1a1a] border border-[#333] hover:border-purple-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
+                   <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.2)] group-hover:scale-110 transition-transform`}>
+                     <UserPlus className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
                    </div>
-                   <span className="text-white font-black text-[10px] sm:text-xs md:text-sm uppercase tracking-wider">Miembros</span>
+                   <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider text-center leading-tight">Añadir<br/>Miembro</span>
                  </button>
 
                  <Drawer.Root open={isManageUsersOpen} onOpenChange={setIsManageUsersOpen}>
                     <Drawer.Portal>
                       <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
                       <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#A855F7]">
-                        <Drawer.Title className="sr-only">Gestionar Integrantes</Drawer.Title>
+                        <Drawer.Title className="sr-only">Añadir Miembro</Drawer.Title>
                         <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
                           <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-                          <h3 className="text-xl font-black text-white mb-6 text-center">Gestionar Integrantes</h3>
+                          <h3 className="text-xl font-black text-white mb-6 text-center">Añadir Miembro</h3>
                           
                           <div className="flex flex-wrap gap-2 mb-6">
                             {participantes.length === 0 ? (
@@ -2256,8 +2391,95 @@ function FinanzasDashboardContent({
                     </Drawer.Portal>
                   </Drawer.Root>
                </>
+            ) : (
+              <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="flex-1 h-full bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
+                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform`}>
+                  <Calculator className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+                </div>
+                <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider">Cálculo</span>
+              </button>
             )}
           </div>
+
+          <Drawer.Root open={isAddingPote} onOpenChange={setIsAddingPote}>
+            <Drawer.Portal>
+              <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
+              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[75vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#10b981]">
+                <Drawer.Title className="sr-only">Registrar Nueva Meta</Drawer.Title>
+                <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+                  <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+                  <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Nueva Meta</h3>
+                  
+                  <form onSubmit={guardarPote} className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿Para qué estamos ahorrando?</label>
+                        <select 
+                          value={poteForm.tipo} 
+                          onChange={(e) => setPoteForm({...poteForm, tipo: e.target.value})} 
+                          className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-emerald-500`}
+                        >
+                          {POTE_OPCIONES.map(opt => <option key={opt} value={opt} className="bg-[#121212]">{opt}</option>)}
+                        </select>
+                      </div>
+
+                      {poteForm.tipo === "Personalizado ✍️" && (
+                        <div className="animate-in fade-in slide-in-from-top-2">
+                           <input 
+                             type="text" placeholder="Ej: Viaje a Margarita" 
+                             value={poteForm.nombreCustom} onChange={(e) => setPoteForm({...poteForm, nombreCustom: e.target.value})} 
+                             className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-emerald-500`} 
+                             required 
+                           />
+                        </div>
+                      )}
+
+                      <div className="min-h-[80px]">
+                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Objetivo ($)</label>
+                        <input 
+                          type="number" step="0.01" placeholder="0.00" 
+                          value={poteForm.monto_objetivo} onChange={(e) => setPoteForm({...poteForm, monto_objetivo: e.target.value})} 
+                          className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-emerald-500`} 
+                          required 
+                        />
+                      </div>
+                    </div>
+                    <button type="submit" className={`w-full bg-emerald-500 text-black font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(16,185,129,0.3)] mt-6 active:scale-95 transition-transform`}>Guardar Meta</button>
+                  </form>
+                </div>
+              </Drawer.Content>
+            </Drawer.Portal>
+          </Drawer.Root>
+
+          {/* CÓDIGO DE INVITACIÓN MOVIDO AL FINAL (DISCRETO) */}
+          {espacioActivo?.tipo !== 'individual' && espacioActivo?.codigo_invitacion && (
+             <div className="bg-transparent border border-fuchsia-500/10 p-4 rounded-3xl mb-6 flex flex-row items-center justify-between gap-4 mt-8">
+                <div className="flex-1">
+                  <p className="text-[9px] text-fuchsia-400 font-bold uppercase tracking-widest flex items-center gap-1.5 mb-0.5">
+                     <Key className="w-3 h-3"/> Código del Espacio
+                  </p>
+                  <p className="text-[10px] text-white/40">Comparte para añadir miembros.</p>
+                </div>
+                <button onClick={() => {navigator.clipboard.writeText(espacioActivo.codigo_invitacion); alert("Código copiado al portapapeles");}} className="bg-[#1a0f2e] border border-white/5 py-2 px-4 rounded-xl text-sm text-white font-black tracking-[0.2em] transition-colors flex items-center justify-center gap-2 font-sans tabular-nums cursor-pointer hover:bg-white/5 active:scale-95">
+                  {espacioActivo.codigo_invitacion} <Copy className="w-3 h-3 text-white/30 ml-1"/>
+                </button>
+             </div>
+          )}
+
+          {espacioActivo?.tipo === 'individual' && !isGuest && (
+             <div className="bg-transparent border border-white/5 p-4 rounded-3xl mb-6 flex flex-row items-center justify-between gap-4 mt-8">
+                <div className="flex-1">
+                  <p className="text-[9px] text-white/50 font-bold uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
+                     <Users className="w-3 h-3"/> ¿Tienes un código?
+                  </p>
+                  <p className="text-[10px] text-white/30">Únete a un Pote o Vaca.</p>
+                </div>
+                <div className="flex gap-2">
+                  <input type="text" value={joinCodeInput} onChange={(e)=>setJoinCodeInput(e.target.value.toUpperCase())} placeholder="EJ: X7K9P2" className="w-24 bg-[#1a0f2e] border border-white/5 rounded-xl px-2 py-2 text-xs text-center text-white font-bold outline-none uppercase tracking-widest" maxLength={6} />
+                  <button onClick={unirseConCodigoInterno} className={`px-3 py-2 rounded-xl ${theme.primary} text-white font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-transform`}>Unirse</button>
+                </div>
+             </div>
+          )}
 
         </div>
       );
@@ -2274,16 +2496,13 @@ function FinanzasDashboardContent({
         </div>
       )}
 
-      {/* HEADER DINÁMICO PARA EDITAR NOMBRE */}
+      {/* HEADER DINÁMICO (TÍTULO CLICKABLE COMO MENÚ DE PERFIL) */}
       <div className="flex items-center justify-between p-4 mb-2">
         <div className="flex items-center gap-3">
-          <button onClick={() => setIsMenuOpen(true)} className="p-2 text-white hover:text-purple-400 bg-transparent rounded-xl transition-colors">
-            <Menu className="w-8 h-8" /> 
-          </button>
-          <div className="flex flex-col">
+          <div className="flex flex-col cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setIsProfileMenuOpen(true)}>
              <div className="text-xl font-black text-white tracking-wide leading-tight flex items-center gap-2">
                  {isEditingSpaceName ? (
-                   <form onSubmit={guardarNombreEspacio} className="flex items-center gap-2">
+                   <form onSubmit={guardarNombreEspacio} className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                      <input type="text" value={newSpaceName} onChange={(e) => setNewSpaceName(e.target.value)} className="bg-black/50 border border-purple-500/50 rounded px-2 py-1 outline-none text-sm w-32" autoFocus />
                      <button type="submit" className="bg-emerald-500 text-black p-1 rounded"><Check size={14}/></button>
                      <button type="button" onClick={() => setIsEditingSpaceName(false)} className="bg-rose-500 text-black p-1 rounded"><X size={14}/></button>
@@ -2291,9 +2510,7 @@ function FinanzasDashboardContent({
                  ) : (
                    <>
                      {espacioActivo?.nombre || "Mi Billetera"} 
-                     {espacioActivo?.tipo !== 'individual' && !isGuest && (
-                       <button onClick={() => {setNewSpaceName(espacioActivo.nombre); setIsEditingSpaceName(true);}} className="text-white/30 hover:text-white transition-colors ml-1"><Edit2 size={14}/></button>
-                     )}
+                     <ChevronDown className="w-5 h-5 text-white/40" />
                    </>
                  )}
              </div>
@@ -2311,68 +2528,101 @@ function FinanzasDashboardContent({
         </div>
       </div>
 
-      {/* EL MENÚ LATERAL MEJORADO (CON BOTONES DE ELIMINAR Y VACA DESBLOQUEADA) */}
-      {isMenuOpen && (
-        <div className="fixed inset-0 z-[200] flex">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)}></div>
-          <div className="relative w-3/4 max-w-xs bg-[#121212] border-r border-[#333] h-full flex flex-col p-6 animate-in slide-in-from-left">
-            <div className="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
-              <img src="/pote.png" alt="Mi Pote" className="w-10 h-10 object-contain" />
-              <button onClick={() => setIsMenuOpen(false)} className="text-white/50 hover:text-white"><X className="w-6 h-6"/></button>
-            </div>
-            
-            <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-3">Tus Billeteras</p>
-            <div className="space-y-2 mb-6">
-              {espacios.filter((e:any) => e.tipo === 'individual').map((e:any) => (
-                <div key={e.id} className="flex gap-1">
-                  <button onClick={() => { setIsMenuOpen(false); onSelectModule('individual', e.id); }} className={`flex-1 flex items-center gap-3 p-3 rounded-xl font-bold text-sm text-left transition-colors ${espacioActivo?.id === e.id ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-[#1a1a1a] text-white/70 hover:bg-white/10'}`}>
-                    <Wallet className="w-4 h-4 shrink-0"/> <span className="truncate">{e.nombre}</span>
-                  </button>
-                  <button onClick={(event) => eliminarEspacio(event, e.id, e.tipo, e.nombre)} className="p-3 bg-[#1a1a1a] rounded-xl text-white/30 hover:text-rose-500 hover:bg-rose-500/10 transition-colors">
-                    <Trash2 className="w-4 h-4"/>
-                  </button>
+      {/* DRAWER DE PERFIL Y CONFIGURACIÓN */}
+      <Drawer.Root open={isProfileMenuOpen} onOpenChange={setIsProfileMenuOpen}>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
+          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-auto fixed bottom-0 left-0 right-0 z-[250] border-t border-white/10 pb-8">
+            <Drawer.Title className="sr-only">Perfil y Configuración</Drawer.Title>
+            <div className="p-6">
+              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+              <div className="flex items-center gap-4 mb-8 bg-[#1a1a1a] p-4 rounded-2xl border border-white/5">
+                <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center border border-purple-500/30">
+                  <UserPlus className="w-6 h-6 text-purple-400" />
                 </div>
-              ))}
-            </div>
-
-            <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-3">Potes y Vacas</p>
-            <div className="space-y-2 flex-1 overflow-y-auto">
-              {espacios.filter((e:any) => e.tipo !== 'individual').map((e:any) => (
-                <div key={e.id} className="flex gap-1">
-                  <button onClick={() => { setIsMenuOpen(false); onSelectModule(e.tipo, e.id); }} className={`flex-1 flex items-center gap-3 p-3 rounded-xl font-bold text-sm text-left transition-colors ${espacioActivo?.id === e.id ? (e.tipo === 'vaca' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/30') : 'bg-[#1a1a1a] text-white/70 hover:bg-white/10'}`}>
-                    {e.tipo === 'vaca' ? <Users className="w-4 h-4 shrink-0" /> : <img src="/pote.png" className="w-4 h-4 opacity-80 shrink-0" />} 
-                    <span className="truncate">{e.nombre}</span>
-                  </button>
-                  <button onClick={(event) => eliminarEspacio(event, e.id, e.tipo, e.nombre)} className="p-3 bg-[#1a1a1a] rounded-xl text-white/30 hover:text-rose-500 hover:bg-rose-500/10 transition-colors">
-                    <Trash2 className="w-4 h-4"/>
-                  </button>
+                <div>
+                  <p className="text-white font-bold">{perfil?.nombre || session?.user?.email?.split('@')[0] || "Invitado"}</p>
+                  <p className="text-[10px] text-white/50">{session?.user?.email || "Modo de prueba"}</p>
                 </div>
-              ))}
+              </div>
               
-              <div className="pt-4 border-t border-white/5 space-y-2 mt-4">
-                <button onClick={() => { setIsMenuOpen(false); onSelectModule('pote'); }} className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/10 font-bold text-xs text-left transition-colors">
-                  <Plus className="w-3 h-3"/> Crear Pote
-                </button>
-                <button onClick={() => { setIsMenuOpen(false); onSelectModule('vaca'); }} className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-bold text-xs text-left transition-colors">
-                  <Plus className="w-3 h-3"/> Crear Vaca
-                </button>
-                <button onClick={() => { setIsMenuOpen(false); openJoinModal(); }} className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-blue-500/30 text-blue-400 hover:bg-blue-500/10 font-bold text-xs text-left transition-colors">
-                  <Key className="w-3 h-3"/> Unirse con código
+              <div className="space-y-2">
+                {!isGuest && (
+                  <>
+                    <button onClick={() => { setIsProfileMenuOpen(false); openProfileModal(); }} className="w-full flex items-center gap-3 p-4 rounded-2xl bg-[#1a1a1a] hover:bg-white/10 text-white font-bold transition-colors">
+                      <Edit2 className="w-5 h-5 text-white/50"/> Editar Mi Perfil
+                    </button>
+                    {espacioActivo?.tipo !== 'individual' && (
+                       <button onClick={() => {setNewSpaceName(espacioActivo.nombre); setIsEditingSpaceName(true); setIsProfileMenuOpen(false);}} className="w-full flex items-center gap-3 p-4 rounded-2xl bg-[#1a1a1a] hover:bg-white/10 text-white font-bold transition-colors">
+                         <Edit3 className="w-5 h-5 text-white/50"/> Renombrar este espacio
+                       </button>
+                    )}
+                  </>
+                )}
+                <button onClick={() => { setIsProfileMenuOpen(false); handleLogout(); }} className="w-full flex items-center gap-3 p-4 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold transition-colors mt-4">
+                  <LogOut className="w-5 h-5"/> Cerrar Sesión
                 </button>
               </div>
             </div>
-            
-            <div className="pt-4 border-t border-white/5 space-y-2 mt-2">
-                <button onClick={() => { setIsMenuOpen(false); openProfileModal(); }} className="w-full flex items-center gap-3 p-3 rounded-xl text-white/70 hover:bg-white/10 text-sm font-bold transition-colors">
-                    <Edit2 className="w-4 h-4"/> Editar Perfil
-                </button>
-                <button onClick={() => { setIsMenuOpen(false); handleLogout(); }} className="w-full flex items-center gap-3 p-3 rounded-xl text-rose-400 hover:bg-rose-500/10 text-sm font-bold transition-colors">
-                    <LogOut className="w-4 h-4"/> Cerrar Sesión
-                </button>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
+
+      {/* DRAWER DESLIZANTE DE ESPACIOS (DESDE ABAJO) */}
+      <Drawer.Root open={isSpacesMenuOpen} onOpenChange={setIsSpacesMenuOpen}>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
+          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[85vh] fixed bottom-0 left-0 right-0 z-[250] border-t border-[#3b82f6]">
+            <Drawer.Title className="sr-only">Cambiar de Espacio</Drawer.Title>
+            <div className="p-6 overflow-y-auto pb-20">
+              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+              <h3 className="text-xl font-black text-white mb-6 text-center">Tus Espacios</h3>
+              
+              <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-3">Tus Billeteras</p>
+              <div className="space-y-2 mb-6">
+                {espacios.filter((e:any) => e.tipo === 'individual').map((e:any) => (
+                  <div key={e.id} className="flex gap-1">
+                    <button onClick={() => { setIsSpacesMenuOpen(false); onSelectModule('individual', e.id); }} className={`flex-1 flex items-center gap-3 p-4 rounded-2xl font-bold text-sm text-left transition-colors ${espacioActivo?.id === e.id ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-[#1a1a1a] text-white/70 hover:bg-white/10'}`}>
+                      <Wallet className="w-5 h-5 shrink-0"/> <span className="truncate">{e.nombre}</span>
+                    </button>
+                    <button onClick={(event) => eliminarEspacio(event, e.id, e.tipo, e.nombre)} className="p-4 bg-[#1a1a1a] rounded-2xl text-white/30 hover:text-rose-500 hover:bg-rose-500/10 transition-colors flex items-center justify-center">
+                      <Trash2 className="w-5 h-5"/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-3">Potes y Vacas</p>
+              <div className="space-y-2 mb-6">
+                {espacios.filter((e:any) => e.tipo !== 'individual').map((e:any) => (
+                  <div key={e.id} className="flex gap-1">
+                    <button onClick={() => { setIsSpacesMenuOpen(false); onSelectModule(e.tipo, e.id); }} className={`flex-1 flex items-center gap-3 p-4 rounded-2xl font-bold text-sm text-left transition-colors ${espacioActivo?.id === e.id ? (e.tipo === 'vaca' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/30') : 'bg-[#1a1a1a] text-white/70 hover:bg-white/10'}`}>
+                      {e.tipo === 'vaca' ? <Users className="w-5 h-5 shrink-0" /> : <img src="/pote.png" className="w-5 h-5 opacity-80 shrink-0" />} 
+                      <span className="truncate">{e.nombre}</span>
+                    </button>
+                    <button onClick={(event) => eliminarEspacio(event, e.id, e.tipo, e.nombre)} className="p-4 bg-[#1a1a1a] rounded-2xl text-white/30 hover:text-rose-500 hover:bg-rose-500/10 transition-colors flex items-center justify-center">
+                      <Trash2 className="w-5 h-5"/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="pt-4 border-t border-white/5 space-y-3 mt-4">
+                <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-3 text-center">Crear o Unirse</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => { setIsSpacesMenuOpen(false); onSelectModule('pote'); }} className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/10 font-bold text-xs text-center transition-colors">
+                    <div className="bg-fuchsia-500/20 p-2 rounded-full"><Plus className="w-5 h-5"/></div> Crear Pote
+                  </button>
+                  <button onClick={() => { setIsSpacesMenuOpen(false); onSelectModule('vaca'); }} className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-bold text-xs text-center transition-colors">
+                    <div className="bg-emerald-500/20 p-2 rounded-full"><Plus className="w-5 h-5"/></div> Crear Vaca
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
+      
       {renderTabContent()}
 
       <nav className={`fixed bottom-0 left-0 right-0 bg-[#1a0f2e]/90 backdrop-blur-xl border-t ${theme.border} p-3 md:hidden z-40 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)]`}>
@@ -2380,9 +2630,14 @@ function FinanzasDashboardContent({
           <NavButton icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
           <NavButton icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
           
-          {/* NUEVA PESTAÑA DE RECORDATORIOS (SÓLO PARA POTES) */}
+          <div className="relative -top-5">
+            <button onClick={() => setIsSpacesMenuOpen(true)} className={`bg-blue-600 text-white p-4 rounded-full shadow-[0_5px_20px_rgba(37,99,235,0.4)] active:scale-95 transition-transform border-4 border-[#0d0714]`}>
+               <ArrowLeftRight className="w-6 h-6" />
+            </button>
+          </div>
+
           {espacioActivo?.tipo !== 'individual' && (
-            <NavButton icon={<ListTodo />} label="Recordatorios" active={activeTab === 'recordatorios'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('recordatorios'); } }} theme={theme} />
+            <NavButton icon={<ListTodo />} label="Tareas" active={activeTab === 'recordatorios'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('recordatorios'); } }} theme={theme} />
           )}
 
           {espacioActivo?.tipo !== 'vaca' && (
@@ -2394,8 +2649,9 @@ function FinanzasDashboardContent({
       <nav className="hidden md:flex justify-center mt-8 space-x-4">
         <NavButtonDesktop icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
         <NavButtonDesktop icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
+        <NavButtonDesktop icon={<ArrowLeftRight />} label="Cambiar Espacio" active={false} onClick={() => setIsSpacesMenuOpen(true)} theme={{primary: 'bg-blue-600', text: 'text-blue-400', border: 'border-blue-500/30'}} />
         {espacioActivo?.tipo !== 'individual' && (
-          <NavButtonDesktop icon={<ListTodo />} label="Recordatorios" active={activeTab === 'recordatorios'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('recordatorios'); } }} theme={theme} />
+          <NavButtonDesktop icon={<ListTodo />} label="Tareas" active={activeTab === 'recordatorios'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('recordatorios'); } }} theme={theme} />
         )}
         {espacioActivo?.tipo !== 'vaca' && (
           <NavButtonDesktop icon={<Shield />} label="Por si acaso" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
