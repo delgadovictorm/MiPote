@@ -2452,7 +2452,7 @@ function FinanzasDashboardContent({
                 <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform`}>
                   <Calculator className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
                 </div>
-                <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider">Cálculo</span>
+                <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider">Simulador de Compras</span>
               </button>
             )}
           </div>

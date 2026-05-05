@@ -262,30 +262,36 @@ export default function LandingPage() {
 
       {/* 🧮 SECCIÓN CALCULADORA EN LA LANDING */}
       <section id="calculadora" className="relative z-10 py-20 px-6 bg-white/[0.02] border-y border-white/5">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-16">
-          <div className="flex-1 space-y-6">
+        <div className="max-w-6xl mx-auto flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+          
+          <div className="flex-1 space-y-6 text-center lg:text-left">
             <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-full mb-2">
               <Calculator className="w-4 h-4 text-blue-400" />
               <span className="text-[11px] font-black uppercase tracking-widest text-blue-300">Herramienta Gratuita</span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter leading-tight">
-              Saca cuentas sin <span className="text-blue-400">enredarte.</span>
+            <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter leading-tight text-white">
+              Saca cuentas sin <br className="hidden lg:block"/> <span className="text-blue-400">enredarte.</span>
             </h2>
-            <p className="text-white/50 text-lg leading-relaxed">
+            <p className="text-white/50 text-base md:text-lg leading-relaxed max-w-lg mx-auto lg:mx-0">
               Prueba cómo funciona nuestro motor de conversión. Ingresa un monto en dólares o bolívares y descubre al instante su equivalente exacto usando las tasas oficiales de Venezuela, actualizadas al día.
             </p>
-            <ul className="space-y-4 pt-4">
-              <li className="flex items-center gap-3 text-sm text-white/70"><CheckCircle2 className="text-blue-400" size={20}/> Tasa Oficial BCV</li>
-              <li className="flex items-center gap-3 text-sm text-white/70"><CheckCircle2 className="text-blue-400" size={20}/> Tasa Dólar Paralelo (USDT)</li>
-              <li className="flex items-center gap-3 text-sm text-white/70"><CheckCircle2 className="text-blue-400" size={20}/> No requiere registro previo</li>
+            <ul className="space-y-4 pt-4 text-left inline-block">
+              <li className="flex items-center gap-3 text-sm text-white/70 font-medium"><CheckCircle2 className="text-blue-400 shrink-0" size={20}/> Tasa Oficial BCV</li>
+              <li className="flex items-center gap-3 text-sm text-white/70 font-medium"><CheckCircle2 className="text-blue-400 shrink-0" size={20}/> Tasa Dólar Paralelo (USDT)</li>
+              <li className="flex items-center gap-3 text-sm text-white/70 font-medium"><CheckCircle2 className="text-blue-400 shrink-0" size={20}/> No requiere registro previo</li>
             </ul>
           </div>
 
-          <div className="flex-1 w-full max-w-md">
-            <div className={`bg-[#1a0f2e] border border-blue-500/30 p-8 rounded-[2rem] shadow-[0_0_50px_rgba(59,130,246,0.15)] w-full mx-auto`}>
-              <h3 className="text-xl font-black text-white flex items-center justify-center gap-3 mb-8"><Calculator className={`w-6 h-6 text-blue-400`} /> Calculadora Libre</h3>
+          <div className="flex-1 w-full max-w-md w-full relative">
+            {/* Efecto de luz detrás de la calculadora */}
+            <div className="absolute inset-0 bg-blue-600/20 blur-[80px] rounded-full pointer-events-none"></div>
+            
+            <div className={`relative bg-[#1a0f2e] border border-blue-500/30 p-6 md:p-8 rounded-[2rem] shadow-[0_0_50px_rgba(59,130,246,0.15)] w-full mx-auto`}>
+              <h3 className="text-xl font-black text-white flex items-center justify-center gap-3 mb-8">
+                <Calculator className={`w-6 h-6 text-blue-400`} /> Calculadora Libre
+              </h3>
+              
               <div className="space-y-6">
-                
                 <div className={`bg-black/40 p-5 rounded-3xl border border-white/5 shadow-inner`}>
                   <label className={`text-[10px] uppercase text-white/50 font-bold tracking-widest block mb-2`}>Monto en Dólares ($)</label>
                   <div className="flex items-center gap-3">
@@ -331,9 +337,9 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+
         </div>
       </section>
-
       {/* 🗣️ MENSAJES VENEZOLANOS */}
       <section className="py-20 px-6 relative z-10">
         <div className="max-w-5xl mx-auto text-center">
@@ -445,7 +451,7 @@ export default function LandingPage() {
       {/* 🏁 FOOTER */}
       <footer className="py-12 border-t border-white/5 text-center relative z-10 bg-[#09090b]">
         <div className="flex justify-center mb-4 opacity-30 grayscale"><img src="/pote.png" className="w-8"/></div>
-        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white/30">© 2026 Mi Pote | Hecho en Caracas</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white/30">© 2026 Mi Pote venezuela</p>
       </footer>
     </div>
   );
