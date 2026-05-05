@@ -516,26 +516,26 @@ export default function MiPoteApp() {
 
   const seleccionarModulo = async (tipoModulo: string, eId?: string) => {
     if (!session) {
-      if (tipoModulo === 'individual') { setIsGuest(true); setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' }); setCurrentView('dashboard'); } 
-      else { setShowPaywall(true); }
+      if (tipoModulo === 'individual') { 
+        setIsGuest(true); 
+        setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' }); 
+        setCurrentView('dashboard'); 
+      } else { 
+        setShowPaywall(true); 
+      }
       return;
     }
 
     setIsGuest(false);
     
-    let espacioEncontrado = eId ? espacios.find(e => e.id === eId) : espacios.find(e => e.tipo === tipoModulo);
-    
-    if (espacioEncontrado) {
-      setEspacioActivo(espacioEncontrado);
-      localStorage.setItem('mipote_last_space', espacioEncontrado.id);
-      setCurrentView('dashboard');
-    } else {
-      const titulos: Record<string, string> = { 'individual': 'Mi Billetera', 'pote': 'Mi Pote', 'vaca': 'La Vaca' };
+    // Si pasamos 'NEW', obligamos a crear uno de cero
+    if (eId === 'NEW') {
+      const titulos: Record<string, string> = { 'pote': 'Nuevo Pote', 'vaca': 'Nueva Vaca' };
       const { data: newSpace } = await supabase.from('espacios').insert([{
         nombre: titulos[tipoModulo],
         tipo: tipoModulo,
         creador_id: session.user.id,
-        codigo_invitacion: tipoModulo !== 'individual' ? generarCodigo() : null
+        codigo_invitacion: generarCodigo()
       }]).select().single();
 
       if (newSpace) {
@@ -545,6 +545,16 @@ export default function MiPoteApp() {
         localStorage.setItem('mipote_last_space', newSpace.id);
         setCurrentView('dashboard');
       }
+      return;
+    }
+
+    // Lógica normal de selección
+    let espacioEncontrado = eId ? espacios.find(e => e.id === eId) : espacios.find(e => e.tipo === tipoModulo);
+    
+    if (espacioEncontrado) {
+      setEspacioActivo(espacioEncontrado);
+      localStorage.setItem('mipote_last_space', espacioEncontrado.id);
+      setCurrentView('dashboard');
     }
   };
 
@@ -2041,7 +2051,7 @@ function FinanzasDashboardContent({
       );
     }
 
-    if (activeTab === 'inicio') {
+      if (activeTab === 'inicio') {
       const nombreUsuario = (perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado";
       const saldoPrincipal = getSaldosAislados(nombreUsuario); 
       const patrimonioTotal = getPatrimonioNeto();
@@ -2049,33 +2059,79 @@ function FinanzasDashboardContent({
       return (
         <div className="space-y-6">
           
-          {/* HEADER PRINCIPAL (PATRIMONIO O VACA) */}
+        {/* HEADER PRINCIPAL (PATRIMONIO O VACA) */}
           {espacioActivo?.tipo === 'vaca' ? (
             <div className="mt-2 mb-4">
                {potes.length === 0 ? (
-                 <div className="bg-emerald-500/10 border border-emerald-500/30 p-8 rounded-[2rem] text-center shadow-lg">
+                 <div className="bg-emerald-500/10 border border-emerald-500/30 p-10 rounded-[2.5rem] text-center animate-in zoom-in-95">
                    <Target className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
-                   <h3 className="text-xl font-black text-white mb-2">Define la meta de la Vaca</h3>
-                   <p className="text-sm text-white/50 mb-6">¿Para qué estamos reuniendo plata y cuánto necesitamos?</p>
-                   <button onClick={() => {setPoteForm({ id: null, tipo: "Personalizado ✍️", nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true);}} className="bg-emerald-500 text-black font-black px-6 py-3 rounded-full hover:bg-emerald-400 active:scale-95 transition-all">Definir Meta</button>
+                   <h3 className="text-xl font-black text-white mb-2">Define tu Vaca</h3>
+                   <p className="text-sm text-white/50 mb-8">¿Cuánto dinero necesitan reunir?</p>
+                   <button onClick={() => { setPoteForm({ id: null, tipo: "Personalizado ✍️", nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true); }} className="w-full bg-emerald-500 text-black font-black py-4 rounded-2xl active:scale-95 transition-all">ESTABLECER META</button>
                  </div>
                ) : (
-                 <div onClick={() => setIsBalanceModalOpen(true)} className="cursor-pointer flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#1a0f2e] to-black/40 border border-emerald-500/30 rounded-[2rem] shadow-2xl transition-transform active:scale-95">
-                    <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-1 flex items-center gap-2">
-                      <Target className="w-3 h-3"/> Meta Vaca: {potes[0].nombre}
-                    </p>
-                    <p className={`text-5xl font-black tracking-tighter tabular-nums font-sans drop-shadow-md ${patrimonioTotal.paralelo < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                      {patrimonioTotal.paralelo < 0 ? '-' : ''}$<AnimatedNum value={Math.abs(patrimonioTotal.paralelo)} format="usd" />
-                    </p>
-                    <div className="flex gap-4 mt-3">
-                       <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
-                         Tasa BCV: Bs. {rates.bcv.toFixed(2)}
-                       </p>
-                       <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
-                         Paralelo: Bs. {rates.usdt.toFixed(2)}
-                       </p>
-                    </div>
-                    <p className="text-[9px] text-white/30 uppercase mt-4 flex items-center gap-1"><ArrowDownCircle size={10}/> Toque para ver detalle</p>
+                 <div onClick={() => setIsBalanceModalOpen(true)} className={`bg-[#1a0f2e] border-2 border-emerald-500/30 p-5 md:p-6 rounded-[2rem] shadow-[0_0_15px_rgba(16,185,129,0.1)] relative overflow-hidden group hover:border-emerald-500/60 transition-colors cursor-pointer`}>
+                    {(() => {
+                      const ahorrado = getPoteAhorrado(potes[0].id, potes[0].nombre);
+                      const porcentaje = Math.min((ahorrado / potes[0].monto_objetivo) * 100, 100);
+                      const faltante = Math.max(potes[0].monto_objetivo - ahorrado, 0);
+
+                      return (
+                        <div className="relative z-10">
+                          {porcentaje >= 100 && (
+                            <div className="absolute inset-0 bg-emerald-600/90 backdrop-blur-sm flex flex-col items-center justify-center z-20 text-center p-4 rounded-xl">
+                              <span className="text-3xl mb-1">🎉</span>
+                              <h3 className="text-white font-black text-lg">¡Vaca Completada!</h3>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <h2 className="text-base md:text-lg font-black text-white flex items-center gap-2">
+                                {potes[0].nombre} 
+                                <span className={`text-emerald-400 text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20`}>META: ${potes[0].monto_objetivo} USDT</span>
+                              </h2>
+                              <p className={`text-xs text-white/50 mt-1`}>Faltan $<AnimatedNum value={faltante} /> USD</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <span className={`text-sm md:text-base font-black text-emerald-400`}><AnimatedNum value={porcentaje} format="pct"/></span>
+                            </div>
+                          </div>
+                          
+                          <div className={`h-3 w-full bg-black/60 rounded-full border border-white/5 p-0.5 mt-2`}>
+                            <div className={`h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]`} style={{ width: `${porcentaje}%`, transition: 'width 1s ease-in-out' }}></div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center mt-4">
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation(); // <-- IMPORTANTE: Evita que se abra el modal al tocar el botón
+                                  setTipo("ingreso"); 
+                                  setCategoria("abono_pote"); 
+                                  setDestinoTransferencia(potes[0].id); 
+                                  const trigger = document.getElementById('nuevo-registro-trigger'); 
+                                  if (trigger) trigger.click(); 
+                                }} 
+                                className="w-10 h-10 bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center rounded-full shadow-lg shadow-emerald-500/20 active:scale-90 transition-all"
+                              >
+                                <Plus size={20} strokeWidth={3} />
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation(); // <-- IMPORTANTE: Evita que se abra el modal
+                                  eliminarPote(potes[0].id);
+                                }} 
+                                className="w-10 h-10 bg-white/5 hover:bg-rose-500/20 text-white/30 hover:text-rose-500 flex items-center justify-center rounded-full border border-white/5 transition-colors"
+                              >
+                                <Trash2 size={18}/>
+                              </button>
+                            </div>
+                            <p className="text-[9px] text-white/30 uppercase flex items-center gap-1">Ver aportes <ArrowDownCircle size={10}/></p>
+                          </div>
+                        </div>
+                      );
+                    })()}
                  </div>
                )}
             </div>
@@ -2609,14 +2665,32 @@ function FinanzasDashboardContent({
               
               <div className="pt-4 border-t border-white/5 space-y-3 mt-4">
                 <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-3 text-center">Crear o Unirse</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => { setIsSpacesMenuOpen(false); onSelectModule('pote'); }} className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/10 font-bold text-xs text-center transition-colors">
-                    <div className="bg-fuchsia-500/20 p-2 rounded-full"><Plus className="w-5 h-5"/></div> Crear Pote
-                  </button>
-                  <button onClick={() => { setIsSpacesMenuOpen(false); onSelectModule('vaca'); }} className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-bold text-xs text-center transition-colors">
-                    <div className="bg-emerald-500/20 p-2 rounded-full"><Plus className="w-5 h-5"/></div> Crear Vaca
-                  </button>
-                </div>
+               <div className="grid grid-cols-2 gap-2">
+  {/* BOTÓN CREAR POTE (Activo) */}
+                <button 
+                  onClick={() => { setIsSpacesMenuOpen(false); onSelectModule('pote', 'NEW'); }} 
+                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/10 font-bold text-xs transition-colors active:scale-95"
+                >
+                  <div className="bg-fuchsia-500/20 p-2 rounded-full">
+                    <Plus className="w-5 h-5"/>
+                  </div> 
+                  Crear Pote
+                </button>
+
+                {/* BOTÓN CREAR VACA (Bloqueado - Próximamente) */}
+                <button 
+                  disabled
+                  className="flex flex-col items-center justify-center gap-1.5 p-4 rounded-2xl border border-dashed border-white/10 text-white/30 bg-white/5 font-bold text-xs cursor-not-allowed"
+                >
+                  <div className="bg-white/5 p-2 rounded-full mb-0.5">
+                    <Lock className="w-4 h-4 opacity-50"/>
+                  </div> 
+                  La Vaca
+                  <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md tracking-widest uppercase">
+                    Próximamente
+                  </span>
+                </button>
+              </div>
               </div>
             </div>
           </Drawer.Content>
