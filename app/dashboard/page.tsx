@@ -5,18 +5,24 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { 
   ArrowDownCircle, ArrowUpCircle, Wallet, Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, Target, Home, CreditCard, Calculator, Lock, Mail, LogIn, UserPlus, Sparkles, ArrowLeft, Shield, Key, Copy, UploadCloud, Phone, Menu, LogOut, Globe, ChevronRight, Loader2,
-  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3, ChevronLeft, ArrowRight, ListTodo, ChevronDown, ArrowLeftRight
+  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3, ChevronLeft, ArrowRight, ListTodo, ChevronDown, ArrowLeftRight, Layers
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Drawer } from "vaul";
+import { InicioTab } from "@/components/Dashboard/InicioTab";
+import { PagosTab } from "@/components/Dashboard/PagosTab";
+import { RecordatoriosTab } from "@/components/Dashboard/RecordatoriosTab";
+import { EmergenciaTab } from "@/components/Dashboard/EmergenciaTab";
+import { CalculadoraTab } from "@/components/Dashboard/CalculadoraTab";
 
 // ============================================================================
 // 1. COMPONENTE TRANSACTION DRAWER (PANTALLA COMPLETA NATIVA PARA IOS)
 // ============================================================================
-export function TransactionDrawer({ 
+function TransactionDrawer({ 
   children,
   tipo, setTipo,
   categoria, setCategoria,
+  customCategoria, setCustomCategoria, categoriasList,
   monto, setMonto,
   moneda, setMoneda,
   descripcion, setDescripcion,
@@ -81,8 +87,9 @@ export function TransactionDrawer({
     
     const isValidDesc = (tipo === 'ingreso' || categoria === 'abono_pote' || tipo === 'transferencia') ? true : descripcion.trim() !== "";
     const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
+    const isOtroValid = categoria === 'otro' ? customCategoria.trim() !== "" : true;
     
-    if (monto && (categoria || tipo === 'transferencia') && isValidDesc && isValidUser) {
+    if (monto && (categoria || tipo === 'transferencia') && isValidDesc && isValidUser && isOtroValid) {
       onSubmit(e);
       setIsOpen(false);
     } else {
@@ -167,6 +174,26 @@ export function TransactionDrawer({
                     <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
                   </button>
                 ))}
+              </div>
+            )}
+
+            {categoria === 'otro' && tipo !== 'transferencia' && (
+              <div className="bg-purple-500/5 p-4 rounded-2xl border border-purple-500/20 mb-6 animate-in zoom-in-95">
+                <label className="text-[10px] text-purple-400 uppercase font-bold tracking-widest block mb-2">Nombre de tu categoría</label>
+                <input 
+                  type="text" 
+                  list="custom-cats"
+                  placeholder="Ej: Taxi 🚕, Cine 🍿, etc." 
+                  value={customCategoria} 
+                  onChange={(e) => setCustomCategoria(e.target.value)} 
+                  className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-purple-500" 
+                />
+                {/* Esto hace que le sugiera categorías que ya haya inventado antes */}
+                <datalist id="custom-cats">
+                  {categoriasList?.filter((c: any) => !['salario','comida','internet','mascotas','cashea','otro'].includes(c.valor)).map((c: any) => (
+                    <option key={c.valor} value={c.label} />
+                  ))}
+                </datalist>
               </div>
             )}
 
@@ -495,11 +522,7 @@ export default function MiPoteApp() {
       } else {
         const { count } = await supabase.from('espacio_miembros').select('*', { count: 'exact', head: true }).eq('espacio_id', spaceFound.id);
         
-        if (spaceFound.tipo === 'pote' && count !== null && count >= 2) {
-          alert("❌ Este Pote ya está lleno (Máximo 2 personas permitidas).");
-          setLoadingAuth(false);
-          return;
-        }
+     
 
         await supabase.from('espacio_miembros').insert([{ espacio_id: spaceFound.id, usuario_id: session.user.id, rol: 'miembro' }]);
         await supabase.from('participantes').insert([{ nombre: (perfil?.nombre || session.user.email.split('@')[0]), espacio_id: spaceFound.id }]);
@@ -859,8 +882,9 @@ export default function MiPoteApp() {
           key={`${session?.user?.id || 'guest'}-${espacioActivo?.id || 'none'}`}
           session={session} 
           espacios={espacios}
-          setEspacioActivo={setEspacioActivo}
+          setEspacios={setEspacios}
           espacioActivo={espacioActivo} 
+          setEspacioActivo={setEspacioActivo}
           onSelectModule={seleccionarModulo}
           handleLogout={handleLogout}
           openJoinModal={() => setShowJoinModal(true)}
@@ -926,9 +950,10 @@ function FinanzasDashboardContent({
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); 
 
   const [activeWallet, setActiveWallet] = useState<'usdt'|'bs'|'cash'>('usdt'); 
+  const [patrimonioRate, setPatrimonioRate] = useState<'paralelo' | 'bcv'>('paralelo');
   const [filtroHistorial, setFiltroHistorial] = useState("Todos");
 
-  const [rates, setRates] = useState({ bcv: 0, usdt: 0 });
+  const [rates, setRates] = useState({ bcv: 0, usdt: 0, eur_bcv: 0, eur_paralelo: 0 });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [cuotasCashea, setCuotasCashea] = useState<any[]>([]);
   const [presupuestos, setPresupuestos] = useState<any[]>([]);
@@ -985,11 +1010,13 @@ function FinanzasDashboardContent({
 
   const [calcAmount, setCalcAmount] = useState("");
   const [calcCurrency, setCalcCurrency] = useState("usd");
+  const [calcBs, setCalcBs] = useState("");
 
   const [monto, setMonto] = useState("");
   const [moneda, setMoneda] = useState("usd");
   const [tipo, setTipo] = useState("egreso");
-  const [categoria, setCategoria] = useState("comida");
+ const [categoria, setCategoria] = useState("comida");
+  const [customCategoria, setCustomCategoria] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [usuario, setUsuario] = useState("");
   
@@ -1011,37 +1038,37 @@ function FinanzasDashboardContent({
   const getMensajes = (tipoApp: string, tipoTx: string) => {
     if (tipoApp === 'pote') {
       return tipoTx === 'ingreso' ? [
-        "¡Epa! Ese pote está engordando, mi amor. 🍯💰", 
+        "¡Epa! Ese pote está engordando, family. 🍯💰", 
         "¡Poniendo pa' lo nuestro! ❤️", 
         "Gotita a gotita llenamos el tobo. 🪣", 
         "¡Así se construye nuestro imperio! 🏰", 
-        "Platica pa' la casa y pa' la vida juntos. 🏠💸", 
+        "No sé ustedes pero en mi familia hacemos un bailecito 💃", 
         "Juntos somos invencibles con la plata. 💪👫", 
         "Echándole pichón pa' cumplir esa meta. 🚀", 
         "¡Este equipo no lo para nadie! 🥇", 
-        "Mi amor, a este paso nos compramos Caracas. 🏙️", 
+        "A este paso nos compramos Caracas. 🏙️", 
         "Pote lleno, corazón contento. ❤️🍯", 
         "Trabajando juntos por ese sueño. 🌟", 
         "Sumando bloques a nuestra casita de ahorros. 🧱", 
         "Esa meta ya nos está guiñando el ojo. 😉", 
-        "¡Dinero asegurado, mi vida! 🔒", 
+        "¡Dinero asegurado! 🔒", 
         "Qué rico ver cómo crece nuestro sudor ahí reflejado. 💦💰"
       ] : [
-        "¿De pana necesitábamos gastar en esto, mi amor? 🤨", 
+        "¿De pana necesitábamos gastar en esto? 🤨", 
         "Mosca con la tarjeta, que nos descuadramos. 💳", 
         "Gastico hormiga detectado, pila ahí. 🐜", 
         "Pilas que ese gustico nos aleja de la meta. 📉", 
-        "Mi vida, este gasto dolió en el alma (y en el bolsillo). 💔", 
+        "este gasto dolió en el alma (y en el bolsillo). 💔", 
         "Nos salimos del presupuesto, arropate hasta donde llegue la cobija. 🛏️", 
         "Cuidado con los antojos que nos dejan limpios. 🍔🚫", 
         "Pelando bola en 3, 2, 1... si seguimos así. 📉", 
         "Este mes nos toca comer arepa con mantequilla. 🫓", 
         "No dejes que la emoción nos vacíe el pote. 🍯🥄", 
-        "Pendiente con el despilfarro, mi amor. 💸", 
+        "Pendiente con el despilfarro. 💸", 
         "Mosca con las compras nerviosas. 🛍️", 
         "Si le seguimos sacando al pote, no vamos a llegar nunca. 🐌", 
         "Administra bien que la cosa no está fácil. 🇻🇪", 
-        "Amor, recuerda la meta... no nos desviemos. 🎯"
+        "recuerda la meta... no nos desviemos. 🎯"
       ];
     } else if (tipoApp === 'vaca') {
       return tipoTx === 'ingreso' ? [
@@ -1126,16 +1153,35 @@ function FinanzasDashboardContent({
     setTimeout(() => setShowToast(false), 4500);
   };
 
-  const fetchRates = async () => {
-    setSyncing(true);
-    try {
-      const res = await fetch("/api/rates");
-      const data = await res.json();
-      if (data.success) {
-        setRates({ bcv: data.bcv, usdt: data.usdt });
+  const fetchRates = async () => { 
+    setSyncing(true); 
+    try { 
+      // Traer Dólar (Tu API)
+      const resUsd = await fetch("/api/rates"); 
+      const dataUsd = await resUsd.json(); 
+      
+      // Traer Euro (DolarAPI)
+      const resEur = await fetch("https://ve.dolarapi.com/v1/euros");
+      const dataEur = await resEur.json();
+
+      // Extraer los datos del Euro del arreglo
+      const eurOficial = dataEur.find((e: any) => e.fuente === "oficial")?.promedio || 0;
+      const eurParalelo = dataEur.find((e: any) => e.fuente === "paralelo")?.promedio || 0;
+
+      // Guardar todo junto en el estado
+      if (dataUsd.success) {
+        setRates({ 
+          bcv: dataUsd.bcv, 
+          usdt: dataUsd.usdt,
+          eur_bcv: eurOficial,
+          eur_paralelo: eurParalelo
+        }); 
       }
-    } catch (error) { console.error("Error al traer tasas:", error); } 
-    finally { setSyncing(false); }
+    } catch (e) {
+      console.error("Error trayendo tasas:", e);
+    } finally { 
+      setSyncing(false); 
+    } 
   };
 
   const fetchData = useCallback(async () => {
@@ -1162,12 +1208,23 @@ function FinanzasDashboardContent({
         const { data: casheaData } = await supabase.from("cashea").select("*").eq("espacio_id", espacioActivo.id).order("fecha_pago", { ascending: true });
         if (casheaData) setCuotasCashea(casheaData);
         
-        const { data: catData } = await supabase.from("categorias").select("*");
-        if (catData) {
-          const combined = [...DEFAULT_CATEGORIES, ...catData];
-          const uniqueCats = Array.from(new Map(combined.map(item => [item.valor, item])).values());
-          setCategoriasList(uniqueCats);
-        }
+       const { data: catData } = await supabase.from("categorias").select("*");
+        
+        // El sistema escanea tu historial y extrae las categorías nuevas que inventaste
+        const customCats = Array.from(new Set(txData?.map(tx => tx.categoria).filter(cat => 
+            cat && 
+            !cat.startsWith('pote_') && 
+            cat !== 'emergencia' && 
+            cat !== 'transferencia_salida' && 
+            cat !== 'transferencia_entrada' &&
+            !DEFAULT_CATEGORIES.some(c => c.valor === cat)
+        ) || []));
+        
+        const dynamicCategorias = customCats.map(cat => ({ valor: cat, label: cat }));
+
+        const combined = [...DEFAULT_CATEGORIES, ...(catData || []), ...dynamicCategorias];
+        const uniqueCats = Array.from(new Map(combined.map(item => [item.valor, item])).values());
+        setCategoriasList(uniqueCats);
 
         const { data: presData } = await supabase.from("presupuestos").select("*").eq("espacio_id", espacioActivo.id);
         if (presData) setPresupuestos(presData);
@@ -1224,12 +1281,18 @@ function FinanzasDashboardContent({
   };
 
   // 🔥 LÓGICA DE REGISTRO Y TRANSFERENCIAS
-  const handleManualSubmit = async (e: React.FormEvent) => {
+const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const valorMonto = parseFloat(monto);
     const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
 
-    // 1. TRANSFERENCIA A OTRO ESPACIO (VACAS / POTES EXTERNOS)
+    // MAGIA: Si eligió Otro, usamos el nombre que escribió
+    let finalCategoria = categoria;
+    if (categoria === 'otro') {
+       if (!customCategoria.trim()) return alert("Por favor ingresa el nombre de tu categoría.");
+       finalCategoria = customCategoria.trim();
+    }
+
     if (tipo === 'transferencia') {
       if (!destinoTransferencia) return alert("Selecciona el espacio destino");
       const destSpace = espacios.find((sp:any) => sp.id === destinoTransferencia);
@@ -1240,20 +1303,14 @@ function FinanzasDashboardContent({
         setTransactions(updatedTx);
         localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
       } else {
-        await supabase.from("transacciones_saas").insert([{
-          descripcion: `Transferencia a: ${destSpace?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id
-        }]);
-        await supabase.from("transacciones_saas").insert([{
-          descripcion: `Transferencia recibida de: Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_entrada', usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: destinoTransferencia, usuario_id: session.user.id
-        }]);
+        await supabase.from("transacciones_saas").insert([{ descripcion: `Transferencia a: ${destSpace?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+        await supabase.from("transacciones_saas").insert([{ descripcion: `Transferencia recibida de: Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_entrada', usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: destinoTransferencia, usuario_id: session.user.id }]);
       }
-      fetchData();
-      triggerToast("egreso", "¡Transferencia enviada con éxito! 💸");
-      return;
+      fetchData(); triggerToast("egreso", "¡Transferencia enviada con éxito! 💸"); 
+      setCustomCategoria(""); return;
     }
 
-    // 2. ABONO A META INTERNA (EL CORAZÓN DEL CAMBIO)
-    if (categoria === 'abono_pote') {
+    if (finalCategoria === 'abono_pote') {
       if (!destinoTransferencia) return alert("Selecciona la meta");
       const poteDestino = potes.find((p:any) => p.id === destinoTransferencia);
       
@@ -1261,29 +1318,20 @@ function FinanzasDashboardContent({
         const tx1 = { id: Date.now().toString() + "_out", descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', created_at: new Date().toISOString() };
         const tx2 = { id: Date.now().toString() + "_in", descripcion: `Abono recibido de Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', created_at: new Date().toISOString() };
         const updatedTx = [tx1, tx2, ...transactions];
-        setTransactions(updatedTx);
-        localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+        setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
       } else {
-        await supabase.from("transacciones_saas").insert([{
-          descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id
-        }]);
-        await supabase.from("transacciones_saas").insert([{
-          descripcion: `Abono recibido desde Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: espacioActivo.id, usuario_id: session.user.id
-        }]);
+        await supabase.from("transacciones_saas").insert([{ descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+        await supabase.from("transacciones_saas").insert([{ descripcion: `Abono recibido desde Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
       }
-      fetchData();
-      triggerToast("ingreso", "¡Abono sumado a tu meta! 🍯");
-      return;
+      fetchData(); triggerToast("ingreso", "¡Abono sumado a tu meta! 🍯"); 
+      setCustomCategoria(""); return;
     }
 
-    const isValidDesc = (tipo === 'ingreso' || categoria === 'abono_pote') ? true : descripcion.trim() !== "";
+    const isValidDesc = (tipo === 'ingreso' || finalCategoria === 'abono_pote') ? true : descripcion.trim() !== "";
     const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
+    if (!isValidDesc || !isValidUser || !finalCategoria) return alert("Verifica la categoría, el detalle y quién pagó."); 
 
-    if (!isValidDesc || !isValidUser || !categoria) { 
-      return alert("Verifica la categoría, el detalle y quién pagó."); 
-    }
-
-    if (categoria === 'cashea') {
+    if (finalCategoria === 'cashea') {
       const montoTotal = parseFloat(monto);
       const nCuotas = (window as any).numCuotasCashea || 3; 
       const montoCuota = montoTotal / nCuotas;
@@ -1296,31 +1344,30 @@ function FinanzasDashboardContent({
       const { error } = await supabase.from("cashea").insert(cuotasParaInsertar);
       if (error) alert("🚨 Error Cashea: " + error.message);
       else { fetchData(); triggerToast("egreso", `Programadas ${nCuotas} cuotas de $${montoCuota.toFixed(2)}`); }
-      return; 
+      setCustomCategoria(""); return; 
     }
     
-    let descFinal = descripcion; 
-    let msjAlertaEspecial = null;
-
-    if (categoria.startsWith("pote_")) {
-       const poteId = categoria.split("_")[1];
+    let descFinal = descripcion; let msjAlertaEspecial = null;
+    if (finalCategoria.startsWith("pote_")) {
+       const poteId = finalCategoria.split("_")[1];
        const poteRelacionado = potes.find((p:any) => p.id.toString() === poteId);
        if (poteRelacionado) descFinal = `Pote: ${poteRelacionado.nombre} - ${descripcion}`;
     } else {
-       let labelCategoria = categoriasList.find(c => c.valor === categoria)?.label || categoria;
+       let labelCategoria = categoriasList.find(c => c.valor === finalCategoria)?.label || finalCategoria;
        descFinal = tipo === 'ingreso' && !descripcion ? labelCategoria : `${labelCategoria} - ${descripcion}`;
     }
 
     if (isGuest) {
-      const newTx = { id: Date.now().toString(), descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario: usuario || "Tú", tipo, created_at: new Date().toISOString() };
+      const newTx = { id: Date.now().toString(), descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: finalCategoria, usuario: usuario || "Tú", tipo, created_at: new Date().toISOString() };
       const updatedTx = [newTx, ...transactions];
       setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
       triggerToast(tipo, msjAlertaEspecial || undefined);
     } else {
-      const { error } = await supabase.from("transacciones_saas").insert([{ descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario: usuario || "Tú", tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+      const { error } = await supabase.from("transacciones_saas").insert([{ descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: finalCategoria, usuario: usuario || "Tú", tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
       if (error) alert("🚨 Error: " + error.message);
       else { fetchData(); triggerToast(tipo, msjAlertaEspecial || undefined); }
     }
+    setCustomCategoria("");
   };
 
   const unirseConCodigoInterno = async (e: React.FormEvent) => {
@@ -1334,7 +1381,7 @@ function FinanzasDashboardContent({
     if (yaEsMiembro) { alert("Ya eres miembro de este espacio."); return; }
 
     const { count } = await supabase.from('espacio_miembros').select('*', { count: 'exact', head: true }).eq('espacio_id', spaceFound.id);
-    if (spaceFound.tipo === 'pote' && count !== null && count >= 2) { alert("❌ Este Pote ya está lleno."); return; }
+    
 
     await supabase.from('espacio_miembros').insert([{ espacio_id: spaceFound.id, usuario_id: session.user.id, rol: 'miembro' }]);
     await supabase.from('participantes').insert([{ nombre: (perfil?.nombre || session.user.email.split('@')[0]), espacio_id: spaceFound.id }]);
@@ -1437,14 +1484,27 @@ function FinanzasDashboardContent({
     const nuevoEstado = !cuota.pagado;
     await supabase.from("cashea").update({ pagado: nuevoEstado }).eq("id", cuota.id);
     if (nuevoEstado) {
-      if (confirm(`¿Descontar $${cuota.monto_cuota} del balance de ${cuota.usuario} por el pago de Cashea?\n\n(Se aplicará arbitraje BCV vs Paralelo)`)) {
-        const costo_bs = cuota.monto_cuota * rates.bcv;
+      const costo_bs = cuota.monto_cuota * rates.bcv;
+      if (confirm(`¿Descontar Bs. ${costo_bs.toFixed(2)} (Equivalente a $${cuota.monto_cuota}) del balance en Bolívares de ${cuota.usuario} por el pago de Cashea?`)) {
         const costo_real_usdt = rates.usdt > 0 ? costo_bs / rates.usdt : cuota.monto_cuota;
-        await supabase.from("transacciones_saas").insert([{
-          descripcion: `Pago Cashea: ${cuota.articulo}`, monto_original: cuota.monto_cuota, moneda_original: "usd", monto_bs: costo_bs, monto_usd_bcv: cuota.monto_cuota, monto_usd_paralelo: costo_real_usdt, categoria: "cashea", usuario: cuota.usuario, tipo: "egreso", espacio_id: espacioActivo.id, usuario_id: session.user.id
+        
+        await supabase.from("transacciones_saas").insert([{ 
+          descripcion: `Pago Cashea: ${cuota.articulo}`, 
+          monto_original: costo_bs,       // <-- AHORA EL MONTO PRINCIPAL ES EN BS
+          moneda_original: "bs",          // <-- AHORA DESCUENTA DE LA BILLETERA DE BOLÍVARES
+          monto_bs: costo_bs, 
+          monto_usd_bcv: cuota.monto_cuota, 
+          monto_usd_paralelo: costo_real_usdt, 
+          categoria: "cashea", 
+          usuario: cuota.usuario, 
+          tipo: "egreso", 
+          espacio_id: espacioActivo.id, 
+          usuario_id: session.user.id 
         }]);
         triggerToast("egreso");
-      } else { await supabase.from("cashea").update({ pagado: false }).eq("id", cuota.id); }
+      } else { 
+        await supabase.from("cashea").update({ pagado: false }).eq("id", cuota.id); 
+      }
     }
     fetchData();
   };
@@ -1497,6 +1557,48 @@ function FinanzasDashboardContent({
       else { setMonto(""); setDescripcion(""); fetchData(); triggerToast(tipo); }
     }
     setIsAddingEmergencia(false);
+  };
+
+  const handleEmergenciaAction = async (monto: number, tipoMovimiento: 'ingreso' | 'egreso', descripcionMovimiento: string) => {
+    if (!espacioActivo) return;
+    const usuarioNombre = perfil?.nombre || session?.user?.email?.split('@')[0] || "Tú";
+    const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(monto, 'usd');
+
+    if (isGuest) {
+      const newTx = {
+        id: Date.now().toString(),
+        descripcion: `Emergencia - ${descripcionMovimiento}`,
+        monto_original: monto,
+        moneda_original: 'usd',
+        monto_bs,
+        monto_usd_bcv,
+        monto_usd_paralelo,
+        categoria: 'emergencia',
+        usuario: usuarioNombre,
+        tipo: tipoMovimiento,
+        created_at: new Date().toISOString(),
+      };
+      const updatedTx = [newTx, ...transactions];
+      setTransactions(updatedTx);
+      localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+      triggerToast?.(tipoMovimiento, 'Movimiento registrado');
+    } else {
+      const { error } = await supabase.from('transacciones_saas').insert([{
+        descripcion: `Emergencia - ${descripcionMovimiento}`,
+        monto_original: monto,
+        moneda_original: 'usd',
+        monto_bs,
+        monto_usd_bcv,
+        monto_usd_paralelo,
+        categoria: 'emergencia',
+        usuario: usuarioNombre,
+        tipo: tipoMovimiento,
+        espacio_id: espacioActivo.id,
+        usuario_id: session?.user?.id,
+      }]);
+      if (error) alert("🚨 Error: " + error.message);
+      else { fetchData(); triggerToast?.(tipoMovimiento, 'Movimiento registrado'); }
+    }
   };
 
   const agregarParticipante = async (e?: React.FormEvent) => {
@@ -1579,195 +1681,64 @@ function FinanzasDashboardContent({
     const transaccionesFiltradas = transaccionesDelMes.filter(tx => filtroHistorial === "Todos" || tx.usuario === filtroHistorial);
     const gastosDelMesCalculados = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
 
-    // 🔥 MAPEO DE GASTOS PARA GRÁFICO SEGURO
+ // 🔥 MAPEO DE GASTOS PARA GRÁFICO SEGURO
     const gastosPorCategoriaValor = gastosDelMesCalculados.reduce((acc, tx) => {
       let catName = tx.categoria.startsWith('pote_') ? 'Extracción Potes' : 
                     tx.categoria === 'emergencia' ? 'Emergencias 🚨' : 
                     (categoriasList.find(c => c.valor === tx.categoria)?.label || tx.categoria);
-      acc[catName] = (acc[catName] || 0) + (tx.monto_usd_paralelo || 0);
+      
+      // Si es cashea descuenta a tasa BCV, sino a Paralelo
+      const montoAUsar = tx.categoria === 'cashea' ? (tx.monto_usd_bcv || 0) : (tx.monto_usd_paralelo || 0);
+      acc[catName] = (acc[catName] || 0) + montoAUsar;
+      
       return acc;
     }, {} as Record<string, number>);
 
     const dataGraficoTorta = Object.keys(gastosPorCategoriaValor).map(key => ({ name: key, value: gastosPorCategoriaValor[key] })).sort((a, b) => b.value - a.value);
     const COLORS = [theme.stroke, '#ec4899', '#f97316', '#eab308', '#10b981', '#0ea5e9', '#6366f1', '#d946ef'];
     
-    // 🔥 NUEVA PESTAÑA: RECORDATORIOS
     if (activeTab === 'recordatorios') {
       return (
-        <div className="space-y-6">
-          <div className={`relative overflow-hidden bg-gradient-to-br ${theme.card} to-[#1a0f2e] border ${theme.border} p-6 md:p-8 rounded-3xl shadow-xl flex flex-col items-center text-center mt-6`}>
-            <ListTodo className={`w-12 h-12 ${theme.text} mb-4`} />
-            <p className="text-xl font-black text-white uppercase tracking-widest mb-2">Lista de Tareas</p>
-            <p className="text-xs text-white/50 mt-2 max-w-md">Anoten aquí lo que falta por comprar, mercado o pagos pendientes en este pote.</p>
-          </div>
-
-          <form onSubmit={agregarRecordatorio} className="flex gap-2 bg-[#1a1a1a] p-2 rounded-2xl border border-white/5 shadow-xl">
-            <input 
-              type="text" value={nuevoRecordatorio} onChange={(e) => setNuevoRecordatorio(e.target.value)}
-              placeholder="Ej: Comprar el botellón de agua..."
-              className="flex-1 bg-transparent text-white px-4 py-3 text-sm outline-none"
-            />
-            <button type="submit" className={`p-3 rounded-xl ${theme.primary} text-white shadow-lg active:scale-95 transition-transform`}>
-              <Plus className="w-5 h-5"/>
-            </button>
-          </form>
-
-          <div className="space-y-3 mt-6">
-            {recordatorios.length === 0 ? (
-              <p className="text-center text-white/30 text-sm italic">No hay tareas pendientes en este pote.</p>
-            ) : recordatorios.map(rec => (
-              <div key={rec.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-colors ${rec.completado ? 'bg-white/5 border-transparent opacity-50' : 'bg-[#1a0f2e] border-white/10'}`}>
-                <div className="flex items-center gap-4 flex-1 cursor-pointer" onClick={() => toggleRecordatorio(rec.id, rec.completado)}>
-                  <div className={`w-6 h-6 rounded-md flex items-center justify-center border ${rec.completado ? `bg-emerald-500 border-emerald-500 text-black` : 'border-white/30 text-transparent'}`}>
-                    <Check size={14} />
-                  </div>
-                  <p className={`text-sm font-bold flex-1 ${rec.completado ? 'text-white/50 line-through' : 'text-white'}`}>{rec.texto}</p>
-                </div>
-                <button onClick={() => eliminarRecordatorio(rec.id)} className="p-2 text-white/30 hover:text-rose-500 transition-colors">
-                  <Trash2 size={16}/>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+        <RecordatoriosTab
+          espacioActivo={espacioActivo}
+          recordatorios={recordatorios}
+          theme={theme}
+          onAgregarRecordatorio={async (texto: string) => {
+            if (!texto.trim() || isGuest || !espacioActivo) return;
+            const { error } = await supabase.from('recordatorios').insert([{ texto, espacio_id: espacioActivo.id, usuario_id: session?.user?.id }]);
+            if (!error) fetchData();
+          }}
+          onToggleRecordatorio={async (id: string, completado: boolean) => {
+            if (isGuest) return;
+            await supabase.from('recordatorios').update({ completado: !completado }).eq('id', id);
+            fetchData();
+          }}
+          onEliminarRecordatorio={async (id: string) => {
+            if (isGuest) return;
+            await supabase.from('recordatorios').delete().eq('id', id);
+            fetchData();
+          }}
+          triggerToast={triggerToast}
+        />
       );
     }
 
     if (activeTab === 'calculadora' || forceTab === 'calculadora') {
-      return (
-        <div className={`bg-[#1a0f2e] border ${theme.border} p-6 rounded-[2rem] shadow-xl w-full max-w-md mx-auto mt-6 md:mt-10 animate-in zoom-in-95`}>
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-black text-white flex items-center gap-3"><Calculator className={`w-6 h-6 ${theme.text}`} /> Simulador de Compras</h2>
-            <button onClick={fetchRates} className={`${theme.lightBg} ${theme.text} p-2 rounded-xl active:scale-95`}><RefreshCw size={16} className={syncing ? 'animate-spin' : ''}/></button>
-          </div>
-
-          <div className="bg-[#121212] p-5 rounded-[1.5rem] border border-white/5 mb-6 shadow-inner">
-             <label className="text-[10px] uppercase text-purple-400 font-bold tracking-widest block mb-4">Ingresa el monto a pagar</label>
-             <div className="flex gap-3">
-               <input type="number" value={calcAmount} onChange={e => setCalcAmount(e.target.value)} className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums font-sans" placeholder="0.00" />
-               <select value={calcCurrency} onChange={e => setCalcCurrency(e.target.value)} className="bg-[#1a1a1a] border border-[#333] text-xs font-bold text-white rounded-xl px-3 outline-none cursor-pointer h-12">
-                 <option value="usd">Dólares ($)</option>
-                 <option value="bs">Bolívares (Bs)</option>
-               </select>
-             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-             <div className="bg-[#121212] p-5 rounded-[1.5rem] border border-white/5 flex flex-col items-center justify-center text-center">
-                <p className="text-[10px] uppercase text-purple-400 font-bold tracking-widest mb-2">Tasa BCV</p>
-                <p className="text-xl font-black text-white tabular-nums font-sans">
-                   {calcCurrency === 'usd' ? `Bs. ${(parseFloat(calcAmount||'0') * rates.bcv).toFixed(2)}` : `$ ${(parseFloat(calcAmount||'0') / rates.bcv).toFixed(2)}`}
-                </p>
-             </div>
-             <div className="bg-[#121212] p-5 rounded-[1.5rem] border border-white/5 flex flex-col items-center justify-center text-center">
-                <p className="text-[10px] uppercase text-purple-400 font-bold tracking-widest mb-2">Tasa Paralelo</p>
-                <p className="text-xl font-black text-white tabular-nums font-sans">
-                   {calcCurrency === 'usd' ? `Bs. ${(parseFloat(calcAmount||'0') * rates.usdt).toFixed(2)}` : `$ ${(parseFloat(calcAmount||'0') / rates.usdt).toFixed(2)}`}
-                </p>
-             </div>
-          </div>
-            
-          {forceTab === 'calculadora' && (
-            <button onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 mt-6">
-              <ArrowLeft className="w-4 h-4"/> Volver al Inicio
-            </button>
-          )}
-        </div>
-      );
+      return <CalculadoraTab rates={rates} theme={theme} triggerToast={triggerToast} onBack={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} />;
     }
 
     if (activeTab === 'emergencia') {
-      const fondoEmergencia = transactions.filter(t => t.categoria === 'emergencia').reduce((acc, tx) => tx.tipo === 'ingreso' ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
-      const txEmergencia = transaccionesFiltradas.filter(t => t.categoria === 'emergencia');
-
       return (
-        <div className="space-y-6">
-          <div className={`relative overflow-hidden bg-gradient-to-br ${theme.card} to-[#1a0f2e] border ${theme.border} p-6 md:p-8 rounded-3xl shadow-xl flex flex-col items-center text-center mt-6`}>
-            <Shield className={`w-12 h-12 ${theme.text} mb-4`} />
-            <p className="text-xs font-bold text-white/70 uppercase tracking-widest mb-2">Fondo "Por Si Acaso" 🚨</p>
-            <p className="text-4xl font-black text-white font-sans tabular-nums tracking-tight">$<AnimatedNum value={fondoEmergencia} format="usd" /></p>
-            <p className="text-xs text-white/50 mt-4 max-w-md">Esta es tu red de seguridad. Este dinero se suma a tu patrimonio total, pero no aparece en tu liquidez diaria para evitar que lo gastes.</p>
-          </div>
-
-          <div className="flex justify-center my-4">
-             <button onClick={() => setIsAddingEmergencia(true)} className={`flex items-center gap-2 ${theme.primary} text-white px-6 py-3 rounded-2xl font-black shadow-lg active:scale-95 transition-all`}>
-                <Plus className="w-5 h-5"/> Movimiento de Emergencia
-             </button>
-          </div>
-
-          <Drawer.Root open={isAddingEmergencia} onOpenChange={setIsAddingEmergencia}>
-            <Drawer.Portal>
-              <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[70vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#3b82f6]">
-                <Drawer.Title className="sr-only">Registrar Emergencia</Drawer.Title>
-                <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
-                  <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-                  <h3 className="text-xl font-black text-white mb-6 text-center">Fondo de Emergencia</h3>
-                  
-                  <form onSubmit={handleEmergenciaSubmit} className="flex flex-col gap-4">
-                    <div className="flex gap-2">
-                      <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={`flex-1 border rounded-xl p-4 text-sm font-black outline-none cursor-pointer ${tipo === 'ingreso' ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/30 border-rose-500/50 text-rose-400'}`}>
-                        <option value="ingreso">AGREGAR FONDO 💰</option><option value="egreso">RETIRO 💸</option>
-                      </select>
-                      
-                      {espacioActivo?.tipo === 'individual' ? (
-                        <div className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white/50 font-bold flex items-center cursor-not-allowed`}>
-                          👤 {(perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado"}
-                        </div>
-                      ) : (
-                        <select required value={usuario} onChange={(e) => setUsuario(e.target.value)} className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm text-white outline-none cursor-pointer appearance-none`}>
-                          <option value="">¿Quién aporta?</option>
-                          {nombresParticipantes.map(u => <option key={u} value={u}>{u}</option>)}
-                          {nombresParticipantes.length > 0 && <option value={espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos (Div)'}>{espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos'}</option>}
-                        </select>
-                      )}
-                    </div>
-                    
-                    <input type="text" required placeholder="Detalle (Ej: Reparación carro)" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-5 text-sm font-bold text-white outline-none focus:border-[#3b82f6]`} />
-
-                    <div className="flex gap-2 min-h-[80px]">
-                      <input type="number" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Monto" className={`flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-[#3b82f6]`} />
-                      <select value={moneda} onChange={(e) => setMoneda(e.target.value)} className={`w-24 bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none`}>
-                        <option value="usd">USD</option><option value="bs">BS</option>
-                      </select>
-                    </div>
-                    
-                    <button type="submit" className={`w-full font-black py-5 mt-4 rounded-3xl ${theme.primary} text-white text-sm shadow-xl active:scale-95 transition-transform tracking-widest uppercase`}>GUARDAR REGISTRO</button>
-                  </form>
-                </div>
-              </Drawer.Content>
-            </Drawer.Portal>
-          </Drawer.Root>
-
-          <div className={`lg:col-span-7 bg-[#1a0f2e] border ${theme.border} rounded-3xl overflow-hidden shadow-xl mt-6`}>
-            <div className={`p-3 border-b border-white/5 bg-black/20 flex flex-col gap-3`}>
-              <div className={`flex justify-between items-center text-xs font-bold uppercase text-white/70`}><span>Historial de Emergencias</span></div>
-            </div>
-            <div className="divide-y divide-white/5 max-h-[400px] overflow-y-auto">
-              {txEmergencia.length === 0 ? (
-                <div className="p-8 text-center text-white/30 text-sm">No hay movimientos en el fondo.</div>
-              ) : txEmergencia.map((tx) => (
-                <div key={tx.id} className="p-3 flex justify-between hover:bg-white/5 group">
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <div className={`p-1.5 rounded-xl shrink-0 ${tx.tipo === 'ingreso' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                      {tx.tipo === 'ingreso' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
-                    </div>
-                    <div className="truncate">
-                      <p className="text-xs font-bold text-white truncate">{tx.descripcion}</p>
-                      <p className="text-[8px] text-white/40 uppercase truncate">{tx.usuario} • {new Date(tx.created_at).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="text-right">
-                      <p className={`text-sm font-black font-sans tabular-nums tracking-tight ${tx.tipo === 'ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>$<AnimatedNum value={tx.monto_usd_paralelo || 0} format="usd" /></p>
-                    </div>
-                    <button onClick={() => eliminarTransaccion(tx.id)} className="p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-rose-500"><Trash2 className="w-3.5 h-3.5" /></button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <EmergenciaTab
+          espacioActivo={espacioActivo}
+          perfil={perfil}
+          session={session}
+          transactions={transactions}
+          theme={theme}
+          onAgregarEmergencia={handleEmergenciaAction}
+          onEliminarTransaccion={eliminarTransaccion}
+          triggerToast={triggerToast}
+        />
       );
     }
 
@@ -2051,7 +2022,7 @@ function FinanzasDashboardContent({
       );
     }
 
-      if (activeTab === 'inicio') {
+    if (activeTab === 'inicio') {
       const nombreUsuario = (perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado";
       const saldoPrincipal = getSaldosAislados(nombreUsuario); 
       const patrimonioTotal = getPatrimonioNeto();
@@ -2135,15 +2106,24 @@ function FinanzasDashboardContent({
                  </div>
                )}
             </div>
-          ) : (
+         ) : (
             <div className="mt-2 mb-4">
                <div onClick={() => setIsBalanceModalOpen(true)} className="cursor-pointer flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#1a0f2e] to-black/40 border border-white/5 rounded-[2rem] shadow-2xl transition-transform active:scale-95">
                   <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-1 flex items-center gap-2">
                     <Globe className="w-3 h-3"/> {espacioActivo?.tipo === 'individual' ? 'Patrimonio Neto Total' : 'Balance Total del Espacio'}
                   </p>
+                  
+                  {/* EL VALOR AHORA CAMBIA SEGÚN EL BOTÓN */}
                   <p className="text-5xl font-black text-white tracking-tighter tabular-nums font-sans text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-200">
-                    $<AnimatedNum value={patrimonioTotal.paralelo} format="usd" />
+                    $<AnimatedNum value={patrimonioRate === 'paralelo' ? patrimonioTotal.paralelo : patrimonioTotal.bcv} format="usd" />
                   </p>
+
+                  {/* NUEVOS BOTONES DE PARALELO / BCV */}
+                  <div className="flex bg-black/40 p-1 rounded-xl w-max mt-2 border border-white/5" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => setPatrimonioRate('paralelo')} className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${patrimonioRate === 'paralelo' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>PARALELO</button>
+                    <button onClick={() => setPatrimonioRate('bcv')} className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${patrimonioRate === 'bcv' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>BCV</button>
+                  </div>
+
                   <div className="flex gap-4 mt-3">
                      <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
                        Tasa BCV: Bs. {rates.bcv.toFixed(2)}
@@ -2329,7 +2309,8 @@ function FinanzasDashboardContent({
                       <div className="flex gap-2 mt-4">
                         {porcentaje < 100 && (
                           <button 
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation(); 
                               setTipo("ingreso"); 
                               setCategoria("abono_pote"); 
                               setDestinoTransferencia(pote.id); 
@@ -2363,6 +2344,7 @@ function FinanzasDashboardContent({
               <TransactionDrawer
                   tipo={tipo} setTipo={setTipo}
                   categoria={categoria} setCategoria={setCategoria}
+                  customCategoria={customCategoria} setCustomCategoria={setCustomCategoria} categoriasList={categoriasList}
                   monto={monto} setMonto={setMonto}
                   moneda={moneda} setMoneda={setMoneda}
                   descripcion={descripcion} setDescripcion={setDescripcion}
@@ -2452,7 +2434,7 @@ function FinanzasDashboardContent({
                 <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform`}>
                   <Calculator className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
                 </div>
-                <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider">Simulador de Compras</span>
+                <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider text-center leading-tight">Simulador<br/>Compras</span>
               </button>
             )}
           </div>
@@ -2576,14 +2558,24 @@ function FinanzasDashboardContent({
           </div>
         </div>
         
+        {/* LADO DERECHO: TASAS DE USD Y EUR */}
         <div className="text-right flex flex-col items-end">
-           <p className="text-[9px] text-white/40 uppercase font-bold tracking-widest flex items-center gap-1">BCV <button onClick={fetchRates} disabled={syncing}><RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`}/></button></p>
-           <p className="text-sm font-sans tabular-nums tracking-tight text-white font-black">Bs. {rates.bcv.toFixed(2)}</p>
-           <p className="text-[9px] text-white/40 uppercase font-bold tracking-widest mt-1">Paralelo</p>
-           <p className="text-sm font-sans tabular-nums tracking-tight text-white font-black">Bs. {rates.usdt.toFixed(2)}</p>
+          <p className="text-[9px] text-white/40 uppercase font-bold tracking-widest flex items-center gap-1">
+            BCV <button onClick={fetchRates} disabled={syncing}><RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`}/></button>
+          </p>
+          <p className="text-xs font-black text-white tabular-nums mt-0.5">
+            <span className="text-emerald-400">$</span> {rates.bcv.toFixed(2)} <span className="text-white/20 mx-1">|</span> <span className="text-blue-400">€</span> {rates.eur_bcv.toFixed(2)}
+          </p>
+          
+          <p className="text-[9px] text-white/40 uppercase font-bold tracking-widest mt-1.5">
+            Paralelo
+          </p>
+          <p className="text-xs font-black text-white tabular-nums mt-0.5">
+            <span className="text-emerald-400">$</span> {rates.usdt.toFixed(2)} <span className="text-white/20 mx-1">|</span> <span className="text-blue-400">€</span> {rates.eur_paralelo.toFixed(2)}
+          </p>
         </div>
       </div>
-
+      
       {/* DRAWER DE PERFIL Y CONFIGURACIÓN */}
       <Drawer.Root open={isProfileMenuOpen} onOpenChange={setIsProfileMenuOpen}>
         <Drawer.Portal>
@@ -2665,8 +2657,8 @@ function FinanzasDashboardContent({
               
               <div className="pt-4 border-t border-white/5 space-y-3 mt-4">
                 <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-3 text-center">Crear o Unirse</p>
-               <div className="grid grid-cols-2 gap-2">
-  {/* BOTÓN CREAR POTE (Activo) */}
+                <div className="grid grid-cols-2 gap-2">
+                {/* BOTÓN CREAR POTE (Activo) */}
                 <button 
                   onClick={() => { setIsSpacesMenuOpen(false); onSelectModule('pote', 'NEW'); }} 
                   className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/10 font-bold text-xs transition-colors active:scale-95"
@@ -2706,7 +2698,7 @@ function FinanzasDashboardContent({
           
           <div className="relative -top-5">
             <button onClick={() => setIsSpacesMenuOpen(true)} className={`bg-blue-600 text-white p-4 rounded-full shadow-[0_5px_20px_rgba(37,99,235,0.4)] active:scale-95 transition-transform border-4 border-[#0d0714]`}>
-               <ArrowLeftRight className="w-6 h-6" />
+               <Layers className="w-6 h-6" />
             </button>
           </div>
 
@@ -2723,7 +2715,7 @@ function FinanzasDashboardContent({
       <nav className="hidden md:flex justify-center mt-8 space-x-4">
         <NavButtonDesktop icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
         <NavButtonDesktop icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
-        <NavButtonDesktop icon={<ArrowLeftRight />} label="Cambiar Espacio" active={false} onClick={() => setIsSpacesMenuOpen(true)} theme={{primary: 'bg-blue-600', text: 'text-blue-400', border: 'border-blue-500/30'}} />
+        <NavButtonDesktop icon={<Layers />} label="Cambiar Espacio" active={false} onClick={() => setIsSpacesMenuOpen(true)} theme={{primary: 'bg-blue-600', text: 'text-blue-400', border: 'border-blue-500/30'}} />
         {espacioActivo?.tipo !== 'individual' && (
           <NavButtonDesktop icon={<ListTodo />} label="Tareas" active={activeTab === 'recordatorios'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('recordatorios'); } }} theme={theme} />
         )}

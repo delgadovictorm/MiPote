@@ -1,0 +1,1751 @@
+"use client";
+
+import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { supabase } from "@/lib/supabase";
+import { AuthFlow } from "@/components/Auth/AuthFlow";
+import { InicioTab } from "@/components/Dashboard/InicioTab";
+import { BilletaTab } from "@/components/Dashboard/BilletaTab";
+import { PotsTab } from "@/components/Dashboard/PotsTab";
+import { VacasTab } from "@/components/Dashboard/VacasTab";
+import { PagosTab } from "@/components/Dashboard/PagosTab";
+import { RecordatoriosTab } from "@/components/Dashboard/RecordatoriosTab";
+import { EmergenciaTab } from "@/components/Dashboard/EmergenciaTab";
+import { CalculadoraTab } from "@/components/Dashboard/CalculadoraTab";
+import { 
+  cargarDatosUsuario, 
+  fetchExchangeRates, 
+  handleLogout, 
+  unirseAlEspacio 
+} from "@/lib/auth";
+import type { Espacio, Perfil, ExchangeRates } from "@/types";
+import { 
+  ArrowDownCircle, ArrowUpCircle, Wallet, Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, Target, Home, CreditCard, Calculator, Lock, Mail, LogIn, UserPlus, Sparkles, ArrowLeft, Shield, Key, Copy, UploadCloud, Phone, Menu, LogOut, Globe, ChevronRight, Loader2,
+  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3, ChevronLeft, ArrowRight, ListTodo, ChevronDown, ArrowLeftRight
+} from "lucide-react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { Drawer } from "vaul";
+
+// ============================================================================
+// 1. COMPONENTE TRANSACTION DRAWER (PANTALLA COMPLETA NATIVA PARA IOS)
+// ============================================================================
+export function TransactionDrawer({ 
+  children,
+  tipo, setTipo,
+  categoria, setCategoria,
+  monto, setMonto,
+  moneda, setMoneda,
+  descripcion, setDescripcion,
+  rates,
+  theme,
+  onSubmit,
+  espacioActivo,
+  participantes,
+  usuario, setUsuario,
+  espacios,
+  potes,
+  destinoTransferencia, setDestinoTransferencia
+}: any) {
+  
+  const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Bloqueamos el scroll del fondo en iOS
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+      const timer = setTimeout(() => {
+        setMonto("");
+        setDescripcion("");
+        setCategoria("");
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen, setMonto, setDescripcion, setCategoria]);
+
+  const categories = {
+    ingreso: [
+      { id: "salario", label: "Sueldo", icon: <DollarSign size={18} /> },
+      { id: "inversiones", label: "Inversiones", icon: <TrendingUp size={18} /> },
+      { id: "ventas", label: "Ventas", icon: <ShoppingCart size={18} /> },
+      { id: "tigritos", label: "Tigritos", icon: <Rocket size={18} /> },
+      { id: "abono_pote", label: "Abonar a Meta 🍯", icon: <Plus size={18} /> },
+      { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
+    ],
+    egreso: [
+      { id: "comida", label: "Comida", icon: <ShoppingCart size={18} /> },
+      { id: "cashea", label: "Cashea", icon: <DollarSign size={18} /> },
+      { id: "internet", label: "Internet", icon: <Wifi size={18} /> },
+      { id: "mascotas", label: "Mascotas", icon: <Dog size={18} /> },
+      { id: "condominio", label: "Condominio", icon: <Home size={18} /> },
+      { id: "regalos", label: "Regalos", icon: <Gift size={18} /> },
+      { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
+    ]
+  };
+
+  const handleLocalSubmit = (e: any) => {
+    e.preventDefault();
+    if (tipo === 'transferencia' && !destinoTransferencia) return alert("Selecciona a qué espacio vas a transferir");
+    if (categoria === 'abono_pote' && !destinoTransferencia) return alert("Selecciona a qué Meta vas a mandar la plata");
+    
+    const isValidDesc = (tipo === 'ingreso' || categoria === 'abono_pote' || tipo === 'transferencia') ? true : descripcion.trim() !== "";
+    const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
+    
+    if (monto && (categoria || tipo === 'transferencia') && isValidDesc && isValidUser) {
+      onSubmit(e);
+      setIsOpen(false);
+    } else {
+      onSubmit(e); 
+    }
+  };
+
+  return (
+    <>
+      {React.cloneElement(children, { onClick: () => setIsOpen(true) })}
+
+      {mounted && isOpen && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-[#0d0714] w-full h-[100dvh] flex flex-col animate-in slide-in-from-bottom-8 fade-in duration-200">
+          
+          <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#121212] shrink-0 shadow-md z-20">
+            <div className="flex items-center gap-3">
+              <button 
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="p-2 bg-white/5 rounded-full text-white/70 hover:text-white hover:bg-rose-500 transition-colors"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <h3 className="text-white font-black text-lg">Nuevo Registro</h3>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32 bg-[#0d0714] overscroll-contain">
+            
+            <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6 flex-wrap gap-1">
+              <button 
+                type="button"
+                onClick={() => {setTipo("ingreso"); setCategoria("");}}
+                className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
+              >
+                INGRESO
+              </button>
+              <button 
+                type="button"
+                onClick={() => {setTipo("egreso"); setCategoria("");}}
+                className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
+              >
+                GASTO
+              </button>
+              {espacios?.length > 1 && espacioActivo?.tipo === 'individual' && (
+                <button 
+                  type="button" 
+                  onClick={() => {setTipo("transferencia"); setCategoria("transferencia");}} 
+                  className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'transferencia' ? 'bg-blue-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
+                >
+                  TRANSFERIR
+                </button>
+              )}
+            </div>
+
+            {tipo === 'transferencia' ? (
+               <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-blue-500/30 mb-6 animate-in zoom-in-95">
+                 <label className="text-[10px] text-blue-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2"><ArrowRight size={14}/> Enviar dinero a un Espacio</label>
+                 <select value={destinoTransferencia} onChange={(e) => setDestinoTransferencia(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer mb-4">
+                    <option value="">Selecciona Pote o Vaca destino...</option>
+                    {espacios?.filter((e:any) => e.id !== espacioActivo.id && e.tipo !== 'individual').map((e:any) => (
+                      <option key={e.id} value={e.id}>{e.nombre}</option>
+                    ))}
+                 </select>
+                 <p className="text-xs text-white/50 leading-relaxed">El dinero se descontará de <b>{espacioActivo.nombre}</b> y se enviará al espacio compartido.</p>
+               </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 mb-6">
+                {categories[tipo as keyof typeof categories].map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setCategoria(cat.id);
+                      setDescripcion(cat.id === 'otro' || cat.id === 'abono_pote' ? '' : cat.label);
+                    }}
+                    className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
+                      categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
+                    }`}
+                  >
+                    {cat.icon}
+                    <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {categoria === 'abono_pote' && tipo !== 'transferencia' && (
+               <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-emerald-500/30 mb-6 animate-in zoom-in-95">
+                 <label className="text-[10px] text-emerald-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2">¿A qué meta enviamos el dinero?</label>
+                 <select value={destinoTransferencia} onChange={(e) => setDestinoTransferencia(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer mb-2">
+                    <option value="">Selecciona la meta destino...</option>
+                    {potes?.map((p:any) => (
+                      <option key={p.id} value={p.id}>{p.nombre}</option>
+                    ))}
+                 </select>
+               </div>
+            )}
+
+            {espacioActivo?.tipo !== 'individual' && tipo !== 'transferencia' && (
+              <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 mb-6">
+                <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest pointer-events-none">¿Quién realizó el movimiento?</label>
+                <select 
+                  value={usuario} 
+                  onChange={(e) => setUsuario(e.target.value)}
+                  className="w-full bg-transparent text-white font-bold outline-none appearance-none cursor-pointer"
+                  required
+                >
+                  <option value="" className="bg-[#1a1a1a]">Seleccionar integrante...</option>
+                  {participantes?.map((p: any) => <option key={p.id} value={p.nombre} className="bg-[#1a1a1a]">{p.nombre}</option>)}
+                  <option value="Ambos" className="bg-[#1a1a1a]">Ambos (Mitad y mitad)</option>
+                </select>
+              </div>
+            )}
+
+            <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 space-y-4 mb-6">
+              <div>
+                <label className="text-[9px] uppercase font-black text-white/30 block mb-1 tracking-widest pointer-events-none">Monto</label>
+                <input 
+                  type="number" step="0.01" placeholder="0.00"
+                  value={monto} 
+                  onChange={(e) => setMonto(e.target.value)}
+                  className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums tracking-tight font-sans"
+                />
+              </div>
+              
+              <div className="flex gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+                <button type="button" onClick={() => setMoneda('usdt')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>USDT</button>
+                <button type="button" onClick={() => setMoneda('bs')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>BS</button>
+                <button type="button" onClick={() => setMoneda('cash')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>CASH</button>
+              </div>
+
+              {monto && rates.bcv > 0 && moneda !== 'cash' && (
+                <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 text-center text-sm pointer-events-none">
+                  {moneda === 'bs' ? (
+                    <>
+                      <div className="flex-1">
+                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
+                        <p className="text-white font-bold font-sans tracking-tight">${(parseFloat(monto) / rates.bcv).toFixed(2)}</p>
+                      </div>
+                      <div className="h-6 w-px bg-white/10"></div>
+                      <div className="flex-1">
+                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
+                        <p className="text-white font-bold font-sans tracking-tight">${(parseFloat(monto) / rates.usdt).toFixed(2)}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex-1">
+                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
+                        <p className="text-white font-bold font-sans tracking-tight">Bs. {(parseFloat(monto) * rates.bcv).toFixed(2)}</p>
+                      </div>
+                      <div className="h-6 w-px bg-white/10"></div>
+                      <div className="flex-1">
+                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
+                        <p className="text-white font-bold font-sans tracking-tight">Bs. {(parseFloat(monto) * rates.usdt).toFixed(2)}</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {categoria === 'cashea' && tipo !== 'transferencia' && (
+              <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-2xl mb-6">
+                <p className="text-[10px] font-black text-purple-400 uppercase mb-3 text-center pointer-events-none">¿En cuántas cuotas?</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[3, 6, 9].map(n => (
+                    <button 
+                      key={n} 
+                      type="button"
+                      onClick={() => (window as any).numCuotasCashea = n}
+                      className="cursor-pointer py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-colors focus:ring-2 ring-purple-400 tabular-nums"
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {tipo === 'egreso' && categoria !== 'abono_pote' && tipo !== 'transferencia' && (
+              <div className="mb-6">
+                <input 
+                  type="text" placeholder="¿En qué se fue la plata? (Ej: Pizza)"
+                  value={descripcion} 
+                  onChange={(e) => setDescripcion(e.target.value)}
+                  className="w-full bg-[#1a1a1a] border border-white/5 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+            )}
+
+            <button 
+              type="button"
+              onClick={handleLocalSubmit}
+              className={`cursor-pointer w-full text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0 ${tipo === 'transferencia' ? 'bg-blue-600 hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.3)]' : 'bg-purple-600 hover:bg-purple-500 shadow-[0_0_20px_rgba(147,51,234,0.3)]'}`}
+            >
+              {tipo === 'transferencia' ? 'Confirmar Transferencia' : 'Confirmar Registro'}
+            </button>
+
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
+// ============================================================================
+// APP PRINCIPAL
+// ============================================================================
+export default function MiPoteApp() {
+  const [session, setSession] = useState<any>(null);
+  const [perfil, setPerfil] = useState<any>(null); 
+  const [isPro, setIsPro] = useState(false);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [currentView, setCurrentView] = useState('auth'); 
+  
+  const [authStage, setAuthStage] = useState<'welcome'|'login'|'reg1'|'reg2'|'loading'>('welcome');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [telefono, setTelefono] = useState(""); 
+  const [regNombre, setRegNombre] = useState("");
+  const [authError, setAuthError] = useState("");
+
+  const [espacios, setEspacios] = useState<any[]>([]);
+  const [espacioActivo, setEspacioActivo] = useState<any>(null);
+  const [isGuest, setIsGuest] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+  
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editNombre, setEditNombre] = useState("");
+
+  const [checkoutPaso, setCheckoutPaso] = useState(1);
+  const [metodoPago, setMetodoPago] = useState("pagomovil");
+  const [referencia, setReferencia] = useState("");
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [enviandoPago, setEnviandoPago] = useState(false);
+  const [tasaCheckout, setTasaCheckout] = useState(45.00);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        cargarDatosUsuario(session.user.id).then(() => setCurrentView('dashboard'));
+      } else {
+        setLoadingAuth(false);
+        setCurrentView('auth');
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        cargarDatosUsuario(session.user.id).then(() => setCurrentView('dashboard'));
+      } else {
+        setLoadingAuth(false);
+        setCurrentView('auth');
+      }
+    });
+
+    fetch("/api/rates").then(res => res.json()).then(data => { if(data.success) setTasaCheckout(data.usdt) });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const cargarDatosUsuario = async (userId: string) => {
+    setEspacios([]);
+    setPerfil(null);
+
+    let { data: perfilBd } = await supabase.from('perfiles').select('*').eq('id', userId).single();
+    if (!perfilBd) {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: newPerfil } = await supabase.from('perfiles').insert([{ id: userId, is_pro: false, estado_pago: 'gratis', email: user?.email }]).select().single();
+      perfilBd = newPerfil;
+    }
+    setIsPro(perfilBd?.is_pro || false);
+    setPerfil(perfilBd);
+
+    const { data: espaciosData } = await supabase.from('espacios').select('*, espacio_miembros!inner(usuario_id)').eq('espacio_miembros.usuario_id', userId);
+    
+    if (espaciosData && espaciosData.length > 0) {
+      const espaciosCorregidos = await Promise.all(espaciosData.map(async (e) => {
+        if (e.tipo !== 'individual' && !e.codigo_invitacion) {
+           const nuevoCodigo = generarCodigo();
+           await supabase.from('espacios').update({ codigo_invitacion: nuevoCodigo }).eq('id', e.id);
+           return { ...e, codigo_invitacion: nuevoCodigo };
+        }
+        return e;
+      }));
+      setEspacios(espaciosCorregidos);
+      
+      const lastSpaceId = localStorage.getItem('mipote_last_space');
+      let spaceToSet = espaciosCorregidos.find(e => e.id === lastSpaceId);
+      if (!spaceToSet) spaceToSet = espaciosCorregidos.find(e => e.tipo === 'individual');
+      if (!spaceToSet) spaceToSet = espaciosCorregidos[0];
+      
+      setEspacioActivo(spaceToSet);
+    } else {
+      setEspacios([]);
+    }
+    
+    setLoadingAuth(false);
+  };
+
+  const generarCodigo = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+
+  const handleLoginUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setLoadingAuth(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { setAuthError(error.message); setLoadingAuth(false); }
+  };
+
+  const handleRegisterUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    if (!telefono || !regNombre) { setAuthError("Completa todos los campos"); return; }
+    
+    setAuthStage('loading');
+    
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) { 
+      setAuthError(error.message); 
+      setAuthStage('reg2'); 
+      return; 
+    }
+    
+    if (data.user) {
+      await supabase.from('perfiles').insert([{ id: data.user.id, email: data.user.email, telefono: telefono, nombre: regNombre, is_pro: false, estado_pago: 'gratis' }]);
+      const { data: newSpace } = await supabase.from('espacios').insert([{ nombre: 'Mi Billetera', tipo: 'individual', creador_id: data.user.id }]).select().single();
+      if (newSpace) await supabase.from('espacio_miembros').insert([{ espacio_id: newSpace.id, usuario_id: data.user.id, rol: 'admin' }]);
+      
+      setTimeout(() => {
+         setCurrentView('dashboard');
+      }, 2000);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    localStorage.clear(); 
+    setEspacioActivo(null); 
+    setEspacios([]); 
+    setIsGuest(false); 
+    setIsPro(false); 
+    setPerfil(null); 
+    setAuthStage('welcome');
+    setCurrentView('auth');
+  };
+
+  const guardarPerfil = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session || !session.user) return;
+    
+    const { error } = await supabase.from('perfiles').update({ nombre: editNombre }).eq('id', session.user.id);
+    if (error) alert("Error al guardar: " + error.message);
+    else {
+      setPerfil({ ...perfil, nombre: editNombre });
+      setShowProfileModal(false);
+      alert("✅ Nombre actualizado correctamente.");
+    }
+  };
+
+  const procesarPagoPRO = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session || !session.user) return alert("Debes iniciar sesión para pagar.");
+    if (!archivo) return alert("Por favor sube la captura de pantalla del pago.");
+    
+    setEnviandoPago(true);
+    const formData = new FormData();
+    formData.append("photo", archivo);
+    
+    const ordenNumero = (200000 + (parseInt(session.user.id.substring(0, 4), 16) % 90000)).toString();
+    const mensaje = `💰 *NUEVO REPORTE DE PAGO MI POTE*\n\n📧 *Usuario:* ${session.user.email}\n🔢 *Orden:* #${ordenNumero}\n💳 *Método:* ${metodoPago.toUpperCase()}\n🧾 *Ref:* ${referencia}\n💲 *Monto:* $2.99\n\n_Acción: Revisa el panel Admin para aprobar._`;
+    formData.append("caption", mensaje);
+
+    try {
+      const res = await fetch("/api/pagos", { method: "POST", body: formData });
+      if (res.ok) {
+        await supabase.from('perfiles').update({ estado_pago: 'pendiente' }).eq('id', session.user.id);
+        setPerfil({...perfil, estado_pago: 'pendiente'});
+        setCheckoutPaso(3);
+      } else {
+        alert("Error al enviar el comprobante a Telegram.");
+      }
+    } catch (err) {
+      alert("Error de conexión con la pasarela.");
+    }
+    setEnviandoPago(false);
+  };
+
+  const unirseConCodigo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinCode.trim()) return;
+    
+    setLoadingAuth(true);
+    const { data: spaceFound } = await supabase.from('espacios').select('*').eq('codigo_invitacion', joinCode.trim().toUpperCase()).single();
+    
+    if (!spaceFound) {
+      alert("❌ Código inválido o espacio no encontrado.");
+    } else {
+      const yaEsMiembro = espacios.find(e => e.id === spaceFound.id);
+      if (yaEsMiembro) {
+        alert("Ya eres miembro de este espacio.");
+      } else {
+        const { count } = await supabase.from('espacio_miembros').select('*', { count: 'exact', head: true }).eq('espacio_id', spaceFound.id);
+        
+        if (spaceFound.tipo === 'pote' && count !== null && count >= 2) {
+          alert("❌ Este Pote ya está lleno (Máximo 2 personas permitidas).");
+          setLoadingAuth(false);
+          return;
+        }
+
+        await supabase.from('espacio_miembros').insert([{ espacio_id: spaceFound.id, usuario_id: session.user.id, rol: 'miembro' }]);
+        await supabase.from('participantes').insert([{ nombre: (perfil?.nombre || session.user.email.split('@')[0]), espacio_id: spaceFound.id }]);
+        
+        await cargarDatosUsuario(session.user.id);
+        setShowJoinModal(false);
+        setJoinCode("");
+        setCurrentView('dashboard');
+        alert("✅ ¡Te has unido exitosamente al espacio!");
+      }
+    }
+    setLoadingAuth(false);
+  };
+
+  const seleccionarModulo = async (tipoModulo: string, eId?: string) => {
+    if (!session) {
+      if (tipoModulo === 'individual') { 
+        setIsGuest(true); 
+        setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' }); 
+        setCurrentView('dashboard'); 
+      } else { 
+        setShowPaywall(true); 
+      }
+      return;
+    }
+
+    setIsGuest(false);
+    
+    // Si pasamos 'NEW', obligamos a crear uno de cero
+    if (eId === 'NEW') {
+      const titulos: Record<string, string> = { 'pote': 'Nuevo Pote', 'vaca': 'Nueva Vaca' };
+      const { data: newSpace } = await supabase.from('espacios').insert([{
+        nombre: titulos[tipoModulo],
+        tipo: tipoModulo,
+        creador_id: session.user.id,
+        codigo_invitacion: generarCodigo()
+      }]).select().single();
+
+      if (newSpace) {
+        await supabase.from('espacio_miembros').insert([{ espacio_id: newSpace.id, usuario_id: session.user.id, rol: 'admin' }]);
+        await cargarDatosUsuario(session.user.id);
+        setEspacioActivo(newSpace);
+        localStorage.setItem('mipote_last_space', newSpace.id);
+        setCurrentView('dashboard');
+      }
+      return;
+    }
+
+    // Lógica normal de selección
+    let espacioEncontrado = eId ? espacios.find(e => e.id === eId) : espacios.find(e => e.tipo === tipoModulo);
+    
+    if (espacioEncontrado) {
+      setEspacioActivo(espacioEncontrado);
+      localStorage.setItem('mipote_last_space', espacioEncontrado.id);
+      setCurrentView('dashboard');
+    }
+  };
+
+  if (loadingAuth) return ( <div className="min-h-screen bg-[#0d0714] flex items-center justify-center"><Loader2 className="w-8 h-8 text-purple-500 animate-spin"/></div> );
+
+  if (currentView === 'auth') {
+    if (authStage === 'welcome') {
+      return (
+        <div className="min-h-screen bg-[#0d0714] flex flex-col relative overflow-hidden animate-in fade-in duration-500">
+           <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-purple-600/20 blur-[100px] rounded-full pointer-events-none" />
+           <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-emerald-600/10 blur-[100px] rounded-full pointer-events-none" />
+
+           <div className="flex-1 flex flex-col justify-end p-8 z-10 relative mb-10 max-w-md mx-auto w-full">
+              <div className="flex justify-center mb-10">
+                 <div className="relative">
+                    <div className="absolute inset-0 bg-fuchsia-500/30 blur-[40px] rounded-full animate-pulse"></div>
+                    <img src="/pote.png" alt="Mi Pote" className="w-40 h-40 object-contain relative z-10 drop-shadow-[0_0_35px_rgba(192,38,211,0.5)] hover:scale-105 transition-transform" />
+                 </div>
+              </div>
+              <h1 className="text-[40px] md:text-5xl font-black text-white tracking-tighter mb-4 leading-tight">
+                Domina <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">tus finanzas.</span>
+              </h1>
+              <p className="text-white/60 text-sm md:text-base mb-10 max-w-sm">
+                Cuentas claras conservan amistades (y parejas). Organiza, divide y ahorra sin estrés.
+              </p>
+              
+              <div className="space-y-4">
+                <button onClick={() => setAuthStage('reg1')} className="w-full bg-white text-black font-black py-4 rounded-2xl text-base shadow-[0_0_20px_rgba(255,255,255,0.2)] active:scale-95 transition-all">Comenzar ahora</button>
+                <button onClick={() => setAuthStage('login')} className="w-full bg-[#1a0f2e] border border-white/10 text-white font-bold py-4 rounded-2xl text-base hover:bg-white/5 active:scale-95 transition-all">Ya tengo cuenta</button>
+              </div>
+              <button onClick={() => { setIsGuest(true); setCurrentView('dashboard'); setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' }); }} className="mt-8 text-emerald-400 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 mx-auto active:scale-95 transition-transform">
+                <Sparkles className="w-4 h-4"/> Entrar como Invitado
+              </button>
+           </div>
+        </div>
+      );
+    }
+
+    if (authStage === 'login') {
+       return (
+        <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+           <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+              <button onClick={() => setAuthStage('welcome')} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white/50 hover:text-white mb-8 transition-colors"><ArrowLeft className="w-5 h-5"/></button>
+              <h2 className="text-3xl font-black text-white mb-2">Bienvenido de vuelta</h2>
+              <p className="text-white/50 text-sm mb-10">Ingresa tus datos para continuar</p>
+
+              <form onSubmit={handleLoginUser} className="space-y-5 flex-1">
+                {authError && <p className="text-rose-400 text-xs text-center bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">{authError}</p>}
+                <div>
+                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Correo Electrónico</label>
+                  <div className="relative">
+                    <Mail className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Contraseña</label>
+                  <div className="relative">
+                    <Lock className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                  </div>
+                </div>
+                <div className="pt-8">
+                  <button type="submit" className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                    Iniciar Sesión <ChevronRight className="w-4 h-4"/>
+                  </button>
+                </div>
+              </form>
+           </div>
+        </div>
+       );
+    }
+
+    if (authStage === 'reg1') {
+      return (
+       <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+          <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+             <div className="flex items-center justify-between mb-8">
+               <button onClick={() => setAuthStage('welcome')} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors"><ArrowLeft className="w-5 h-5"/></button>
+               <div className="flex gap-2">
+                  <div className="h-1.5 w-8 bg-purple-500 rounded-full"></div>
+                  <div className="h-1.5 w-8 bg-white/10 rounded-full"></div>
+               </div>
+               <div className="w-10"></div>
+             </div>
+             
+             <h2 className="text-3xl font-black text-white mb-2">Crea tu cuenta</h2>
+             <p className="text-white/50 text-sm mb-10">Ingresa tu correo y crea una contraseña segura</p>
+
+             <form onSubmit={(e) => { e.preventDefault(); setAuthStage('reg2'); }} className="space-y-5 flex-1">
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Correo Electrónico</label>
+                 <div className="relative">
+                   <Mail className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Contraseña</label>
+                 <div className="relative">
+                   <Lock className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div className="pt-8">
+                 <button type="submit" className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                   Siguiente <ChevronRight className="w-4 h-4"/>
+                 </button>
+               </div>
+             </form>
+          </div>
+       </div>
+      );
+    }
+
+    if (authStage === 'reg2') {
+      return (
+       <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+          <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+             <div className="flex items-center justify-between mb-8">
+               <button onClick={() => setAuthStage('reg1')} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors"><ArrowLeft className="w-5 h-5"/></button>
+               <div className="flex gap-2">
+                  <div className="h-1.5 w-8 bg-purple-500 rounded-full"></div>
+                  <div className="h-1.5 w-8 bg-purple-500 rounded-full"></div>
+               </div>
+               <div className="w-10"></div>
+             </div>
+             
+             <h2 className="text-3xl font-black text-white mb-2">Información personal</h2>
+             <p className="text-white/50 text-sm mb-10">¿Cómo quieres que te llamen en tus potes?</p>
+
+             <form onSubmit={handleRegisterUser} className="space-y-5 flex-1">
+               {authError && <p className="text-rose-400 text-xs text-center bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">{authError}</p>}
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Nombre o Apodo</label>
+                 <div className="relative">
+                   <UserPlus className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="text" placeholder="Ej: Pedro Peréz" value={regNombre} onChange={e => setRegNombre(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div>
+                 <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">WhatsApp (Teléfono)</label>
+                 <div className="relative">
+                   <Phone className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                   <input type="tel" placeholder="Ej: 04121234567" value={telefono} onChange={e => setTelefono(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                 </div>
+               </div>
+               <div className="pt-8">
+                 <button type="submit" className="w-full bg-emerald-500 text-black font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                   Finalizar Registro <Check className="w-4 h-4"/>
+                 </button>
+               </div>
+             </form>
+          </div>
+       </div>
+      );
+    }
+
+    if (authStage === 'loading') {
+      return (
+        <div className="min-h-screen bg-[#0d0714] flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+           <div className="relative mb-8">
+              <div className="absolute inset-0 bg-purple-500/30 blur-[30px] rounded-full animate-pulse"></div>
+              <img src="/pote.png" alt="Mi Pote" className="w-24 h-24 object-contain relative z-10 animate-bounce" />
+           </div>
+           <h2 className="text-2xl font-black text-white mb-2">Armando tu Pote...</h2>
+           <p className="text-white/50 text-sm flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Ya casi estamos listos</p>
+        </div>
+      );
+    }
+  }
+
+  if (currentView === 'calculadora-libre') {
+    return (
+      <div className="min-h-screen bg-[#0d0714] p-4 flex flex-col items-center pt-10">
+        <div className="w-full max-w-md relative">
+          <button onClick={() => setCurrentView('dashboard')} className="absolute -top-10 left-0 text-purple-400 flex items-center gap-2 text-sm font-bold"><ArrowLeft className="w-4 h-4"/> Volver</button>
+          <FinanzasDashboardContent session={session} espacios={espacios} setEspacios={setEspacios} espacioActivo={espacioActivo} setEspacioActivo={setEspacioActivo} onSelectModule={seleccionarModulo} handleLogout={handleLogout} openJoinModal={() => setShowJoinModal(true)} openProfileModal={() => setShowProfileModal(true)} isGuest={isGuest} perfil={perfil} forceTab="calculadora" onChangeView={setCurrentView} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0d0714] flex flex-col items-center p-0 md:p-4">
+      {/* MODAL INGRESAR CÓDIGO */}
+      {showJoinModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <form onSubmit={unirseConCodigo} className="bg-[#1a0f2e] border border-blue-500/50 p-8 rounded-[2.5rem] shadow-[0_0_50px_rgba(59,130,246,0.2)] max-w-sm w-full text-center relative">
+            <button type="button" onClick={() => setShowJoinModal(false)} className="absolute top-4 right-4 text-white/50 hover:text-white"><X className="w-5 h-5"/></button>
+            <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-500/20"><Key className="w-8 h-8 text-blue-400" /></div>
+            <h3 className="text-xl font-black text-white mb-2">Unirse a un Espacio</h3>
+            <p className="text-sm text-blue-300 mb-6">Ingresa el código de invitación que te compartió tu pareja o amigo.</p>
+            <input type="text" value={joinCode} onChange={(e)=>setJoinCode(e.target.value.toUpperCase())} placeholder="EJ: X7K9P2" className="w-full bg-black/50 border border-blue-500/30 rounded-xl p-4 text-center text-xl font-bold text-white mb-4 outline-none focus:border-blue-400 uppercase tracking-widest tabular-nums font-sans" required maxLength={6} />
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3.5 rounded-xl shadow-lg transition-transform active:scale-95">VERIFICAR CÓDIGO</button>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL EDITAR PERFIL */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <form onSubmit={guardarPerfil} className="bg-[#1a0f2e] border border-purple-500/50 p-8 rounded-[2.5rem] shadow-[0_0_50px_rgba(168,85,247,0.2)] max-w-sm w-full text-center relative">
+            <button type="button" onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 text-white/50 hover:text-white"><X className="w-5 h-5"/></button>
+            <div className="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-purple-500/20"><UserPlus className="w-8 h-8 text-purple-400" /></div>
+            <h3 className="text-xl font-black text-white mb-2">Tu Perfil</h3>
+            <p className="text-sm text-purple-300 mb-6">¿Cómo quieres que te llamen en tus potes y vacas?</p>
+            <input type="text" value={editNombre} onChange={(e)=>setEditNombre(e.target.value)} placeholder="Ej: Pedro Peréz" className="w-full bg-black/50 border border-purple-500/30 rounded-xl p-4 text-center text-lg font-bold text-white mb-4 outline-none focus:border-purple-400" required />
+            <button type="submit" className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3.5 rounded-xl shadow-lg transition-transform active:scale-95">GUARDAR NOMBRE</button>
+          </form>
+        </div>
+      )}
+
+      {/* EL MODAL DEL PAYWALL */}
+      {showPaywall && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in overflow-y-auto">
+          <div className="bg-[#1a0f2e] border border-amber-500/50 p-6 md:p-8 rounded-[2.5rem] shadow-[0_0_50px_rgba(245,158,11,0.2)] max-w-md w-full text-center relative my-8">
+            <button onClick={() => {setShowPaywall(false); setCheckoutPaso(1);}} className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-6 h-6"/></button>
+            
+            {!session ? (
+              <>
+                <div className="w-16 h-16 bg-amber-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-amber-500/20"><Sparkles className="w-8 h-8 text-amber-400" /></div>
+                <h3 className="text-xl font-black text-white mb-2">Desbloquea Mi Pote PRO</h3>
+                <p className="text-sm text-white/70 mb-6">Crea una cuenta para pagar tu suscripción ($2.99/mes) y desbloquear funciones premium como Presupuesto, Cashea y Espacios Compartidos.</p>
+                <button onClick={() => {setShowPaywall(false); setCurrentView('auth');}} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black py-3.5 rounded-xl shadow-lg mb-3 hover:scale-105 transition-transform">CREAR CUENTA GRATIS</button>
+              </>
+            ) : perfil?.estado_pago === 'pendiente' ? (
+               <div className="py-8">
+                 <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse"><RefreshCw className="w-10 h-10 text-blue-400" /></div>
+                 <h3 className="text-2xl font-black text-white mb-2">Pago en Revisión</h3>
+                 <p className="text-blue-200 text-sm">Ya enviamos tu pago. Un administrador lo aprobará pronto y se te habilitará el acceso.</p>
+               </div>
+            ) : checkoutPaso === 1 ? (
+              <>
+                <div className="w-16 h-16 bg-amber-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-amber-500/20"><Sparkles className="w-8 h-8 text-amber-400" /></div>
+                <h3 className="text-2xl font-black text-white mb-2">Hazte PRO</h3>
+                <p className="text-amber-200 text-sm mb-6">Acceso a Potes compartidos y Las Vacas infinitas por <span className="font-black">$2.99 / mes</span>.</p>
+                <button onClick={()=>setCheckoutPaso(2)} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black py-4 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.3)] mb-3 hover:scale-105 transition-transform text-lg">PAGAR AHORA</button>
+              </>
+            ) : checkoutPaso === 2 ? (
+              <form onSubmit={procesarPagoPRO} className="text-left space-y-4">
+                <h3 className="text-xl font-black text-white text-center mb-4 border-b border-white/10 pb-4">Realizar Pago</h3>
+                
+                <div className="flex gap-2 mb-4">
+                  <button type="button" onClick={()=>setMetodoPago('pagomovil')} className={`flex-1 py-2 text-xs font-bold rounded-lg border ${metodoPago === 'pagomovil' ? 'bg-blue-500 text-white border-blue-500' : 'bg-transparent text-white/50 border-white/10'}`}>Pago Móvil</button>
+                  <button type="button" onClick={()=>setMetodoPago('binance')} className={`flex-1 py-2 text-xs font-bold rounded-lg border ${metodoPago === 'binance' ? 'bg-amber-500 text-black border-amber-500' : 'bg-transparent text-white/50 border-white/10'}`}>Binance Pay</button>
+                </div>
+
+                <div className="bg-black/50 border border-white/5 p-4 rounded-xl text-sm text-white/80 space-y-2 font-mono">
+                  {metodoPago === 'binance' ? (
+                    <>
+                      <p className="text-[10px] text-amber-400 uppercase font-bold font-sans">Enviar exactamente:</p>
+                      <p className="text-2xl font-black text-white font-sans">$2.99 USDT</p>
+                      <p className="mt-2 text-xs font-sans text-white/50">Correo Binance Pay:</p>
+                      <div className="flex justify-between items-center bg-white/5 p-2 rounded"><span>dmvictorbalboa@gmail.com</span> <Copy className="w-4 h-4 cursor-pointer hover:text-white" onClick={()=>navigator.clipboard.writeText("dmvictorbalboa@gmail.com")}/></div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[10px] text-blue-400 uppercase font-bold font-sans">Monto a Pagar en Bs (Tasa Paralelo):</p>
+                      <p className="text-2xl font-black text-white font-sans">Bs. {(4.99 * tasaCheckout).toFixed(2)}</p>
+                      <p className="mt-2 text-xs font-sans text-white/50">Datos del Pago Móvil:</p>
+                      <div className="bg-white/5 p-3 rounded space-y-1 text-xs">
+                        <p>📱 Teléfono: <strong>0412-301-6936</strong></p>
+                        <p>🏦 Banco: <strong>Bancamiga (0172)</strong></p>
+                        <p>🪪 C.I: <strong>27.531.901</strong></p>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs text-white/50 font-bold uppercase tracking-widest">Referencia / Alias</label>
+                  <input type="text" required value={referencia} onChange={e=>setReferencia(e.target.value)} placeholder="Ej: Pago de Carlos o 1459" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white outline-none mt-1 focus:border-amber-500 transition-colors" />
+                </div>
+
+                <div>
+                  <label className="text-xs text-white/50 font-bold uppercase tracking-widest">Capture (Recibo)</label>
+                  <label className="flex items-center justify-center w-full bg-black/50 border border-dashed border-white/20 rounded-xl p-4 cursor-pointer hover:border-amber-500 mt-1 transition-colors">
+                    <input type="file" required accept="image/*" className="hidden" onChange={e => setArchivo(e.target.files?.[0] || null)} />
+                    {archivo ? <span className="text-emerald-400 text-xs font-bold flex items-center gap-2"><Check className="w-4 h-4"/> {archivo.name}</span> : <span className="text-white/50 text-xs flex items-center gap-2"><UploadCloud className="w-4 h-4"/> Subir Imagen</span>}
+                  </label>
+                </div>
+
+                <button type="submit" disabled={enviandoPago} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-xl shadow-lg mt-6 disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
+                  {enviandoPago ? 'ENVIANDO REPORTE...' : 'REPORTAR PAGO'}
+                </button>
+              </form>
+            ) : (
+               <div className="py-8">
+                 <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4"><Check className="w-10 h-10 text-emerald-400" /></div>
+                 <h3 className="text-2xl font-black text-white mb-2">¡Pago Enviado!</h3>
+                 <p className="text-emerald-200 text-sm mb-6">Estamos verificando tu pago. Te daremos acceso pro en los próximos minutos.</p>
+                 <button onClick={()=>{setShowPaywall(false); setCheckoutPaso(1);}} className="w-full bg-white/10 text-white font-bold py-3 rounded-xl hover:bg-white/20 transition-all">Entendido</button>
+               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="w-full max-w-5xl relative">
+        <FinanzasDashboardContent 
+          key={`${session?.user?.id || 'guest'}-${espacioActivo?.id || 'none'}`}
+          session={session} 
+          espacios={espacios}
+          setEspacioActivo={setEspacioActivo}
+          espacioActivo={espacioActivo} 
+          onSelectModule={seleccionarModulo}
+          handleLogout={handleLogout}
+          openJoinModal={() => setShowJoinModal(true)}
+          openProfileModal={() => { setEditNombre(perfil?.nombre || session?.user?.email?.split('@')[0]); setShowProfileModal(true); }}
+          isGuest={isGuest}
+          perfil={perfil}
+          onTriggerPaywall={() => setShowPaywall(true)}
+          onChangeView={setCurrentView}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 3. DASHBOARD PRINCIPAL - NÚCLEO DINÁMICO
+// ============================================================================
+function FinanzasDashboardContent({ 
+  session, espacios, setEspacioActivo, espacioActivo, onSelectModule, handleLogout, openProfileModal, openJoinModal, isGuest = false, perfil, onTriggerPaywall, forceTab, onChangeView
+}: any) {
+  const getTheme = (tipo: string) => {
+    switch(tipo) {
+      case 'pote': return { primary: 'bg-fuchsia-600', text: 'text-fuchsia-400', border: 'border-fuchsia-500/30', card: 'from-fuchsia-600/40', darkBg: 'bg-fuchsia-950/30', stroke: '#c026d3', lightBg: 'bg-fuchsia-500/10' };
+      case 'vaca': return { primary: 'bg-emerald-600', text: 'text-emerald-400', border: 'border-emerald-500/30', card: 'from-emerald-600/40', darkBg: 'bg-emerald-950/30', stroke: '#059669', lightBg: 'bg-emerald-500/10' };
+      default: return { primary: 'bg-purple-600', text: 'text-purple-400', border: 'border-purple-500/30', card: 'from-purple-600/40', darkBg: 'bg-purple-950/30', stroke: '#9333ea', lightBg: 'bg-purple-500/10' };
+    }
+  };
+  const theme = getTheme(espacioActivo?.tipo || 'individual');
+
+  const eliminarEspacio = async (e: React.MouseEvent, idEspacio: string, tipo: string, nombre: string) => {
+    e.stopPropagation();
+    const misBilleteras = espacios.filter((esp: any) => esp.tipo === 'individual');
+    
+    if (tipo === 'individual' && misBilleteras.length <= 1) {
+      return alert("🚨 No puedes eliminar tu única billetera principal.");
+    }
+    
+    if (!confirm(`¿Seguro que deseas eliminar "${nombre}"?`)) return;
+
+    await supabase.from('espacios').delete().eq('id', idEspacio);
+    alert("✅ Espacio eliminado. Recargando...");
+    window.location.reload();
+  };
+
+  const eliminarTransaccion = async (id: string) => {
+    if(!confirm("¿Seguro que deseas eliminar este registro?")) return;
+    if (isGuest) {
+      const updatedTx = transactions.filter(t => t.id !== id);
+      setTransactions(updatedTx); 
+      localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+    } else {
+      const { error } = await supabase.from("transacciones_saas").delete().eq("id", id);
+      if (error) alert("Error: " + error.message);
+      else fetchData();
+    }
+  };
+
+  const [activeTab, setActiveTab] = useState(forceTab || "inicio");
+  
+  // NAV STATES
+  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false); 
+  const [isSpacesMenuOpen, setIsSpacesMenuOpen] = useState(false); 
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); 
+
+  const [activeWallet, setActiveWallet] = useState<'usdt'|'bs'|'cash'>('usdt'); 
+  const [filtroHistorial, setFiltroHistorial] = useState("Todos");
+
+  const [rates, setRates] = useState({ bcv: 0, usdt: 0 });
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [cuotasCashea, setCuotasCashea] = useState<any[]>([]);
+  const [presupuestos, setPresupuestos] = useState<any[]>([]);
+  const [potes, setPotes] = useState<any[]>([]);
+  const [participantes, setParticipantes] = useState<any[]>([]);
+  const [gastosFijos, setGastosFijos] = useState<any[]>([]);
+  
+  const [isAddingPote, setIsAddingPote] = useState(false);
+  const POTE_OPCIONES = espacioActivo?.tipo === 'vaca' 
+    ? ["La rumba 🪩", "Pa' la caña 🍻", "El viaje ✈️", "La nave 🚗", "Personalizado ✍️"]
+    : ["La nave 🚗", "Los estrenos 👕", "El gustico 🍔", "El semestre 📚", "Teléfono 📱", "Viaje ✈️", "Hogar 🏠", "Personalizado ✍️"];
+  
+  const [poteForm, setPoteForm] = useState({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" });
+  
+  const [nuevoPart, setNuevoPart] = useState("");
+  const [joinCodeInput, setJoinCodeInput] = useState("");
+
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [mesActual, setMesActual] = useState(() => new Date().toISOString().slice(0, 7));
+
+  const [isAddingEmergencia, setIsAddingEmergencia] = useState(false);
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
+  const [isAddingCashea, setIsAddingCashea] = useState(false);
+  const [isAddingFijo, setIsAddingFijo] = useState(false);
+  
+  const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
+
+  // NUEVO: ESTADO PARA EDITAR NOMBRE DEL ESPACIO
+  const [isEditingSpaceName, setIsEditingSpaceName] = useState(false);
+  const [newSpaceName, setNewSpaceName] = useState(espacioActivo?.nombre || "");
+
+  // NUEVO: ESTADO PARA RECORDATORIOS (LISTA DE TAREAS)
+  const [recordatorios, setRecordatorios] = useState<any[]>([]);
+  const [nuevoRecordatorio, setNuevoRecordatorio] = useState("");
+
+  const DEFAULT_CATEGORIES = [
+    { valor: "salario", label: "Ingreso / Salario 💰" },
+    { valor: "comida", label: "Comida 🍔" },
+    { valor: "internet", label: "Internet / Servicios 🌐" },
+    { valor: "mascotas", label: "Mascotas 🐾" },
+    { valor: "cashea", label: "Cashea 🛍️" },
+    { valor: "otro", label: "Otro (Personalizado) ✍️" }
+  ];
+  const [categoriasList, setCategoriasList] = useState<any[]>(DEFAULT_CATEGORIES);
+
+  const [casheaForm, setCasheaForm] = useState({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" });
+  const [budgetForm, setBudgetForm] = useState({ categoria: "", monto_limite: "" });
+  const [fijoForm, setFijoForm] = useState({ descripcion: "", monto: "", dia_pago: "1" });
+
+  const [showToast, setShowToast] = useState(false);
+  const [mensajeMotivacional, setMensajeMotivacional] = useState("");
+  const [toastType, setToastType] = useState("ingreso");
+
+  const [calcAmount, setCalcAmount] = useState("");
+  const [calcCurrency, setCalcCurrency] = useState("usd");
+
+  const [monto, setMonto] = useState("");
+  const [moneda, setMoneda] = useState("usd");
+  const [tipo, setTipo] = useState("egreso");
+  const [categoria, setCategoria] = useState("comida");
+  const [descripcion, setDescripcion] = useState("");
+  const [usuario, setUsuario] = useState("");
+  
+  // NUEVO: DESTINO DE LA TRANSFERENCIA
+  const [destinoTransferencia, setDestinoTransferencia] = useState("");
+
+  const handleCalcUsd = (val: string) => {
+    setCalcAmount(val);
+    const num = parseFloat(val) || 0;
+    setCalcBs((num * rates.usdt).toFixed(2));
+  };
+
+  const handleCalcBs = (val: string) => {
+    setCalcBs(val);
+    const num = parseFloat(val) || 0;
+    setCalcAmount(rates.usdt > 0 ? (num / rates.usdt).toFixed(2) : "0.00");
+  };
+
+  const getMensajes = (tipoApp: string, tipoTx: string) => {
+    if (tipoApp === 'pote') {
+      return tipoTx === 'ingreso' ? [
+        "¡Epa! Ese pote está engordando, mi amor. 🍯💰", 
+        "¡Poniendo pa' lo nuestro! ❤️", 
+        "Gotita a gotita llenamos el tobo. 🪣", 
+        "¡Así se construye nuestro imperio! 🏰", 
+        "Platica pa' la casa y pa' la vida juntos. 🏠💸", 
+        "Juntos somos invencibles con la plata. 💪👫", 
+        "Echándole pichón pa' cumplir esa meta. 🚀", 
+        "¡Este equipo no lo para nadie! 🥇", 
+        "Mi amor, a este paso nos compramos Caracas. 🏙️", 
+        "Pote lleno, corazón contento. ❤️🍯", 
+        "Trabajando juntos por ese sueño. 🌟", 
+        "Sumando bloques a nuestra casita de ahorros. 🧱", 
+        "Esa meta ya nos está guiñando el ojo. 😉", 
+        "¡Dinero asegurado, mi vida! 🔒", 
+        "Qué rico ver cómo crece nuestro sudor ahí reflejado. 💦💰"
+      ] : [
+        "¿De pana necesitábamos gastar en esto, mi amor? 🤨", 
+        "Mosca con la tarjeta, que nos descuadramos. 💳", 
+        "Gastico hormiga detectado, pila ahí. 🐜", 
+        "Pilas que ese gustico nos aleja de la meta. 📉", 
+        "Mi vida, este gasto dolió en el alma (y en el bolsillo). 💔", 
+        "Nos salimos del presupuesto, arropate hasta donde llegue la cobija. 🛏️", 
+        "Cuidado con los antojos que nos dejan limpios. 🍔🚫", 
+        "Pelando bola en 3, 2, 1... si seguimos así. 📉", 
+        "Este mes nos toca comer arepa con mantequilla. 🫓", 
+        "No dejes que la emoción nos vacíe el pote. 🍯🥄", 
+        "Pendiente con el despilfarro, mi amor. 💸", 
+        "Mosca con las compras nerviosas. 🛍️", 
+        "Si le seguimos sacando al pote, no vamos a llegar nunca. 🐌", 
+        "Administra bien que la cosa no está fácil. 🇻🇪", 
+        "Amor, recuerda la meta... no nos desviemos. 🎯"
+      ];
+    } else if (tipoApp === 'vaca') {
+      return tipoTx === 'ingreso' ? [
+        "¡Cayó la plata pa' las frías! 🍻", 
+        "¡Coronamos! La vaca va engordando. 🐄💰", 
+        "Epa mis panas, esta vaca ya huele a playa. 🏖️", 
+        "¡Aportando pa'l desastre! 🎉", 
+        "¡Con esta vaca armamos la rumba! 🪩", 
+        "Llegó el de los reales. 💸😎", 
+        "Esta gente si está responsable vale, pagando a tiempo. 👏", 
+        "¡Vaca gorda, desastre seguro! 🐄💥", 
+        "Sumando pa' la curda y la gozadera. 🥃", 
+        "Se armó el bonche, ya hay presupuesto. 🎊", 
+        "La vaca dice: ¡Muuuuucho billete! 🐄💸", 
+        "¡Nadie se queda por fuera de esta rumba! 🥳", 
+        "Transferencia confirmada, el pana va pendiente. ✅", 
+        "Panas que pagan a tiempo = Panas de verdad. 🫂", 
+        "¡Plata lista! Ahora a planear a dónde vamos. 📍"
+      ] : [
+        "¡Coño, nos bajaron los fondos! 📉", 
+        "¿Quién autorizó este gasto loco? 🤨", 
+        "Aflojando la plata... más vale que valga la pena. 💸", 
+        "Epa, controlen el gasto que no llegamos a la fecha. 🛑", 
+        "¡Se nos fue una luca de la vaca! 🐄💸", 
+        "Gastando los reales, mosca que nos quedamos limpios. 🧹", 
+        "Si nos seguimos gastando la plata, nos toca tomar agua de chorro. 🚰", 
+        "Rindiendo la plata como si fuéramos economistas. 🤓", 
+        "Mosca con los gastos fantasmas que nos desfalcan. 👻", 
+        "Pila ahí con esos 'gusticos' con plata ajena. 👀", 
+        "¡Agarren mínimo que nos quedamos sin vaca! 🐄🚫", 
+        "Un tarjetazo menos en la vaca. 💳", 
+        "Esa factura dolió más que ratón de cocuy. 🥃🤕", 
+        "Pidan descuento pa' la próxima, no sean botaratas. 🏷️", 
+        "Ajustando las cuentas del desastre. 📊"
+      ];
+    } else {
+      return tipoTx === 'ingreso' ? [
+        "¡Cayó la quincena, papá! 🤑", 
+        "¡Coronamos! Platica pa' la cuenta. 💰", 
+        "Un paso más pa' comprarnos Caracas. 🏙️", 
+        "Echándole pichón y viendo los frutos. 💪", 
+        "Plata en mano, sonrisa en la cara. 😁", 
+        "Resolviendo como todo un guerrero. 🛡️", 
+        "Esa cuenta engordando sabroso. 🐷💸", 
+        "¡Llegó el de los reales! 😎", 
+        "Billete llama billete. 💵", 
+        "Coronando otro tigrito. 🐯", 
+        "Sumando pa' no pelar bola. ➕", 
+        "Ese saldo pa' rriba como la espuma. 🫧", 
+        "Así se construye el imperio, mi pana. 🏰", 
+        "Hoy se come rico, entró platica. 🍔", 
+        "¡Chinga! Sonó la caja registradora. 🎰"
+      ] : [
+        "Coño, ese tarjetazo dolió. 💳💥", 
+        "Chao billete, te extrañaremos. 💸👋", 
+        "Mosca con la gastadera que te pega la patria. 🇻🇪", 
+        "¿De pana necesitabas comprar eso? 🤨", 
+        "El bolsillo está pidiendo cacao. 🏳️", 
+        "Otro gustico y comemos arepa sola. 🫓", 
+        "Se nos fue una luca ahí. 📉", 
+        "Ajusta el cinturón que nos quedamos limpios. 👖", 
+        "Esa platica voló más rápido que un chisme. 🦅", 
+        "Pila con los gastos hormiga que nos matan. 🐜", 
+        "Pagando y llorando. 😭", 
+        "¡Agárrate que la cuenta bajó! 🎢", 
+        "Menos mal que hay salud, porque plata... 🏥", 
+        "Ese gasto no estaba en los planes, mi pana. 📝❌", 
+        "Gastando como si fuéramos enchufados. 🔌😅"
+      ];
+    }
+  };
+
+  const triggerToast = (tipoTransaccion: string, mensajeForzado?: string) => {
+    if (mensajeForzado) {
+      setMensajeMotivacional(mensajeForzado);
+    } else {
+      const lista = getMensajes(espacioActivo?.tipo || 'individual', tipoTransaccion);
+      setMensajeMotivacional(lista[Math.floor(Math.random() * lista.length)]);
+    }
+    setToastType(tipoTransaccion);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 4500);
+  };
+
+  const fetchRates = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/rates");
+      const data = await res.json();
+      if (data.success) {
+        setRates({ bcv: data.bcv, usdt: data.usdt });
+      }
+    } catch (error) { console.error("Error al traer tasas:", error); } 
+    finally { setSyncing(false); }
+  };
+
+  const fetchData = useCallback(async () => {
+    setTransactions([]); setCuotasCashea([]); setPresupuestos([]); setPotes([]); setParticipantes([]); setRecordatorios([]); setGastosFijos([]);
+
+    if (!espacioActivo) return;
+    setLoading(true);
+    
+    try {
+      // CARGAR GASTOS FIJOS DESDE LOCALSTORAGE (Fallback seguro)
+      const savedFijos = localStorage.getItem(`gastos_fijos_${espacioActivo.id}`);
+      if (savedFijos) setGastosFijos(JSON.parse(savedFijos));
+
+      if (isGuest) {
+        setTransactions(JSON.parse(localStorage.getItem('mipote_guest_tx') || '[]'));
+        setPotes(JSON.parse(localStorage.getItem('mipote_guest_potes') || '[]'));
+      } else if (espacioActivo) {
+        const { data: txData } = await supabase.from("transacciones_saas").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: false });
+        if (txData) setTransactions(txData);
+        
+        const { data: partData } = await supabase.from("participantes").select("*").eq("espacio_id", espacioActivo.id);
+        if (partData) setParticipantes(partData);
+
+        const { data: casheaData } = await supabase.from("cashea").select("*").eq("espacio_id", espacioActivo.id).order("fecha_pago", { ascending: true });
+        if (casheaData) setCuotasCashea(casheaData);
+        
+        const { data: catData } = await supabase.from("categorias").select("*");
+        if (catData) {
+          const combined = [...DEFAULT_CATEGORIES, ...catData];
+          const uniqueCats = Array.from(new Map(combined.map(item => [item.valor, item])).values());
+          setCategoriasList(uniqueCats);
+        }
+
+        const { data: presData } = await supabase.from("presupuestos").select("*").eq("espacio_id", espacioActivo.id);
+        if (presData) setPresupuestos(presData);
+
+        const { data: metasData } = await supabase.from("metas").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: true });
+        if (metasData) setPotes(metasData);
+
+        const { data: recData } = await supabase.from("recordatorios").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: false });
+        if (recData) setRecordatorios(recData);
+      }
+    } catch (err) { console.error("Error fetch:", err); } finally { setLoading(false); }
+  }, [espacioActivo, isGuest]);
+
+  useEffect(() => { fetchRates(); fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    let interval: any;
+    if (activeTab === 'calculadora' || forceTab === 'calculadora') {
+      fetchRates(); interval = setInterval(fetchRates, 10000); 
+    }
+    return () => clearInterval(interval);
+  }, [activeTab, forceTab]);
+
+  useEffect(() => {
+    if (espacioActivo?.tipo === 'individual') {
+      setUsuario((perfil?.nombre || session?.user?.email?.split('@')[0]) || "Tú");
+    }
+  }, [espacioActivo, session, perfil]);
+
+  const nombresParticipantes = participantes.map(p => p.nombre);
+  const filterOptions = ["Todos", ...nombresParticipantes];
+  if (espacioActivo?.tipo !== 'individual' && !filterOptions.includes("Ambos")) filterOptions.push(espacioActivo?.tipo === 'pote' ? 'Ambos' : 'Todos (Div)');
+
+  const calcularMontos = (montoInput: number, monedaInput: string) => {
+    let monto_bs = 0, monto_usd_bcv = 0, monto_usd_paralelo = 0;
+    if (monedaInput === 'bs') {
+      monto_bs = montoInput; 
+      monto_usd_bcv = rates.bcv > 0 ? montoInput / rates.bcv : 0; 
+      monto_usd_paralelo = rates.usdt > 0 ? montoInput / rates.usdt : 0;
+    } else if (monedaInput === 'usdt' || monedaInput === 'usd') {
+      monto_usd_paralelo = montoInput; monto_usd_bcv = montoInput; monto_bs = montoInput * rates.usdt;
+    } else if (monedaInput === 'cash') {
+      monto_usd_paralelo = montoInput; monto_usd_bcv = montoInput; monto_bs = montoInput * rates.bcv; 
+    }
+    return { monto_bs, monto_usd_bcv, monto_usd_paralelo };
+  };
+
+  const getPoteAhorrado = (poteId: string, poteNombre: string) => {
+    if (espacioActivo?.tipo === 'vaca') {
+      const saldos = getSaldosAislados('ALL');
+      return saldos.usdt + saldos.cash + (rates.usdt > 0 ? saldos.bs / rates.usdt : 0);
+    }
+    return transactions.filter(tx => tx.categoria === `pote_${poteId}`).reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+  };
+
+  // 🔥 LÓGICA DE REGISTRO Y TRANSFERENCIAS
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const valorMonto = parseFloat(monto);
+    const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
+
+    // 1. TRANSFERENCIA A OTRO ESPACIO (VACAS / POTES EXTERNOS)
+    if (tipo === 'transferencia') {
+      if (!destinoTransferencia) return alert("Selecciona el espacio destino");
+      const destSpace = espacios.find((sp:any) => sp.id === destinoTransferencia);
+      
+      if (isGuest) {
+        const tx1 = { id: Date.now().toString() + "_out", descripcion: `Transferencia a: ${destSpace?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', created_at: new Date().toISOString() };
+        const updatedTx = [tx1, ...transactions];
+        setTransactions(updatedTx);
+        localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+      } else {
+        await supabase.from("transacciones_saas").insert([{
+          descripcion: `Transferencia a: ${destSpace?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id
+        }]);
+        await supabase.from("transacciones_saas").insert([{
+          descripcion: `Transferencia recibida de: Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_entrada', usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: destinoTransferencia, usuario_id: session.user.id
+        }]);
+      }
+      fetchData();
+      triggerToast("egreso", "¡Transferencia enviada con éxito! 💸");
+      return;
+    }
+
+    // 2. ABONO A META INTERNA (EL CORAZÓN DEL CAMBIO)
+    if (categoria === 'abono_pote') {
+      if (!destinoTransferencia) return alert("Selecciona la meta");
+      const poteDestino = potes.find((p:any) => p.id === destinoTransferencia);
+      
+      if (isGuest) {
+        const tx1 = { id: Date.now().toString() + "_out", descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', created_at: new Date().toISOString() };
+        const tx2 = { id: Date.now().toString() + "_in", descripcion: `Abono recibido de Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', created_at: new Date().toISOString() };
+        const updatedTx = [tx1, tx2, ...transactions];
+        setTransactions(updatedTx);
+        localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+      } else {
+        await supabase.from("transacciones_saas").insert([{
+          descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id
+        }]);
+        await supabase.from("transacciones_saas").insert([{
+          descripcion: `Abono recibido desde Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: espacioActivo.id, usuario_id: session.user.id
+        }]);
+      }
+      fetchData();
+      triggerToast("ingreso", "¡Abono sumado a tu meta! 🍯");
+      return;
+    }
+
+    const isValidDesc = (tipo === 'ingreso' || categoria === 'abono_pote') ? true : descripcion.trim() !== "";
+    const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
+
+    if (!isValidDesc || !isValidUser || !categoria) { 
+      return alert("Verifica la categoría, el detalle y quién pagó."); 
+    }
+
+    if (categoria === 'cashea') {
+      const montoTotal = parseFloat(monto);
+      const nCuotas = (window as any).numCuotasCashea || 3; 
+      const montoCuota = montoTotal / nCuotas;
+      const cuotasParaInsertar = [];
+      const { addDays, format } = require('date-fns');
+
+      for (let i = 1; i <= nCuotas; i++) {
+        cuotasParaInsertar.push({ articulo: descripcion, monto_cuota: montoCuota, fecha_pago: format(addDays(new Date(), i * 14), 'yyyy-MM-dd'), usuario: usuario || "Tú", espacio_id: espacioActivo.id, pagado: false });
+      }
+      const { error } = await supabase.from("cashea").insert(cuotasParaInsertar);
+      if (error) alert("🚨 Error Cashea: " + error.message);
+      else { fetchData(); triggerToast("egreso", `Programadas ${nCuotas} cuotas de $${montoCuota.toFixed(2)}`); }
+      return; 
+    }
+    
+    let descFinal = descripcion; 
+    let msjAlertaEspecial = null;
+
+    if (categoria.startsWith("pote_")) {
+       const poteId = categoria.split("_")[1];
+       const poteRelacionado = potes.find((p:any) => p.id.toString() === poteId);
+       if (poteRelacionado) descFinal = `Pote: ${poteRelacionado.nombre} - ${descripcion}`;
+    } else {
+       let labelCategoria = categoriasList.find(c => c.valor === categoria)?.label || categoria;
+       descFinal = tipo === 'ingreso' && !descripcion ? labelCategoria : `${labelCategoria} - ${descripcion}`;
+    }
+
+    if (isGuest) {
+      const newTx = { id: Date.now().toString(), descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario: usuario || "Tú", tipo, created_at: new Date().toISOString() };
+      const updatedTx = [newTx, ...transactions];
+      setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+      triggerToast(tipo, msjAlertaEspecial || undefined);
+    } else {
+      const { error } = await supabase.from("transacciones_saas").insert([{ descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria, usuario: usuario || "Tú", tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+      if (error) alert("🚨 Error: " + error.message);
+      else { fetchData(); triggerToast(tipo, msjAlertaEspecial || undefined); }
+    }
+  };
+
+  const unirseConCodigoInterno = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinCodeInput.trim()) return;
+    
+    const { data: spaceFound } = await supabase.from('espacios').select('*').eq('codigo_invitacion', joinCodeInput.trim().toUpperCase()).single();
+    if (!spaceFound) { alert("❌ Código inválido."); return; }
+    
+    const yaEsMiembro = espacios?.find((e:any) => e.id === spaceFound.id);
+    if (yaEsMiembro) { alert("Ya eres miembro de este espacio."); return; }
+
+    const { count } = await supabase.from('espacio_miembros').select('*', { count: 'exact', head: true }).eq('espacio_id', spaceFound.id);
+    if (spaceFound.tipo === 'pote' && count !== null && count >= 2) { alert("❌ Este Pote ya está lleno."); return; }
+
+    await supabase.from('espacio_miembros').insert([{ espacio_id: spaceFound.id, usuario_id: session.user.id, rol: 'miembro' }]);
+    await supabase.from('participantes').insert([{ nombre: (perfil?.nombre || session.user.email.split('@')[0]), espacio_id: spaceFound.id }]);
+    
+    alert("✅ ¡Te has unido exitosamente!");
+    window.location.reload();
+  };
+
+  const guardarNombreEspacio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSpaceName.trim() || isGuest) return;
+    
+    const { error } = await supabase.from('espacios').update({ nombre: newSpaceName }).eq('id', espacioActivo.id);
+    if (error) {
+      alert("Error al actualizar el nombre");
+    } else {
+      setEspacioActivo({...espacioActivo, nombre: newSpaceName});
+      setIsEditingSpaceName(false);
+    }
+  };
+
+  const agregarRecordatorio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevoRecordatorio.trim() || isGuest) return;
+
+    const { error } = await supabase.from('recordatorios').insert([{
+      texto: nuevoRecordatorio,
+      espacio_id: espacioActivo.id,
+      usuario_id: session.user.id
+    }]);
+
+    if (!error) {
+      setNuevoRecordatorio("");
+      fetchData();
+    }
+  };
+
+  const toggleRecordatorio = async (id: string, estadoActual: boolean) => {
+    if (isGuest) return;
+    await supabase.from('recordatorios').update({ completado: !estadoActual }).eq('id', id);
+    fetchData();
+  };
+
+  const eliminarRecordatorio = async (id: string) => {
+    if (isGuest) return;
+    await supabase.from('recordatorios').delete().eq('id', id);
+    fetchData();
+  };
+
+  const verificarLimiteInvitado = () => {
+    return true; 
+  };
+
+  const agregarCashea = async (e: React.FormEvent) => { 
+    e.preventDefault(); if(!verificarLimiteInvitado()) return; 
+    if (!casheaForm.articulo || !casheaForm.monto_cuota || !casheaForm.fecha_pago) return;
+    await supabase.from("cashea").insert([{ articulo: casheaForm.articulo, monto_cuota: parseFloat(casheaForm.monto_cuota), fecha_pago: casheaForm.fecha_pago, usuario: casheaForm.usuario || "Tú", espacio_id: espacioActivo.id }]);
+    setIsAddingCashea(false); setCasheaForm({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" }); fetchData();
+  };
+
+  const guardarPresupuesto = async (e: React.FormEvent) => { 
+    e.preventDefault(); if(!verificarLimiteInvitado()) return;
+    if (!budgetForm.categoria || !budgetForm.monto_limite) return;
+    const existente = presupuestos.find(p => p.categoria === budgetForm.categoria);
+    if (existente) await supabase.from("presupuestos").update({ monto_limite: parseFloat(budgetForm.monto_limite) }).eq("id", existente.id);
+    else await supabase.from("presupuestos").insert([{ categoria: budgetForm.categoria, monto_limite: parseFloat(budgetForm.monto_limite), espacio_id: espacioActivo.id }]);
+    setIsEditingBudget(false); setBudgetForm({ categoria: "", monto_limite: "" }); fetchData();
+  };
+
+  const eliminarPresupuesto = async (id: string) => {
+    if(!confirm("¿Eliminar este tope presupuestario?")) return;
+    await supabase.from("presupuestos").delete().eq("id", id); fetchData();
+  };
+
+  const guardarGastoFijo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fijoForm.descripcion || !fijoForm.monto) return;
+    const newFijo = { id: Date.now().toString(), pagado: false, ...fijoForm };
+    const updated = [...gastosFijos, newFijo];
+    setGastosFijos(updated);
+    localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
+    setIsAddingFijo(false);
+    setFijoForm({ descripcion: "", monto: "", dia_pago: "1" });
+  };
+
+  const toggleGastoFijo = (id: string) => {
+    const updated = gastosFijos.map(gf => gf.id === id ? { ...gf, pagado: !gf.pagado } : gf);
+    setGastosFijos(updated);
+    localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
+  };
+
+  const eliminarGastoFijo = (id: string) => {
+    if(!confirm("¿Eliminar este gasto fijo?")) return;
+    const updated = gastosFijos.filter(gf => gf.id !== id);
+    setGastosFijos(updated);
+    localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
+  };
+
+  const toggleCashea = async (cuota: any) => {
+    const nuevoEstado = !cuota.pagado;
+    await supabase.from("cashea").update({ pagado: nuevoEstado }).eq("id", cuota.id);
+    if (nuevoEstado) {
+      if (confirm(`¿Descontar $${cuota.monto_cuota} del balance de ${cuota.usuario} por el pago de Cashea?\n\n(Se aplicará arbitraje BCV vs Paralelo)`)) {
+        const costo_bs = cuota.monto_cuota * rates.bcv;
+        const costo_real_usdt = rates.usdt > 0 ? costo_bs / rates.usdt : cuota.monto_cuota;
+        await supabase.from("transacciones_saas").insert([{
+          descripcion: `Pago Cashea: ${cuota.articulo}`, monto_original: cuota.monto_cuota, moneda_original: "usd", monto_bs: costo_bs, monto_usd_bcv: cuota.monto_cuota, monto_usd_paralelo: costo_real_usdt, categoria: "cashea", usuario: cuota.usuario, tipo: "egreso", espacio_id: espacioActivo.id, usuario_id: session.user.id
+        }]);
+        triggerToast("egreso");
+      } else { await supabase.from("cashea").update({ pagado: false }).eq("id", cuota.id); }
+    }
+    fetchData();
+  };
+
+  const guardarPote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verificarLimiteInvitado()) return;
+
+    const nombreFinal = poteForm.tipo === "Personalizado ✍️" ? poteForm.nombreCustom : poteForm.tipo;
+    if (!nombreFinal || !poteForm.monto_objetivo) return;
+
+    if (isGuest) {
+      const newPote = { id: Date.now().toString(), nombre: nombreFinal, monto_objetivo: parseFloat(poteForm.monto_objetivo) };
+      const updatedPotes = [...potes, newPote];
+      setPotes(updatedPotes);
+      localStorage.setItem('mipote_guest_potes', JSON.stringify(updatedPotes));
+    } else {
+      if (poteForm.id) await supabase.from("metas").update({ nombre: nombreFinal, monto_objetivo: parseFloat(poteForm.monto_objetivo) }).eq("id", poteForm.id);
+      else await supabase.from("metas").insert([{ nombre: nombreFinal, monto_objetivo: parseFloat(poteForm.monto_objetivo), espacio_id: espacioActivo.id }]);
+      fetchData();
+    }
+    setIsAddingPote(false);
+    setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" });
+  };
+
+  const eliminarPote = async (id: string) => {
+    await supabase.from("metas").delete().eq("id", id); fetchData();
+  };
+
+  const handleEmergenciaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!descripcion.trim() || (!usuario.trim() && espacioActivo?.tipo !== 'individual')) { 
+      alert("Completa el detalle y quién aportó/retiró."); 
+      return; 
+    }
+
+    const valorMonto = parseFloat(monto);
+    const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
+    
+    if (isGuest) {
+      const newTx = { id: Date.now().toString(), descripcion: `Emergencia - ${descripcion}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'emergencia', usuario: usuario || "Tú", tipo, created_at: new Date().toISOString() };
+      const updatedTx = [newTx, ...transactions];
+      setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+      setMonto(""); setDescripcion(""); triggerToast(tipo);
+    } else {
+      const { error } = await supabase.from("transacciones_saas").insert([{
+        descripcion: `Emergencia - ${descripcion}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'emergencia', usuario: usuario || "Tú", tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id
+      }]);
+      if (error) alert("🚨 Error: " + error.message);
+      else { setMonto(""); setDescripcion(""); fetchData(); triggerToast(tipo); }
+    }
+    setIsAddingEmergencia(false);
+  };
+
+  const agregarParticipante = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!nuevoPart.trim() || !espacioActivo) return;
+    const { error } = await supabase.from("participantes").insert([{ nombre: nuevoPart.trim(), espacio_id: espacioActivo.id }]);
+    if (error) { alert("🚨 Error al guardar participante: " + error.message); return; }
+    setNuevoPart(""); fetchData(); 
+  };
+
+  const eliminarParticipante = async (id: string, nombre: string) => {
+    if (!confirm(`¿Estás seguro de eliminar a ${nombre} de este espacio?`)) return;
+    await supabase.from("participantes").delete().eq("id", id);
+    fetchData();
+  };
+
+  const getSaldosAislados = (userName?: string) => {
+    let bs = 0, usdt = 0, cash = 0;
+    transactions.forEach(tx => {
+      if (tx.categoria.startsWith("pote_") || tx.categoria === 'emergencia') return; 
+      let fraction = 0;
+      const txUser = tx.usuario?.trim();
+      const targetUser = userName?.trim();
+
+      if (!userName || userName === 'ALL' || espacioActivo?.tipo === 'individual') fraction = 1;
+      else {
+          if (txUser === targetUser || (txUser === 'Tú' && targetUser === (perfil?.nombre || session?.user?.email?.split('@')[0]))) fraction = 1;
+          else if (txUser === 'Ambos' || txUser === 'Todos (Div)') fraction = 1 / (espacioActivo?.tipo === 'vaca' ? Math.max(participantes.length, 1) : 2);
+      }
+
+      if (fraction > 0) {
+        const montoNominal = tx.monto_original || tx.monto_usd_paralelo || 0;
+        const signo = tx.tipo === "ingreso" ? 1 : -1;
+        const valorReal = montoNominal * signo * fraction;
+        const monedaEstricta = tx.moneda_original || (montoNominal > 1000 ? 'bs' : 'usd');
+
+        if (monedaEstricta === 'bs') bs += valorReal;
+        else if (monedaEstricta === 'cash') cash += valorReal;
+        else usdt += valorReal;
+      }
+    });
+    return { bs, usdt, cash };
+  };
+
+  const getPatrimonioNeto = () => {
+    const saldos = getSaldosAislados('ALL'); 
+    let balanceLiquido = saldos.usdt + saldos.cash + (rates.usdt > 0 ? saldos.bs / rates.usdt : 0);
+    let balanceLiquidoBcv = saldos.usdt + saldos.cash + (rates.bcv > 0 ? saldos.bs / rates.bcv : 0);
+
+    let ahorradoPotes = transactions
+      .filter(tx => tx.categoria.startsWith("pote_"))
+      .reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+
+    let ahorradoEmergencia = transactions
+      .filter(tx => tx.categoria === "emergencia")
+      .reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+
+    return {
+      paralelo: balanceLiquido + ahorradoPotes + ahorradoEmergencia,
+      bcv: balanceLiquidoBcv + ahorradoPotes + ahorradoEmergencia
+    };
+  };
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-[#1a0f2e] border border-purple-500/30 p-3 rounded-xl shadow-xl">
+          <p className="text-white font-bold text-xs mb-1">{payload[0].name}</p>
+          <p className="text-xs font-sans tabular-nums text-purple-400">
+            ${payload[0].value.toFixed(2)} USDT
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const renderTabContent = () => {
+    const triggerToast = (msg: string, type: string = 'info') => {
+      alert(msg); // Implementación simple, puedes mejorar esto
+    };
+
+    // Renderizar el tab correspondiente basado en activeTab
+    switch(activeTab) {
+      case 'inicio':
+        return (
+          <InicioTab
+            espacioActivo={espacioActivo}
+            perfil={perfil}
+            potes={potes}
+            session={session}
+            transactions={transactions}
+            rates={rates}
+            theme={theme}
+            participantes={participantes}
+            getPoteAhorrado={getPoteAhorrado}
+            setIsAddingPote={setIsAddingPote}
+            setPoteForm={setPoteForm}
+            getSaldosAislados={getSaldosAislados}
+            getPatrimonioNeto={getPatrimonioNeto}
+            triggerToast={triggerToast}
+          />
+        );
+
+      case 'billetera':
+        return (
+          <BilletaTab
+            espacioActivo={espacioActivo}
+            perfil={perfil}
+            session={session}
+            transactions={transactions}
+            rates={rates}
+            theme={theme}
+            getSaldosAislados={getSaldosAislados}
+            triggerToast={triggerToast}
+          />
+        );
+
+      case 'potes':
+        return (
+          <PotsTab
+            espacioActivo={espacioActivo}
+            potes={potes}
+            transactions={transactions}
+            theme={theme}
+            getPoteAhorrado={getPoteAhorrado}
+            setIsAddingPote={setIsAddingPote}
+            setPoteForm={setPoteForm}
+            isAddingPote={isAddingPote}
+            poteForm={poteForm}
+            handleSavePote={guardarPote}
+            eliminarPote={eliminarPote}
+            triggerToast={triggerToast}
+          />
+        );
+
+      case 'vacas':
+        return (
+          <VacasTab
+            espacioActivo={espacioActivo}
+            potes={potes}
+            transactions={transactions}
+            participantes={participantes}
+            theme={theme}
+            getPoteAhorrado={getPoteAhorrado}
+            triggerToast={triggerToast}
+          />
+        );
+
+      case 'pagos':
+        return (
+          <PagosTab
+            espacioActivo={espacioActivo}
+            transactions={transactions}
+            presupuestos={presupuestos}
+            gastosFijos={gastosFijos}
+            cuotasCashea={cuotasCashea}
+            theme={theme}
+            mesActual={mesActual}
+            categoriasList={categoriasList}
+            onSavePresupuesto={guardarPresupuesto}
+            onDeletePresupuesto={eliminarPresupuesto}
+            onSaveGastoFijo={guardarGastoFijo}
+            onDeleteGastoFijo={eliminarGastoFijo}
+            onToggleCashea={toggleCashea}
+            triggerToast={triggerToast}
+          />
+        );
+
+      case 'recordatorios':
+        return (
+          <RecordatoriosTab
+            espacioActivo={espacioActivo}
+            recordatorios={recordatorios}
+            theme={theme}
+            onAgregarRecordatorio={agregarRecordatorio}
+            onToggleRecordatorio={toggleRecordatorio}
+            onEliminarRecordatorio={eliminarRecordatorio}
+            triggerToast={triggerToast}
+          />
+        );
+
+      case 'emergencia':
+        return (
+          <EmergenciaTab
+            espacioActivo={espacioActivo}
+            perfil={perfil}
+            session={session}
+            transactions={transactions}
+            theme={theme}
+            onAgregarEmergencia={handleManualSubmit}
+            onEliminarTransaccion={eliminarTransaccion}
+            triggerToast={triggerToast}
+          />
+        );
+
+      case 'calculadora':
+        return (
+          <CalculadoraTab
+            rates={rates}
+            theme={theme}
+            triggerToast={triggerToast}
+          />
+        );
+
+      default:
+        return (
+          <InicioTab
+            espacioActivo={espacioActivo}
+            perfil={perfil}
+            potes={potes}
+            session={session}
+            transactions={transactions}
+            rates={rates}
+            theme={theme}
+            participantes={participantes}
+            getPoteAhorrado={getPoteAhorrado}
+            setIsAddingPote={setIsAddingPote}
+            setPoteForm={setPoteForm}
+            getSaldosAislados={getSaldosAislados}
+            getPatrimonioNeto={getPatrimonioNeto}
+            triggerToast={triggerToast}
+          />
+        );
+    }
+  };
+
+  if (!renderTabContent) {
+    return <div className="p-10 text-center text-white/50">Cargando...</div>;
+  }
+
+  // Main component render
+  
+  return renderTabContent();
+}
+
