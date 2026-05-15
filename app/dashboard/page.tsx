@@ -44,12 +44,12 @@ function TransactionDrawer({
     setMounted(true);
   }, []);
 
-  // Evitamos que se quede pegado el scroll en móviles
+  // Bloqueamos el scroll del fondo en iOS
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = 'auto'; // <-- FUERZA A DESBLOQUEAR EL SCROLL
+      document.body.style.overflow = '';
       const timer = setTimeout(() => {
         setMonto("");
         setDescripcion("");
@@ -57,7 +57,7 @@ function TransactionDrawer({
       }, 300);
       return () => clearTimeout(timer);
     }
-    return () => { document.body.style.overflow = 'auto'; };
+    return () => { document.body.style.overflow = ''; };
   }, [isOpen, setMonto, setDescripcion, setCategoria]);
 
   const categories = {
@@ -762,7 +762,10 @@ export default function MiPoteApp() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0d0714] flex flex-col items-center p-0 md:p-4">
+    <div 
+      className="fixed inset-0 w-full h-[100dvh] bg-[#0d0714] overflow-y-auto overflow-x-hidden flex flex-col items-center p-0 md:p-4 scroll-smooth" 
+      style={{ pointerEvents: 'auto' }}
+    >
       {/* MODAL INGRESAR CÓDIGO */}
       {showJoinModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
@@ -943,6 +946,13 @@ function FinanzasDashboardContent({
   };
 
   const [activeTab, setActiveTab] = useState(forceTab || "inicio");
+  // 🔴 LLAVE MAESTRA: Quita cualquier bloqueo de Vaul y React al cambiar de pestaña
+  useEffect(() => {
+    document.body.style.overflow = 'unset';
+    document.body.style.pointerEvents = 'auto';
+    document.body.removeAttribute('data-scroll-locked');
+    document.documentElement.style.overflow = 'unset';
+  }, [activeTab]);
   
   // NAV STATES
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false); 
@@ -2527,8 +2537,9 @@ const handleManualSubmit = async (e: React.FormEvent) => {
   }
 
   return (
-    <div className="w-full min-h-[100dvh] overflow-y-auto overflow-x-hidden pb-28 md:pb-0 scroll-smooth">
+    <div className="w-full pb-20 md:pb-0">
       {isGuest && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs p-3 text-center mb-4 rounded-xl flex items-center justify-center gap-2">
           <Sparkles className="w-4 h-4"/> Modo Invitado: Prueba gratuita activada.
         </div>
       )}
