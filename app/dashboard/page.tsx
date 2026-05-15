@@ -992,6 +992,22 @@ function FinanzasDashboardContent({
   
   const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
 
+  // --- ESTADOS PARA CAMBIO P2P ---
+  const [isP2POpen, setIsP2POpen] = useState(false);
+  const [p2pForm, setP2pForm] = useState({
+    monedaDe: 'usdt',
+    monedaPara: 'bs',
+    monto: '',
+    tasa: ''
+  });
+
+  // Cuando se abra el modal, le precargamos la tasa paralelo por defecto para ayudar al usuario
+  useEffect(() => {
+    if (isP2POpen && !p2pForm.tasa) {
+      setP2pForm(prev => ({ ...prev, tasa: rates.usdt.toFixed(2) }));
+    }
+  }, [isP2POpen, rates.usdt]);
+
   // NUEVO: ESTADO PARA EDITAR NOMBRE DEL ESPACIO
   const [isEditingSpaceName, setIsEditingSpaceName] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState(espacioActivo?.nombre || "");
@@ -1325,17 +1341,74 @@ const handleManualSubmit = async (e: React.FormEvent) => {
       const poteDestino = potes.find((p:any) => p.id === destinoTransferencia);
       
       if (isGuest) {
-        const tx1 = { id: Date.now().toString() + "_out", descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', created_at: new Date().toISOString() };
-        const tx2 = { id: Date.now().toString() + "_in", descripcion: `Abono recibido de Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', created_at: new Date().toISOString() };
-        const updatedTx = [tx1, tx2, ...transactions];
-        setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+        let newTxs = [...transactions];
+        // SOLO restamos liquidez si estás en tu billetera personal
+        if (espacioActivo.tipo === 'individual') {
+          newTxs.unshift({ id: Date.now().toString() + "_out", descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', created_at: new Date().toISOString() });
+        }
+        // Siempre registramos el ingreso a la meta
+        newTxs.unshift({ id: Date.now().toString() + "_in", descripcion: `Abono recibido`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', created_at: new Date().toISOString() });
+        setTransactions(newTxs); 
+        localStorage.setItem('mipote_guest_tx', JSON.stringify(newTxs));
       } else {
-        await supabase.from("transacciones_saas").insert([{ descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
-        await supabase.from("transacciones_saas").insert([{ descripcion: `Abono recibido desde Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+        // SOLO restamos liquidez si estás en tu billetera personal
+        if (espacioActivo.tipo === 'individual') {
+          await supabase.from("transacciones_saas").insert([{ descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+        }
+        // Siempre registramos el ingreso a la meta
+        await supabase.from("transacciones_saas").insert([{ descripcion: `Abono recibido`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
       }
       fetchData(); triggerToast("ingreso", "¡Abono sumado a tu meta! 🍯"); 
       setCustomCategoria(""); return;
     }
+
+    const realizarCambioP2P = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const montoDe = parseFloat(p2pForm.monto);
+    const tasaUsada = parseFloat(p2pForm.tasa);
+    
+    if (!montoDe || !tasaUsada || p2pForm.monedaDe === p2pForm.monedaPara) return alert("Verifica los montos y que las monedas sean distintas.");
+
+    let montoRecibe = 0;
+    if (p2pForm.monedaDe === 'usdt' && p2pForm.monedaPara === 'bs') montoRecibe = montoDe * tasaUsada;
+    else if (p2pForm.monedaDe === 'bs' && p2pForm.monedaPara === 'usdt') montoRecibe = montoDe / tasaUsada;
+    else return alert("Este par de monedas aún no está soportado para P2P.");
+
+    const desc = `Cambio P2P: ${p2pForm.monedaDe.toUpperCase()} a ${p2pForm.monedaPara.toUpperCase()} (Tasa: ${tasaUsada})`;
+    const usuarioTx = perfil?.nombre || session?.user?.email?.split('@')[0] || "Tú";
+
+    // 1. REGISTRAMOS LA SALIDA DE LA MONEDA QUE ENTREGAS
+    const txSalida = {
+      id: Date.now().toString() + "_out", descripcion: desc, monto_original: montoDe, moneda_original: p2pForm.monedaDe,
+      monto_bs: p2pForm.monedaDe === 'bs' ? montoDe : montoDe * rates.usdt,
+      monto_usd_bcv: p2pForm.monedaDe === 'usdt' ? montoDe : montoDe / rates.bcv,
+      monto_usd_paralelo: p2pForm.monedaDe === 'usdt' ? montoDe : montoDe / rates.usdt,
+      categoria: 'cambio_p2p', usuario: usuarioTx, tipo: 'egreso', created_at: new Date().toISOString()
+    };
+
+    // 2. REGISTRAMOS LA ENTRADA DE LA MONEDA QUE RECIBES
+    const txEntrada = {
+      id: Date.now().toString() + "_in", descripcion: desc, monto_original: montoRecibe, moneda_original: p2pForm.monedaPara,
+      monto_bs: p2pForm.monedaPara === 'bs' ? montoRecibe : montoRecibe * rates.usdt,
+      monto_usd_bcv: p2pForm.monedaPara === 'usdt' ? montoRecibe : montoRecibe / rates.bcv,
+      monto_usd_paralelo: p2pForm.monedaPara === 'usdt' ? montoRecibe : montoRecibe / rates.usdt,
+      categoria: 'cambio_p2p', usuario: usuarioTx, tipo: 'ingreso', created_at: new Date().toISOString()
+    };
+
+    if (isGuest) {
+      const updatedTx = [txEntrada, txSalida, ...transactions];
+      setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+    } else {
+      await supabase.from("transacciones_saas").insert([
+        { ...txSalida, id: undefined, espacio_id: espacioActivo.id, usuario_id: session.user.id },
+        { ...txEntrada, id: undefined, espacio_id: espacioActivo.id, usuario_id: session.user.id }
+      ]);
+    }
+    
+    fetchData();
+    triggerToast("ingreso", "¡Cambio P2P completado con éxito! 💱");
+    setIsP2POpen(false); setP2pForm({ monedaDe: 'usdt', monedaPara: 'bs', monto: '', tasa: rates.usdt.toString() });
+  };
 
     const isValidDesc = (tipo === 'ingreso' || finalCategoria === 'abono_pote') ? true : descripcion.trim() !== "";
     const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
@@ -1625,10 +1698,12 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     fetchData();
   };
 
-  const getSaldosAislados = (userName?: string) => {
+  const getSaldosAislados = (userName?: string, incluirMetas: boolean = false) => {
     let bs = 0, usdt = 0, cash = 0;
     transactions.forEach(tx => {
-      if (tx.categoria.startsWith("pote_") || tx.categoria === 'emergencia') return; 
+      // Si NO incluimos metas y la transacción es de una meta, la ignoramos
+      if (!incluirMetas && (tx.categoria.startsWith("pote_") || tx.categoria === 'emergencia')) return; 
+      
       let fraction = 0;
       const txUser = tx.usuario?.trim();
       const targetUser = userName?.trim();
@@ -2216,7 +2291,7 @@ const getPatrimonioNeto = () => {
 
                       {/* 2. FILAS DE LOS INTEGRANTES */}
                       {participantes.map((p: any) => {
-                        const saldoP = getSaldosAislados(p.nombre);
+                        const saldoP = getSaldosAislados(p.nombre, true);
                         const totalP = saldoP.usdt + saldoP.cash + (rates.usdt > 0 ? saldoP.bs / rates.usdt : 0);
                         
                         return (
