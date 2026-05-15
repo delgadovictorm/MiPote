@@ -44,12 +44,12 @@ function TransactionDrawer({
     setMounted(true);
   }, []);
 
-  // Bloqueamos el scroll del fondo en iOS
+  // Evitamos que se quede pegado el scroll en móviles
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = '';
+      document.body.style.overflow = 'auto'; // <-- FUERZA A DESBLOQUEAR EL SCROLL
       const timer = setTimeout(() => {
         setMonto("");
         setDescripcion("");
@@ -57,7 +57,7 @@ function TransactionDrawer({
       }, 300);
       return () => clearTimeout(timer);
     }
-    return () => { document.body.style.overflow = ''; };
+    return () => { document.body.style.overflow = 'auto'; };
   }, [isOpen, setMonto, setDescripcion, setCategoria]);
 
   const categories = {
@@ -2527,9 +2527,8 @@ const handleManualSubmit = async (e: React.FormEvent) => {
   }
 
   return (
-    <div className="w-full pb-20 md:pb-0">
+    <div className="w-full min-h-[100dvh] overflow-y-auto overflow-x-hidden pb-28 md:pb-0 scroll-smooth">
       {isGuest && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs p-3 text-center mb-4 rounded-xl flex items-center justify-center gap-2">
           <Sparkles className="w-4 h-4"/> Modo Invitado: Prueba gratuita activada.
         </div>
       )}
