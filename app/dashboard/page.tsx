@@ -1653,25 +1653,34 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     return { bs, usdt, cash };
   };
 
-  const getPatrimonioNeto = () => {
-    const saldos = getSaldosAislados('ALL'); 
-    let balanceLiquido = saldos.usdt + saldos.cash + (rates.usdt > 0 ? saldos.bs / rates.usdt : 0);
-    let balanceLiquidoBcv = saldos.usdt + saldos.cash + (rates.bcv > 0 ? saldos.bs / rates.bcv : 0);
+const getPatrimonioNeto = () => {
+    let totalEnBolivaresVirtuales = 0;
 
-    let ahorradoPotes = transactions
-      .filter(tx => tx.categoria.startsWith("pote_"))
-      .reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+    transactions.forEach(tx => {
+      const signo = tx.tipo === "ingreso" ? 1 : -1;
+      const montoOriginal = tx.monto_original || 0;
+      const moneda = tx.moneda_original || (montoOriginal > 1000 ? 'bs' : 'usd');
 
-    let ahorradoEmergencia = transactions
-      .filter(tx => tx.categoria === "emergencia")
-      .reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+      if (moneda === 'bs') {
+        // Si ya son bolívares, los sumamos directo
+        totalEnBolivaresVirtuales += (montoOriginal * signo);
+      } else {
+        // SI SON DÓLARES (USDT/CASH), los llevamos a Bs. usando la tasa PARALELO 
+        // para saber cuánta "plata real" representan en la calle.
+        totalEnBolivaresVirtuales += (montoOriginal * signo * rates.usdt);
+      }
+    });
 
+    // Ahora, esa "montaña de bolívares" la expresamos en la moneda que elijas
     return {
-      paralelo: balanceLiquido + ahorradoPotes + ahorradoEmergencia,
-      bcv: balanceLiquidoBcv + ahorradoPotes + ahorradoEmergencia
+      // Valor en dólares reales (mercado paralelo)
+      paralelo: rates.usdt > 0 ? totalEnBolivaresVirtuales / rates.usdt : 0,
+      
+      // Valor en dólares oficiales (BCV) -> AQUÍ ES DONDE EL MONTO VA A SUBIR
+      bcv: rates.bcv > 0 ? totalEnBolivaresVirtuales / rates.bcv : 0
     };
   };
-
+  
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -2125,8 +2134,12 @@ const handleManualSubmit = async (e: React.FormEvent) => {
                   
                   {/* EL VALOR AHORA CAMBIA SEGÚN EL BOTÓN */}
                   <p className="text-5xl font-black text-white tracking-tighter tabular-nums font-sans text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-200">
-                    $<AnimatedNum value={patrimonioRate === 'paralelo' ? patrimonioTotal.paralelo : patrimonioTotal.bcv} format="usd" />
-                  </p>
+  {/* Si el botón es 'paralelo', muestra el cálculo paralelo, si no, el bcv */}
+  $<AnimatedNum 
+      value={patrimonioRate === 'paralelo' ? getPatrimonioNeto().paralelo : getPatrimonioNeto().bcv} 
+      format="usd" 
+    />
+</p>
 
                   {/* NUEVOS BOTONES DE PARALELO / BCV */}
                   <div className="flex bg-black/40 p-1 rounded-xl w-max mt-2 border border-white/5" onClick={(e) => e.stopPropagation()}>
