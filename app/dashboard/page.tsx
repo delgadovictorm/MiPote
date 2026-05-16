@@ -1307,7 +1307,7 @@ function FinanzasDashboardContent({
   };
 
   // 🔥 LÓGICA DE REGISTRO Y TRANSFERENCIAS
-const handleManualSubmit = async (e: React.FormEvent) => {
+  const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const valorMonto = parseFloat(monto);
     const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
@@ -1362,7 +1362,51 @@ const handleManualSubmit = async (e: React.FormEvent) => {
       setCustomCategoria(""); return;
     }
 
-    const realizarCambioP2P = async (e: React.FormEvent) => {
+    const isValidDesc = (tipo === 'ingreso' || finalCategoria === 'abono_pote') ? true : descripcion.trim() !== "";
+    const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
+    if (!isValidDesc || !isValidUser || !finalCategoria) return alert("Verifica la categoría, el detalle y quién pagó."); 
+
+    if (finalCategoria === 'cashea') {
+      const montoTotal = parseFloat(monto);
+      const nCuotas = (window as any).numCuotasCashea || 3; 
+      const montoCuota = montoTotal / nCuotas;
+      const cuotasParaInsertar = [];
+      const { addDays, format } = require('date-fns');
+
+      for (let i = 1; i <= nCuotas; i++) {
+        cuotasParaInsertar.push({ articulo: descripcion, monto_cuota: montoCuota, fecha_pago: format(addDays(new Date(), i * 14), 'yyyy-MM-dd'), usuario: usuario || "Tú", espacio_id: espacioActivo.id, pagado: false });
+      }
+      const { error } = await supabase.from("cashea").insert(cuotasParaInsertar);
+      if (error) alert("🚨 Error Cashea: " + error.message);
+      else { fetchData(); triggerToast("egreso", `Programadas ${nCuotas} cuotas de $${montoCuota.toFixed(2)}`); }
+      setCustomCategoria(""); return; 
+    }
+    
+    let descFinal = descripcion; let msjAlertaEspecial = null;
+    if (finalCategoria.startsWith("pote_")) {
+       const poteId = finalCategoria.split("_")[1];
+       const poteRelacionado = potes.find((p:any) => p.id.toString() === poteId);
+       if (poteRelacionado) descFinal = `Pote: ${poteRelacionado.nombre} - ${descripcion}`;
+    } else {
+       let labelCategoria = categoriasList.find(c => c.valor === finalCategoria)?.label || finalCategoria;
+       descFinal = tipo === 'ingreso' && !descripcion ? labelCategoria : `${labelCategoria} - ${descripcion}`;
+    }
+
+    if (isGuest) {
+      const newTx = { id: Date.now().toString(), descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: finalCategoria, usuario: usuario || "Tú", tipo, created_at: new Date().toISOString() };
+      const updatedTx = [newTx, ...transactions];
+      setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+      triggerToast(tipo, msjAlertaEspecial || undefined);
+    } else {
+      const { error } = await supabase.from("transacciones_saas").insert([{ descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: finalCategoria, usuario: usuario || "Tú", tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+      if (error) alert("🚨 Error: " + error.message);
+      else { fetchData(); triggerToast(tipo, msjAlertaEspecial || undefined); }
+    }
+    setCustomCategoria("");
+  };
+
+  // 💱 LÓGICA DE CAMBIO P2P (AHORA SÍ ESTÁ AFUERA Y VISIBLE)
+  const realizarCambioP2P = async (e: React.FormEvent) => {
     e.preventDefault();
     const montoDe = parseFloat(p2pForm.monto);
     const tasaUsada = parseFloat(p2pForm.tasa);
@@ -1408,49 +1452,6 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     fetchData();
     triggerToast("ingreso", "¡Cambio P2P completado con éxito! 💱");
     setIsP2POpen(false); setP2pForm({ monedaDe: 'usdt', monedaPara: 'bs', monto: '', tasa: rates.usdt.toString() });
-  };
-
-    const isValidDesc = (tipo === 'ingreso' || finalCategoria === 'abono_pote') ? true : descripcion.trim() !== "";
-    const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
-    if (!isValidDesc || !isValidUser || !finalCategoria) return alert("Verifica la categoría, el detalle y quién pagó."); 
-
-    if (finalCategoria === 'cashea') {
-      const montoTotal = parseFloat(monto);
-      const nCuotas = (window as any).numCuotasCashea || 3; 
-      const montoCuota = montoTotal / nCuotas;
-      const cuotasParaInsertar = [];
-      const { addDays, format } = require('date-fns');
-
-      for (let i = 1; i <= nCuotas; i++) {
-        cuotasParaInsertar.push({ articulo: descripcion, monto_cuota: montoCuota, fecha_pago: format(addDays(new Date(), i * 14), 'yyyy-MM-dd'), usuario: usuario || "Tú", espacio_id: espacioActivo.id, pagado: false });
-      }
-      const { error } = await supabase.from("cashea").insert(cuotasParaInsertar);
-      if (error) alert("🚨 Error Cashea: " + error.message);
-      else { fetchData(); triggerToast("egreso", `Programadas ${nCuotas} cuotas de $${montoCuota.toFixed(2)}`); }
-      setCustomCategoria(""); return; 
-    }
-    
-    let descFinal = descripcion; let msjAlertaEspecial = null;
-    if (finalCategoria.startsWith("pote_")) {
-       const poteId = finalCategoria.split("_")[1];
-       const poteRelacionado = potes.find((p:any) => p.id.toString() === poteId);
-       if (poteRelacionado) descFinal = `Pote: ${poteRelacionado.nombre} - ${descripcion}`;
-    } else {
-       let labelCategoria = categoriasList.find(c => c.valor === finalCategoria)?.label || finalCategoria;
-       descFinal = tipo === 'ingreso' && !descripcion ? labelCategoria : `${labelCategoria} - ${descripcion}`;
-    }
-
-    if (isGuest) {
-      const newTx = { id: Date.now().toString(), descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: finalCategoria, usuario: usuario || "Tú", tipo, created_at: new Date().toISOString() };
-      const updatedTx = [newTx, ...transactions];
-      setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
-      triggerToast(tipo, msjAlertaEspecial || undefined);
-    } else {
-      const { error } = await supabase.from("transacciones_saas").insert([{ descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: finalCategoria, usuario: usuario || "Tú", tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
-      if (error) alert("🚨 Error: " + error.message);
-      else { fetchData(); triggerToast(tipo, msjAlertaEspecial || undefined); }
-    }
-    setCustomCategoria("");
   };
 
   const unirseConCodigoInterno = async (e: React.FormEvent) => {
@@ -1773,8 +1774,7 @@ const getPatrimonioNeto = () => {
   const renderTabContent = () => {
     const transaccionesDelMes = transactions.filter(tx => tx.created_at.startsWith(mesActual));
     const transaccionesFiltradas = transaccionesDelMes.filter(tx => filtroHistorial === "Todos" || tx.usuario === filtroHistorial);
-    const gastosDelMesCalculados = transaccionesDelMes.filter(tx => tx.tipo === 'egreso');
-
+    const gastosDelMesCalculados = transaccionesDelMes.filter(tx => tx.tipo === 'egreso' && tx.categoria !== 'transferencia_salida' && tx.categoria !== 'cambio_p2p');
  // 🔥 MAPEO DE GASTOS PARA GRÁFICO SEGURO
     const gastosPorCategoriaValor = gastosDelMesCalculados.reduce((acc, tx) => {
       let catName = tx.categoria.startsWith('pote_') ? 'Extracción Potes' : 
@@ -2435,159 +2435,133 @@ const getPatrimonioNeto = () => {
             </div>
           )}
 
-          {/* CAJON DE ACCIONES PRINCIPALES */}
-          <div className="mb-6 mt-6 flex gap-3 h-[100px]">
+          {/* CAJON DE ACCIONES PRINCIPALES (REDISEÑADO A 2x2) */}
+          <div className="mb-6 mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+            
             {/* BOTON 1: NUEVO REGISTRO */}
-            <div className="flex-[2] h-full">
+            <div className="h-[100px]">
               <TransactionDrawer
-                  tipo={tipo} setTipo={setTipo}
-                  categoria={categoria} setCategoria={setCategoria}
+                  tipo={tipo} setTipo={setTipo} categoria={categoria} setCategoria={setCategoria}
                   customCategoria={customCategoria} setCustomCategoria={setCustomCategoria} categoriasList={categoriasList}
-                  monto={monto} setMonto={setMonto}
-                  moneda={moneda} setMoneda={setMoneda}
-                  descripcion={descripcion} setDescripcion={setDescripcion}
-                  rates={rates} theme={theme} onSubmit={handleManualSubmit}
+                  monto={monto} setMonto={setMonto} moneda={moneda} setMoneda={setMoneda}
+                  descripcion={descripcion} setDescripcion={setDescripcion} rates={rates} theme={theme} onSubmit={handleManualSubmit}
                   espacios={espacios} espacioActivo={espacioActivo} potes={potes}
                   participantes={participantes} usuario={usuario} setUsuario={setUsuario}
                   destinoTransferencia={destinoTransferencia} setDestinoTransferencia={setDestinoTransferencia}
                 >
                   <button id="nuevo-registro-trigger" type="button" className="w-full h-full bg-[#1a1a1a] border border-[#333] hover:border-emerald-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
-                    <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-emerald-500 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] group-hover:scale-110 transition-transform`}>
-                      <Plus className="w-5 h-5 md:w-6 md:h-6 text-black" />
+                    <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] group-hover:scale-110 transition-transform">
+                      <Plus className="w-5 h-5 text-black" />
                     </div>
-                    <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider">Nuevo Registro</span>
+                    <span className="text-white font-black text-[10px] uppercase tracking-wider text-center">Nuevo Registro</span>
                   </button>
               </TransactionDrawer>
             </div>
-            
-            {/* BOTON 2: NUEVA META (O CALCULADORA EN VACA) */}
-            {espacioActivo?.tipo !== 'vaca' ? (
-              <button onClick={() => { setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true); }} className="flex-1 h-full bg-[#1a1a1a] border border-[#333] hover:border-fuchsia-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
-                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-fuchsia-500/10 border border-fuchsia-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(192,38,211,0.2)] group-hover:scale-110 transition-transform`}>
-                  <Target className="w-4 h-4 md:w-5 md:h-5 text-fuchsia-400" />
+
+            {/* BOTON 2: CAMBIO P2P */}
+            <button onClick={() => setIsP2POpen(true)} className="h-[100px] bg-[#1a1a1a] border border-[#333] hover:border-amber-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
+              <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.2)] group-hover:scale-110 transition-transform">
+                <ArrowLeftRight className="w-4 h-4 text-amber-400" />
+              </div>
+              <span className="text-white font-black text-[10px] uppercase tracking-wider text-center">Cambio P2P</span>
+            </button>
+
+            {/* BOTON 3: NUEVA META */}
+            {espacioActivo?.tipo !== 'vaca' && (
+              <button onClick={() => { setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true); }} className="h-[100px] bg-[#1a1a1a] border border-[#333] hover:border-fuchsia-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
+                <div className="w-10 h-10 rounded-full bg-fuchsia-500/10 border border-fuchsia-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(192,38,211,0.2)] group-hover:scale-110 transition-transform">
+                  <Target className="w-4 h-4 text-fuchsia-400" />
                 </div>
-                <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider text-center">Nueva Meta</span>
-              </button>
-            ) : (
-              <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="flex-1 h-full bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
-                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform`}>
-                  <Calculator className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
-                </div>
-                <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider text-center leading-tight">Simulador<br/>Compras</span>
+                <span className="text-white font-black text-[10px] uppercase tracking-wider text-center">Nueva Meta</span>
               </button>
             )}
 
-            {/* BOTON 3: AÑADIR MIEMBRO (O CALCULADORA EN BILLETERA) */}
+            {/* BOTON 4: AÑADIR MIEMBRO O SIMULADOR */}
             {espacioActivo?.tipo !== 'individual' ? (
-               <>
-                 <button onClick={() => setIsManageUsersOpen(true)} className="flex-1 h-full bg-[#1a1a1a] border border-[#333] hover:border-purple-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
-                   <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.2)] group-hover:scale-110 transition-transform`}>
-                     <UserPlus className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
-                   </div>
-                   <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider text-center leading-tight">Añadir<br/>Miembro</span>
-                 </button>
-
-                 <Drawer.Root open={isManageUsersOpen} onOpenChange={setIsManageUsersOpen}>
-                    <Drawer.Portal>
-                      <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-                      <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#A855F7]">
-                        <Drawer.Title className="sr-only">Añadir Miembro</Drawer.Title>
-                        <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
-                          <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-                          <h3 className="text-xl font-black text-white mb-6 text-center">Añadir Miembro</h3>
-                          
-                          <div className="flex flex-wrap gap-2 mb-6">
-                            {participantes.length === 0 ? (
-                              <p className="text-xs text-white/20 italic text-center w-full">No hay miembros agregados...</p>
-                            ) : (
-                              participantes.map((p: any) => (
-                                <div key={p.id} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-white/5 bg-[#1a1a1a] text-white group hover:border-rose-500/50 transition-colors">
-                                  {p.nombre}
-                                  <button onClick={() => eliminarParticipante(p.id, p.nombre)} className="text-white/20 hover:text-rose-500 transition-colors">
-                                    <X size={16} />
-                                  </button>
-                                </div>
-                              ))
-                            )}
-                          </div>
-
-                          <div className="flex gap-2">
-                            <input 
-                              type="text" placeholder="Nombre del integrante..." 
-                              value={nuevoPart} onChange={(e) => setNuevoPart(e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && agregarParticipante()}
-                              className="flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#A855F7] transition-all"
-                            />
-                            <button onClick={agregarParticipante} className={`p-4 rounded-xl ${theme.primary} text-white shadow-lg active:scale-95 transition-all`}>
-                              <UserPlus size={20} />
-                            </button>
-                          </div>
-                        </div>
-                      </Drawer.Content>
-                    </Drawer.Portal>
-                  </Drawer.Root>
-               </>
+               <button onClick={() => setIsManageUsersOpen(true)} className="h-[100px] bg-[#1a1a1a] border border-[#333] hover:border-purple-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
+                 <div className="w-10 h-10 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.2)] group-hover:scale-110 transition-transform">
+                   <UserPlus className="w-4 h-4 text-purple-400" />
+                 </div>
+                 <span className="text-white font-black text-[10px] uppercase tracking-wider text-center leading-tight">Añadir<br/>Miembro</span>
+               </button>
             ) : (
-              <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="flex-1 h-full bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
-                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform`}>
-                  <Calculator className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+              <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="h-[100px] bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
+                <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform">
+                  <Calculator className="w-4 h-4 text-blue-400" />
                 </div>
-                <span className="text-white font-black text-[10px] md:text-xs uppercase tracking-wider text-center leading-tight">Simulador<br/>Compras</span>
+                <span className="text-white font-black text-[10px] uppercase tracking-wider text-center leading-tight">Simulador<br/>Compras</span>
               </button>
             )}
           </div>
 
-          <Drawer.Root open={isAddingPote} onOpenChange={setIsAddingPote}>
+          {/* === DRAWER DEL CAMBIO P2P === */}
+          <Drawer.Root open={isP2POpen} onOpenChange={setIsP2POpen}>
             <Drawer.Portal>
               <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[75vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#10b981]">
-                <Drawer.Title className="sr-only">Registrar Nueva Meta</Drawer.Title>
+              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[85vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-amber-500">
+                <Drawer.Title className="sr-only">Cambio P2P</Drawer.Title>
                 <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
                   <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-                  <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Nueva Meta</h3>
+                  <div className="flex justify-center mb-4">
+                     <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center"><ArrowLeftRight className="text-amber-400 w-6 h-6"/></div>
+                  </div>
+                  <h3 className="text-xl font-black text-white mb-2 text-center">Cambio de Divisas</h3>
+                  <p className="text-xs text-white/50 text-center mb-6">Actualiza tu liquidez sin afectar tu presupuesto mensual.</p>
                   
-                  <form onSubmit={guardarPote} className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-4">
-                      <div>
-                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿Para qué estamos ahorrando?</label>
-                        <select 
-                          value={poteForm.tipo} 
-                          onChange={(e) => setPoteForm({...poteForm, tipo: e.target.value})} 
-                          className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-emerald-500`}
-                        >
-                          {POTE_OPCIONES.map(opt => <option key={opt} value={opt} className="bg-[#121212]">{opt}</option>)}
+                  <form onSubmit={realizarCambioP2P} className="flex flex-col gap-5">
+                    
+                    {/* Selectores de Moneda */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Entregas</label>
+                        <select value={p2pForm.monedaDe} onChange={(e) => setP2pForm({...p2pForm, monedaDe: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-amber-500">
+                          <option value="usdt">USDT</option>
+                          <option value="bs">Bolívares (BS)</option>
                         </select>
                       </div>
-
-                      {poteForm.tipo === "Personalizado ✍️" && (
-                        <div className="animate-in fade-in slide-in-from-top-2">
-                           <input 
-                             type="text" placeholder="Ej: Viaje a Margarita" 
-                             value={poteForm.nombreCustom} onChange={(e) => setPoteForm({...poteForm, nombreCustom: e.target.value})} 
-                             className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-emerald-500`} 
-                             required 
-                           />
-                        </div>
-                      )}
-
-                      <div className="min-h-[80px]">
-                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Objetivo ($)</label>
-                        <input 
-                          type="number" step="0.01" placeholder="0.00" 
-                          value={poteForm.monto_objetivo} onChange={(e) => setPoteForm({...poteForm, monto_objetivo: e.target.value})} 
-                          className={`w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-emerald-500`} 
-                          required 
-                        />
+                      <div className="pt-6"><ArrowLeftRight className="text-white/20 w-5 h-5"/></div>
+                      <div className="flex-1">
+                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Recibes</label>
+                        <select value={p2pForm.monedaPara} onChange={(e) => setP2pForm({...p2pForm, monedaPara: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-amber-500">
+                          <option value="bs">Bolívares (BS)</option>
+                          <option value="usdt">USDT</option>
+                        </select>
                       </div>
                     </div>
-                    <button type="submit" className={`w-full bg-emerald-500 text-black font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(16,185,129,0.3)] mt-6 active:scale-95 transition-transform`}>Guardar Meta</button>
+
+                    {/* Inputs de Monto y Tasa */}
+                    <div className="flex gap-3">
+                      <div className="flex-[2]">
+                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto a cambiar</label>
+                        <input type="number" step="0.01" placeholder="0.00" value={p2pForm.monto} onChange={(e) => setP2pForm({...p2pForm, monto: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-2xl font-black text-white font-sans tabular-nums outline-none focus:border-amber-500" required />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Tasa Pactada</label>
+                        <input type="number" step="0.001" placeholder="0.00" value={p2pForm.tasa} onChange={(e) => setP2pForm({...p2pForm, tasa: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-base font-bold text-white font-sans tabular-nums outline-none focus:border-amber-500" required />
+                      </div>
+                    </div>
+
+                    {/* Calculadora visual de resultado */}
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 mt-2 flex flex-col items-center justify-center">
+                       <p className="text-[10px] uppercase text-amber-500/80 font-bold tracking-widest mb-1">Total a recibir en {p2pForm.monedaPara.toUpperCase()}</p>
+                       <p className="text-3xl font-black text-amber-400 font-sans tabular-nums">
+                         {p2pForm.monedaPara === 'bs' ? 'Bs. ' : '$'}
+                         {p2pForm.monto && p2pForm.tasa ? 
+                            (p2pForm.monedaDe === 'usdt' && p2pForm.monedaPara === 'bs' ? (parseFloat(p2pForm.monto) * parseFloat(p2pForm.tasa)).toLocaleString('es-VE', {minimumFractionDigits: 2}) : 
+                             p2pForm.monedaDe === 'bs' && p2pForm.monedaPara === 'usdt' ? (parseFloat(p2pForm.monto) / parseFloat(p2pForm.tasa)).toLocaleString('en-US', {minimumFractionDigits: 2}) : '0.00'
+                            ) : '0.00'
+                         }
+                       </p>
+                    </div>
+
+                    <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black py-5 rounded-3xl uppercase tracking-widest text-sm shadow-[0_0_20px_rgba(245,158,11,0.3)] mt-4 active:scale-95 transition-transform">Confirmar P2P</button>
                   </form>
                 </div>
               </Drawer.Content>
             </Drawer.Portal>
           </Drawer.Root>
-
-          {/* CÓDIGO DE INVITACIÓN MOVIDO AL FINAL (DISCRETO) */}
+          
+                    {/* CÓDIGO DE INVITACIÓN MOVIDO AL FINAL (DISCRETO) */}
           {espacioActivo?.tipo !== 'individual' && espacioActivo?.codigo_invitacion && (
              <div className="bg-transparent border border-fuchsia-500/10 p-4 rounded-3xl mb-6 flex flex-row items-center justify-between gap-4 mt-8">
                 <div className="flex-1">
