@@ -1405,7 +1405,7 @@ function FinanzasDashboardContent({
     setCustomCategoria("");
   };
 
-  // 💱 LÓGICA DE CAMBIO P2P (AHORA SÍ ESTÁ AFUERA Y VISIBLE)
+  // 💱 LÓGICA DE CAMBIO P2P (BLINDADA CONTRA ERRORES SQL)
   const realizarCambioP2P = async (e: React.FormEvent) => {
     e.preventDefault();
     const montoDe = parseFloat(p2pForm.monto);
@@ -1421,39 +1421,53 @@ function FinanzasDashboardContent({
     const desc = `Cambio P2P: ${p2pForm.monedaDe.toUpperCase()} a ${p2pForm.monedaPara.toUpperCase()} (Tasa: ${tasaUsada})`;
     const usuarioTx = perfil?.nombre || session?.user?.email?.split('@')[0] || "Tú";
 
-    // 1. REGISTRAMOS LA SALIDA DE LA MONEDA QUE ENTREGAS
+    // 🛡️ FUNCIÓN DE SEGURIDAD: Evita que el sistema explote si la tasa es 0 (Cálculo de Infinity)
+    const safeDiv = (num: number, divisor: number) => divisor > 0 ? num / divisor : 0;
+
+    // 1. REGISTRAMOS LA SALIDA (EJ: Se restan tus USDT)
     const txSalida = {
       id: Date.now().toString() + "_out", descripcion: desc, monto_original: montoDe, moneda_original: p2pForm.monedaDe,
       monto_bs: p2pForm.monedaDe === 'bs' ? montoDe : montoDe * rates.usdt,
-      monto_usd_bcv: p2pForm.monedaDe === 'usdt' ? montoDe : montoDe / rates.bcv,
-      monto_usd_paralelo: p2pForm.monedaDe === 'usdt' ? montoDe : montoDe / rates.usdt,
+      monto_usd_bcv: p2pForm.monedaDe === 'usdt' ? montoDe : safeDiv(montoDe, rates.bcv),
+      monto_usd_paralelo: p2pForm.monedaDe === 'usdt' ? montoDe : safeDiv(montoDe, rates.usdt),
       categoria: 'cambio_p2p', usuario: usuarioTx, tipo: 'egreso', created_at: new Date().toISOString()
     };
 
-    // 2. REGISTRAMOS LA ENTRADA DE LA MONEDA QUE RECIBES
+    // 2. REGISTRAMOS LA ENTRADA (EJ: Se suman tus BS)
     const txEntrada = {
       id: Date.now().toString() + "_in", descripcion: desc, monto_original: montoRecibe, moneda_original: p2pForm.monedaPara,
       monto_bs: p2pForm.monedaPara === 'bs' ? montoRecibe : montoRecibe * rates.usdt,
-      monto_usd_bcv: p2pForm.monedaPara === 'usdt' ? montoRecibe : montoRecibe / rates.bcv,
-      monto_usd_paralelo: p2pForm.monedaPara === 'usdt' ? montoRecibe : montoRecibe / rates.usdt,
+      monto_usd_bcv: p2pForm.monedaPara === 'usdt' ? montoRecibe : safeDiv(montoRecibe, rates.bcv),
+      monto_usd_paralelo: p2pForm.monedaPara === 'usdt' ? montoRecibe : safeDiv(montoRecibe, rates.usdt),
       categoria: 'cambio_p2p', usuario: usuarioTx, tipo: 'ingreso', created_at: new Date().toISOString()
     };
 
     if (isGuest) {
       const updatedTx = [txEntrada, txSalida, ...transactions];
       setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+      triggerToast("ingreso", "¡Cambio P2P completado con éxito! 💱");
+      setIsP2POpen(false); setP2pForm({ monedaDe: 'usdt', monedaPara: 'bs', monto: '', tasa: rates.usdt.toString() });
     } else {
-      await supabase.from("transacciones_saas").insert([
-        { ...txSalida, id: undefined, espacio_id: espacioActivo.id, usuario_id: session.user.id },
-        { ...txEntrada, id: undefined, espacio_id: espacioActivo.id, usuario_id: session.user.id }
+      // 🛡️ FUNCIÓN DE SEGURIDAD 2: Le quitamos el "id" artificial para que Supabase genere su propio UUID y no choque.
+      const { id: id1, ...dbSalida } = txSalida;
+      const { id: id2, ...dbEntrada } = txEntrada;
+      
+      const { error } = await supabase.from("transacciones_saas").insert([
+        { ...dbSalida, espacio_id: espacioActivo.id, usuario_id: session.user.id },
+        { ...dbEntrada, espacio_id: espacioActivo.id, usuario_id: session.user.id }
       ]);
-    }
-    
-    fetchData();
-    triggerToast("ingreso", "¡Cambio P2P completado con éxito! 💱");
-    setIsP2POpen(false); setP2pForm({ monedaDe: 'usdt', monedaPara: 'bs', monto: '', tasa: rates.usdt.toString() });
-  };
 
+      if (error) {
+         // Ahora sí nos dirá qué falló si algo sale mal en la Base de Datos
+         alert("Error guardando el P2P: " + error.message);
+      } else {
+         fetchData(); // Recargamos para que se actualice la liquidez y el historial
+         triggerToast("ingreso", "¡Cambio P2P completado con éxito! 💱");
+         setIsP2POpen(false); setP2pForm({ monedaDe: 'usdt', monedaPara: 'bs', monto: '', tasa: rates.usdt.toString() });
+      }
+    }
+  };
+  
   const unirseConCodigoInterno = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!joinCodeInput.trim()) return;
