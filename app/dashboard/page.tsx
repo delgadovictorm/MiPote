@@ -14,6 +14,8 @@ import { PagosTab } from "@/components/Dashboard/PagosTab";
 import { RecordatoriosTab } from "@/components/Dashboard/RecordatoriosTab";
 import { EmergenciaTab } from "@/components/Dashboard/EmergenciaTab";
 import { CalculadoraTab } from "@/components/Dashboard/CalculadoraTab";
+import OpenAI from "openai";
+import { Camera } from "lucide-react"; // Asegúrate de tener este icono
 
 // ============================================================================
 // 1. COMPONENTE TRANSACTION DRAWER (PANTALLA COMPLETA NATIVA PARA IOS)
@@ -76,6 +78,7 @@ function TransactionDrawer({
       { id: "mascotas", label: "Mascotas", icon: <Dog size={18} /> },
       { id: "condominio", label: "Condominio", icon: <Home size={18} /> },
       { id: "regalos", label: "Regalos", icon: <Gift size={18} /> },
+      { id: "retiro_pote", label: "Retirar de Meta 📉", icon: <ArrowDownCircle size={18} /> }, // <-- ESTA LÍNEA
       { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
     ]
   };
@@ -197,9 +200,9 @@ function TransactionDrawer({
               </div>
             )}
 
-            {categoria === 'abono_pote' && tipo !== 'transferencia' && (
+           {(categoria === 'abono_pote' || categoria === 'retiro_pote') && tipo !== 'transferencia' && (
                <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-emerald-500/30 mb-6 animate-in zoom-in-95">
-                 <label className="text-[10px] text-emerald-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2">¿A qué meta enviamos el dinero?</label>
+                 <label className="text-[10px] text-emerald-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2">¿De qué meta es el movimiento?</label>
                  <select value={destinoTransferencia} onChange={(e) => setDestinoTransferencia(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer mb-2">
                     <option value="">Selecciona la meta destino...</option>
                     {potes?.map((p:any) => (
@@ -908,11 +911,11 @@ export default function MiPoteApp() {
 function FinanzasDashboardContent({ 
   session, espacios, setEspacioActivo, espacioActivo, onSelectModule, handleLogout, openProfileModal, openJoinModal, isGuest = false, perfil, onTriggerPaywall, forceTab, onChangeView
 }: any) {
-  const getTheme = (tipo: string) => {
+const getTheme = (tipo: string) => {
     switch(tipo) {
-      case 'pote': return { primary: 'bg-fuchsia-600', text: 'text-fuchsia-400', border: 'border-fuchsia-500/30', card: 'from-fuchsia-600/40', darkBg: 'bg-fuchsia-950/30', stroke: '#c026d3', lightBg: 'bg-fuchsia-500/10' };
-      case 'vaca': return { primary: 'bg-emerald-600', text: 'text-emerald-400', border: 'border-emerald-500/30', card: 'from-emerald-600/40', darkBg: 'bg-emerald-950/30', stroke: '#059669', lightBg: 'bg-emerald-500/10' };
-      default: return { primary: 'bg-purple-600', text: 'text-purple-400', border: 'border-purple-500/30', card: 'from-purple-600/40', darkBg: 'bg-purple-950/30', stroke: '#9333ea', lightBg: 'bg-purple-500/10' };
+      case 'pote': return { primary: 'bg-[#C026D3]', text: 'text-[#E879F9]', border: 'border-white/5', card: 'bg-[#1C1C1E]', darkBg: 'bg-[#121212]', stroke: '#c026d3', lightBg: 'bg-fuchsia-500/10' };
+      case 'vaca': return { primary: 'bg-[#059669]', text: 'text-[#34D399]', border: 'border-white/5', card: 'bg-[#1C1C1E]', darkBg: 'bg-[#121212]', stroke: '#059669', lightBg: 'bg-emerald-500/10' };
+      default: return { primary: 'bg-[#7C3AED]', text: 'text-[#A78BFA]', border: 'border-white/5', card: 'bg-[#1C1C1E]', darkBg: 'bg-[#121212]', stroke: '#7C3AED', lightBg: 'bg-[#7C3AED]/10' };
     }
   };
   const theme = getTheme(espacioActivo?.tipo || 'individual');
@@ -989,17 +992,26 @@ function FinanzasDashboardContent({
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [isAddingCashea, setIsAddingCashea] = useState(false);
   const [isAddingFijo, setIsAddingFijo] = useState(false);
+
+  const [comercio, setComercio] = useState("");
+const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
   
   const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
 
+  // --- ESTADOS PARA REDISEÑO Y VISION IA ---
+  const [isFABMenuOpen, setIsFABMenuOpen] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   // --- ESTADOS PARA CAMBIO P2P ---
   const [isP2POpen, setIsP2POpen] = useState(false);
-  const [p2pForm, setP2pForm] = useState({
-    monedaDe: 'usdt',
-    monedaPara: 'bs',
-    monto: '',
-    tasa: ''
-  });
+  const [p2pForm, setP2pForm] = useState({ monedaDe: 'usdt', monedaPara: 'bs', monto: '', tasa: '', usuario: '' });
+
+  useEffect(() => {
+    if (isP2POpen && !p2pForm.tasa) setP2pForm(prev => ({ ...prev, tasa: rates.usdt.toFixed(2) }));
+  }, [isP2POpen, rates.usdt]);
+
+
 
   // Cuando se abra el modal, le precargamos la tasa paralelo por defecto para ayudar al usuario
   useEffect(() => {
@@ -1306,13 +1318,82 @@ function FinanzasDashboardContent({
     return transactions.filter(tx => tx.categoria === `pote_${poteId}`).reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
   };
 
+
+// 📸 MOTOR DE IA: ESCANEO DE FACTURAS CON GPT-4o
+  const handleScanInvoice = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    if (!apiKey) return alert("Falta la API Key en el archivo .env.local");
+
+    setIsScanning(true);
+    triggerToast("ingreso", "Leyendo factura con IA... 📸");
+
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+      const base64Image = await base64Promise;
+      const imageUrl = base64Image.split(',')[1];
+
+      const openai = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: "Analiza esta factura. Extrae: 'comercio', 'monto_total' (número), 'moneda' (bs o usdt), 'iva_total' (número), 'fecha', 'hora', 'categoria_sugerida' (comida, cashea, internet, mascotas, condominio, regalos, otro) y un arreglo llamado 'productos' que contenga objetos con 'nombre' y 'precio'. Responde SOLO un JSON." },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageUrl}` } }
+            ],
+        }],
+        temperature: 0,
+      });
+
+      const aiResponse = response.choices[0]?.message?.content;
+      if (aiResponse) {
+        const jsonString = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+        const data = JSON.parse(jsonString);
+
+        // --- CARGAR DATOS EN EL FORMULARIO VISUAL ---
+        setTipo("egreso");
+        setMonto(data.monto_total?.toString() || "");
+        setMoneda(data.moneda?.toLowerCase() === 'bs' ? 'bs' : 'usdt');
+        setDescripcion(`${data.comercio || 'Comercio'} (${data.hora || ''})`);
+        setCategoria(categoriasList.some(c => c.valor === data.categoria_sugerida) ? data.categoria_sugerida : "otro");
+
+        // --- NUEVO: GUARDAR LA DATA ESTRUCTURADA EN LOS BOLSILLOS OCULTOS ---
+        setComercio(data.comercio || "");
+        setMetadatosFactura({
+           fecha: data.fecha,
+           hora: data.hora,
+           iva: data.iva_total,
+           productos: data.productos || []
+        });
+
+        triggerToast("ingreso", "¡Datos listos! Confirma el registro.");
+        setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 500);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error leyendo la factura. Intenta manualmente.");
+    } finally {
+      setIsScanning(false);
+      if (event.target) event.target.value = '';
+    }
+  };
+  
+
+
   // 🔥 LÓGICA DE REGISTRO Y TRANSFERENCIAS
-  const handleManualSubmit = async (e: React.FormEvent) => {
+const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const valorMonto = parseFloat(monto);
     const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, moneda);
 
-    // MAGIA: Si eligió Otro, usamos el nombre que escribió
     let finalCategoria = categoria;
     if (categoria === 'otro') {
        if (!customCategoria.trim()) return alert("Por favor ingresa el nombre de tu categoría.");
@@ -1322,13 +1403,7 @@ function FinanzasDashboardContent({
     if (tipo === 'transferencia') {
       if (!destinoTransferencia) return alert("Selecciona el espacio destino");
       const destSpace = espacios.find((sp:any) => sp.id === destinoTransferencia);
-      
-      if (isGuest) {
-        const tx1 = { id: Date.now().toString() + "_out", descripcion: `Transferencia a: ${destSpace?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', created_at: new Date().toISOString() };
-        const updatedTx = [tx1, ...transactions];
-        setTransactions(updatedTx);
-        localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
-      } else {
+      if (!isGuest) {
         await supabase.from("transacciones_saas").insert([{ descripcion: `Transferencia a: ${destSpace?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
         await supabase.from("transacciones_saas").insert([{ descripcion: `Transferencia recibida de: Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_entrada', usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: destinoTransferencia, usuario_id: session.user.id }]);
       }
@@ -1336,26 +1411,26 @@ function FinanzasDashboardContent({
       setCustomCategoria(""); return;
     }
 
+    if (finalCategoria === 'retiro_pote') {
+      if (!destinoTransferencia) return alert("Selecciona la meta");
+      const poteDestino = potes.find((p:any) => p.id === destinoTransferencia);
+      if (!isGuest) {
+        if (espacioActivo.tipo === 'individual') {
+          await supabase.from("transacciones_saas").insert([{ descripcion: `Retiro de meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_entrada', usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+        }
+        await supabase.from("transacciones_saas").insert([{ descripcion: `Retiro realizado`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+      }
+      fetchData(); triggerToast("egreso", "Retiro de meta descontado 📉"); 
+      setCustomCategoria(""); return;
+    }
+
     if (finalCategoria === 'abono_pote') {
       if (!destinoTransferencia) return alert("Selecciona la meta");
       const poteDestino = potes.find((p:any) => p.id === destinoTransferencia);
-      
-      if (isGuest) {
-        let newTxs = [...transactions];
-        // SOLO restamos liquidez si estás en tu billetera personal
-        if (espacioActivo.tipo === 'individual') {
-          newTxs.unshift({ id: Date.now().toString() + "_out", descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', created_at: new Date().toISOString() });
-        }
-        // Siempre registramos el ingreso a la meta
-        newTxs.unshift({ id: Date.now().toString() + "_in", descripcion: `Abono recibido`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', created_at: new Date().toISOString() });
-        setTransactions(newTxs); 
-        localStorage.setItem('mipote_guest_tx', JSON.stringify(newTxs));
-      } else {
-        // SOLO restamos liquidez si estás en tu billetera personal
+      if (!isGuest) {
         if (espacioActivo.tipo === 'individual') {
           await supabase.from("transacciones_saas").insert([{ descripcion: `Abono a meta: ${poteDestino?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
         }
-        // Siempre registramos el ingreso a la meta
         await supabase.from("transacciones_saas").insert([{ descripcion: `Abono recibido`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: `pote_${destinoTransferencia}`, usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
       }
       fetchData(); triggerToast("ingreso", "¡Abono sumado a tu meta! 🍯"); 
@@ -1398,76 +1473,56 @@ function FinanzasDashboardContent({
       setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
       triggerToast(tipo, msjAlertaEspecial || undefined);
     } else {
-      const { error } = await supabase.from("transacciones_saas").insert([{ descripcion: descFinal, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: finalCategoria, usuario: usuario || "Tú", tipo, espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+      // 🎯 AQUÍ ES EL CAMBIO EXACTO: Insert general para gastos comunes de la calle
+      const { error } = await supabase.from("transacciones_saas").insert([{ 
+        descripcion: descFinal, 
+        monto_original: valorMonto, 
+        moneda_original: moneda, 
+        monto_bs, 
+        monto_usd_bcv, 
+        monto_usd_paralelo, 
+        categoria: finalCategoria, 
+        usuario: usuario || "Tú", 
+        tipo, 
+        espacio_id: espacioActivo.id, 
+        usuario_id: session.user.id,
+        comercio: comercio || null,          // <-- Guardamos el comercio extraído por la IA
+        metadatos: metadatosFactura || null  // <-- Guardamos el JSON completo con productos e IVA
+      }]);
+      
       if (error) alert("🚨 Error: " + error.message);
       else { fetchData(); triggerToast(tipo, msjAlertaEspecial || undefined); }
     }
     setCustomCategoria("");
   };
 
-  // 💱 LÓGICA DE CAMBIO P2P (BLINDADA CONTRA ERRORES SQL)
+  // P2P CORREGIDO (IDENTIDAD Y MATEMÁTICA)
   const realizarCambioP2P = async (e: React.FormEvent) => {
     e.preventDefault();
     const montoDe = parseFloat(p2pForm.monto);
     const tasaUsada = parseFloat(p2pForm.tasa);
     
-    if (!montoDe || !tasaUsada || p2pForm.monedaDe === p2pForm.monedaPara) return alert("Verifica los montos y que las monedas sean distintas.");
+    if (!montoDe || !tasaUsada || p2pForm.monedaDe === p2pForm.monedaPara) return alert("Verifica los montos.");
+    if (!p2pForm.usuario) return alert("Selecciona el responsable del cambio.");
 
     let montoRecibe = 0;
     if (p2pForm.monedaDe === 'usdt' && p2pForm.monedaPara === 'bs') montoRecibe = montoDe * tasaUsada;
     else if (p2pForm.monedaDe === 'bs' && p2pForm.monedaPara === 'usdt') montoRecibe = montoDe / tasaUsada;
-    else return alert("Este par de monedas aún no está soportado para P2P.");
 
-    const desc = `Cambio P2P: ${p2pForm.monedaDe.toUpperCase()} a ${p2pForm.monedaPara.toUpperCase()} (Tasa: ${tasaUsada})`;
-    const usuarioTx = perfil?.nombre || session?.user?.email?.split('@')[0] || "Tú";
-
-    // 🛡️ FUNCIÓN DE SEGURIDAD: Evita que el sistema explote si la tasa es 0 (Cálculo de Infinity)
     const safeDiv = (num: number, divisor: number) => divisor > 0 ? num / divisor : 0;
+    const desc = `Cambio P2P: ${p2pForm.monedaDe.toUpperCase()} a ${p2pForm.monedaPara.toUpperCase()} (Tasa: ${tasaUsada})`;
+    const usuarioTx = p2pForm.usuario;
 
-    // 1. REGISTRAMOS LA SALIDA (EJ: Se restan tus USDT)
-    const txSalida = {
-      id: Date.now().toString() + "_out", descripcion: desc, monto_original: montoDe, moneda_original: p2pForm.monedaDe,
-      monto_bs: p2pForm.monedaDe === 'bs' ? montoDe : montoDe * rates.usdt,
-      monto_usd_bcv: p2pForm.monedaDe === 'usdt' ? montoDe : safeDiv(montoDe, rates.bcv),
-      monto_usd_paralelo: p2pForm.monedaDe === 'usdt' ? montoDe : safeDiv(montoDe, rates.usdt),
-      categoria: 'cambio_p2p', usuario: usuarioTx, tipo: 'egreso', created_at: new Date().toISOString()
-    };
+    const txSalida = { descripcion: desc, monto_original: montoDe, moneda_original: p2pForm.monedaDe, monto_bs: p2pForm.monedaDe === 'bs' ? montoDe : montoDe * rates.usdt, monto_usd_bcv: p2pForm.monedaDe === 'usdt' ? montoDe : safeDiv(montoDe, rates.bcv), monto_usd_paralelo: p2pForm.monedaDe === 'usdt' ? montoDe : safeDiv(montoDe, rates.usdt), categoria: 'cambio_p2p', usuario: usuarioTx, tipo: 'egreso', created_at: new Date().toISOString() };
+    const txEntrada = { descripcion: desc, monto_original: montoRecibe, moneda_original: p2pForm.monedaPara, monto_bs: p2pForm.monedaPara === 'bs' ? montoRecibe : montoRecibe * rates.usdt, monto_usd_bcv: p2pForm.monedaPara === 'usdt' ? montoRecibe : safeDiv(montoRecibe, rates.bcv), monto_usd_paralelo: p2pForm.monedaPara === 'usdt' ? montoRecibe : safeDiv(montoRecibe, rates.usdt), categoria: 'cambio_p2p', usuario: usuarioTx, tipo: 'ingreso', created_at: new Date().toISOString() };
 
-    // 2. REGISTRAMOS LA ENTRADA (EJ: Se suman tus BS)
-    const txEntrada = {
-      id: Date.now().toString() + "_in", descripcion: desc, monto_original: montoRecibe, moneda_original: p2pForm.monedaPara,
-      monto_bs: p2pForm.monedaPara === 'bs' ? montoRecibe : montoRecibe * rates.usdt,
-      monto_usd_bcv: p2pForm.monedaPara === 'usdt' ? montoRecibe : safeDiv(montoRecibe, rates.bcv),
-      monto_usd_paralelo: p2pForm.monedaPara === 'usdt' ? montoRecibe : safeDiv(montoRecibe, rates.usdt),
-      categoria: 'cambio_p2p', usuario: usuarioTx, tipo: 'ingreso', created_at: new Date().toISOString()
-    };
-
-    if (isGuest) {
-      const updatedTx = [txEntrada, txSalida, ...transactions];
-      setTransactions(updatedTx); localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
-      triggerToast("ingreso", "¡Cambio P2P completado con éxito! 💱");
-      setIsP2POpen(false); setP2pForm({ monedaDe: 'usdt', monedaPara: 'bs', monto: '', tasa: rates.usdt.toString() });
-    } else {
-      // 🛡️ FUNCIÓN DE SEGURIDAD 2: Le quitamos el "id" artificial para que Supabase genere su propio UUID y no choque.
-      const { id: id1, ...dbSalida } = txSalida;
-      const { id: id2, ...dbEntrada } = txEntrada;
-      
-      const { error } = await supabase.from("transacciones_saas").insert([
-        { ...dbSalida, espacio_id: espacioActivo.id, usuario_id: session.user.id },
-        { ...dbEntrada, espacio_id: espacioActivo.id, usuario_id: session.user.id }
-      ]);
-
-      if (error) {
-         // Ahora sí nos dirá qué falló si algo sale mal en la Base de Datos
-         alert("Error guardando el P2P: " + error.message);
-      } else {
-         fetchData(); // Recargamos para que se actualice la liquidez y el historial
-         triggerToast("ingreso", "¡Cambio P2P completado con éxito! 💱");
-         setIsP2POpen(false); setP2pForm({ monedaDe: 'usdt', monedaPara: 'bs', monto: '', tasa: rates.usdt.toString() });
-      }
+    if (!isGuest) {
+      await supabase.from("transacciones_saas").insert([ { ...txSalida, espacio_id: espacioActivo.id, usuario_id: session.user.id }, { ...txEntrada, espacio_id: espacioActivo.id, usuario_id: session.user.id } ]);
+      fetchData(); triggerToast("ingreso", "P2P Completado 💱");
+      setIsP2POpen(false); setP2pForm({ monedaDe: 'usdt', monedaPara: 'bs', monto: '', tasa: rates.usdt.toString(), usuario: '' });
     }
   };
-  
+
   const unirseConCodigoInterno = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!joinCodeInput.trim()) return;
@@ -1864,7 +1919,7 @@ const getPatrimonioNeto = () => {
         <div className="space-y-4 md:space-y-6 mt-6">
           
           {transaccionesDelMes.length > 0 && (
-            <div className={`bg-[#1a0f2e] border ${theme.border} p-4 md:p-6 rounded-3xl shadow-xl flex flex-col min-h-[300px]`}>
+            <div className="bg-[#1C1C1E] p-5 rounded-3xl flex flex-col min-h-[300px]">
               <h3 className="text-xs md:text-sm font-bold text-white mb-4 flex items-center gap-2">
                 <PieChartIcon className={`w-4 h-4 ${theme.text}`}/> Distribución Egresos
               </h3>
@@ -1884,7 +1939,7 @@ const getPatrimonioNeto = () => {
             </div>
           )}
 
-          <div className={`bg-[#1a0f2e] border ${theme.border} p-4 md:p-6 rounded-3xl shadow-xl`}>
+          <div className="bg-[#1C1C1E] p-5 rounded-3xl flex flex-col min-h-[300px]">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2">
                 <Target className="w-4 h-4 text-rose-400"/> Control Presupuestario
@@ -1947,7 +2002,7 @@ const getPatrimonioNeto = () => {
             </div>
           </div>
 
-          <div className={`bg-[#1a0f2e] border ${theme.border} p-4 md:p-5 rounded-3xl`}>
+          <div className="bg-[#1C1C1E] p-5 rounded-3xl flex flex-col min-h-[300px]">
             <div className="flex justify-between items-center mb-3 md:mb-4">
               <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2"><Home className={`w-3.5 h-3.5 md:w-4 md:h-4 ${theme.text}`}/> Gastos Fijos</h3>
               <button onClick={() => setIsAddingFijo(true)} className={`flex items-center gap-1 ${theme.lightBg} ${theme.text} px-3 py-1.5 rounded-lg text-[10px] font-black transition-colors`}><Plus className="w-3 h-3"/> Nuevo Fijo</button>
@@ -1956,7 +2011,7 @@ const getPatrimonioNeto = () => {
             <Drawer.Root open={isAddingFijo} onOpenChange={setIsAddingFijo}>
               <Drawer.Portal>
                 <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
-                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[70vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-emerald-500">
+                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[70vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-white/5">
                   <Drawer.Title className="sr-only">Registrar Gasto Fijo</Drawer.Title>
                   <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
                     <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
@@ -2007,7 +2062,7 @@ const getPatrimonioNeto = () => {
             </div>
           </div>
 
-          <div className={`bg-[#1a0f2e] border ${theme.border} p-4 md:p-5 rounded-3xl`}>
+          <div className="bg-[#1C1C1E] p-5 rounded-3xl flex flex-col min-h-[300px]">
             <div className="flex justify-between items-center mb-3 md:mb-4">
               <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2"><Calendar className={`w-3.5 h-3.5 md:w-4 md:h-4 ${theme.text}`}/> Cashea</h3>
               <button onClick={() => setIsAddingCashea(true)} className={`flex items-center gap-1 ${theme.lightBg} ${theme.text} px-3 py-1.5 rounded-lg text-[10px] font-black transition-colors`}><Plus className="w-3 h-3"/> Nuevo Pago</button>
@@ -2076,7 +2131,7 @@ const getPatrimonioNeto = () => {
             </div>
           </div>
 
-          <div className={`bg-[#1a0f2e] border ${theme.border} rounded-3xl overflow-hidden shadow-xl`}>
+          <div className="bg-[#1C1C1E] p-5 rounded-3xl flex flex-col min-h-[300px]">
              <div className={`p-3 border-b border-white/5 bg-black/20 flex flex-col gap-3`}>
                 <div className={`flex justify-between items-center text-xs font-bold uppercase text-white/70`}>
                   <span>Historial del Mes</span>
@@ -2214,39 +2269,41 @@ const getPatrimonioNeto = () => {
                  </div>
                )}
             </div>
-         ) : (
+        ) : (
             <div className="mt-2 mb-4">
-               <div onClick={() => setIsBalanceModalOpen(true)} className="cursor-pointer flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#1a0f2e] to-black/40 border border-white/5 rounded-[2rem] shadow-2xl transition-transform active:scale-95">
-                  <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-1 flex items-center gap-2">
-                    <Globe className="w-3 h-3"/> {espacioActivo?.tipo === 'individual' ? 'Patrimonio Neto Total' : 'Balance Total del Espacio'}
-                  </p>
-                  
-                  {/* EL VALOR AHORA CAMBIA SEGÚN EL BOTÓN */}
-                  <p className="text-5xl font-black text-white tracking-tighter tabular-nums font-sans text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-200">
-  {/* Si el botón es 'paralelo', muestra el cálculo paralelo, si no, el bcv */}
-  $<AnimatedNum 
-      value={patrimonioRate === 'paralelo' ? getPatrimonioNeto().paralelo : getPatrimonioNeto().bcv} 
-      format="usd" 
-    />
-</p>
+                 <div onClick={() => setIsBalanceModalOpen(true)} className="cursor-pointer flex flex-col items-center justify-center p-8 bg-[#1C1C1E] rounded-[2rem] transition-transform active:scale-95 border border-white/5">
+                   <p className="text-[11px] text-white/50 uppercase font-bold tracking-widest mb-2 flex items-center gap-2">
+                     <Globe className="w-4 h-4"/> {espacioActivo?.tipo === 'individual' ? 'Patrimonio Neto Total' : 'Balance Global'}
+                   </p>
+                   
+{/* Texto blanco sólido, sin gradientes */}
+                   <p className="text-5xl font-bold text-white tabular-nums font-sans tracking-tight leading-none mb-5">
+                     $<AnimatedNum 
+                         value={patrimonioRate === 'paralelo' ? getPatrimonioNeto().paralelo : getPatrimonioNeto().bcv} 
+                         format="usd" 
+                       />
+                   </p>
 
-                  {/* NUEVOS BOTONES DE PARALELO / BCV */}
-                  <div className="flex bg-black/40 p-1 rounded-xl w-max mt-2 border border-white/5" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => setPatrimonioRate('paralelo')} className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${patrimonioRate === 'paralelo' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>PARALELO</button>
-                    <button onClick={() => setPatrimonioRate('bcv')} className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${patrimonioRate === 'bcv' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>BCV</button>
-                  </div>
+                   {/* Selector Plano con acento Verde Fintech */}
+                   <div className="flex bg-[#121212] p-1 rounded-xl w-max mb-5 border border-white/5" onClick={(e) => e.stopPropagation()}>
+                     <button onClick={() => setPatrimonioRate('paralelo')} className={`px-5 py-2 text-[10px] font-bold rounded-lg transition-colors ${patrimonioRate === 'paralelo' ? 'bg-[#10B981] text-white' : 'text-white/40 hover:text-white/80'}`}>PARALELO</button>
+                     <button onClick={() => setPatrimonioRate('bcv')} className={`px-5 py-2 text-[10px] font-bold rounded-lg transition-colors ${patrimonioRate === 'bcv' ? 'bg-[#10B981] text-white' : 'text-white/40 hover:text-white/80'}`}>BCV OFICIAL</button>
+                   </div>
 
-                  <div className="flex gap-4 mt-3">
-                     <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
-                       Tasa BCV: Bs. {rates.bcv.toFixed(2)}
-                     </p>
-                     <p className="text-[10px] text-white/50 font-bold font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">
-                       Paralelo: Bs. {rates.usdt.toFixed(2)}
-                     </p>
-                  </div>
-                  <p className="text-[9px] text-white/30 uppercase mt-4 flex items-center gap-1"><ArrowDownCircle size={10}/> Toque para ver detalle</p>
-               </div>
-            </div>
+                   <div className="flex gap-3 mt-2">
+                       <p className="text-[10px] text-white/40 font-medium bg-[#121212] px-3 py-2 rounded-lg border border-white/5">
+                         Tasa BCV: Bs. {rates.bcv.toFixed(2)}
+                       </p>
+                       <p className="text-[10px] text-white/40 font-medium bg-[#121212] px-3 py-2 rounded-lg border border-white/5">
+                         Paralelo: Bs. {rates.usdt.toFixed(2)}
+                       </p>
+                   </div>
+                   
+                   <p className="text-[9px] text-white/30 uppercase mt-5 flex items-center gap-1">
+                     <ArrowDownCircle size={10}/> Toque para ver detalle
+                   </p>
+                 </div>
+              </div>
           )}
 
           <Drawer.Root open={isBalanceModalOpen} onOpenChange={setIsBalanceModalOpen}>
@@ -2389,36 +2446,45 @@ const getPatrimonioNeto = () => {
                 </h2>
               </div>
 
-              {potes.map(pote => {
+{potes.map(pote => {
                 const ahorrado = getPoteAhorrado(pote.id, pote.nombre);
                 const porcentaje = Math.min((ahorrado / pote.monto_objetivo) * 100, 100);
                 
                 return (
-                  <div key={pote.id} className={`bg-[#1a0f2e] border-2 border-emerald-500/30 p-5 md:p-6 rounded-[2rem] shadow-[0_0_15px_rgba(16,185,129,0.1)] relative overflow-hidden group hover:border-emerald-500/60 transition-colors`}>
+                  <div key={pote.id} className="bg-[#1C1C1E] border border-white/5 p-6 rounded-[2rem] relative overflow-hidden group transition-colors">
+                    
+                    {/* Pantalla de éxito cuando se llega al 100% */}
                     {porcentaje >= 100 && (
-                      <div className="absolute inset-0 bg-emerald-600/90 backdrop-blur-sm flex flex-col items-center justify-center z-20 text-center p-4">
+                      <div className="absolute inset-0 bg-[#10B981]/95 backdrop-blur-sm flex flex-col items-center justify-center z-20 text-center p-4">
                         <span className="text-3xl mb-1">🎉</span>
                         <h3 className="text-white font-black text-lg">¡Meta Alcanzada!</h3>
-                        <p className="text-emerald-100 text-[10px] mb-3">Lograron ahorrar ${pote.monto_objetivo}.</p>
-                        <button onClick={() => eliminarPote(pote.id)} className="bg-white text-emerald-600 font-bold px-4 py-2 rounded-xl text-xs shadow-lg active:scale-95 transition-transform">Eliminar Pote</button>
+                        <p className="text-white/90 text-[10px] mb-3 font-bold">Lograron ahorrar ${pote.monto_objetivo}.</p>
+                        <button onClick={() => eliminarPote(pote.id)} className="bg-[#121212] text-white font-bold px-4 py-2 rounded-xl text-xs active:scale-95 transition-transform">Finalizar y Eliminar</button>
                       </div>
                     )}
 
                     <div className="relative z-10">
                       <div className="flex justify-between items-start mb-3">
                         <div>
-                          <h2 className="text-base md:text-lg font-black text-white flex items-center gap-2">{pote.nombre} <span className={`text-emerald-400 text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20`}>META: ${pote.monto_objetivo} USDT</span></h2>
-                          <p className={`text-xs text-white/50 mt-1`}>Faltan $<AnimatedNum value={Math.max(pote.monto_objetivo - ahorrado, 0)} /> USD</p>
+                          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                            {pote.nombre} 
+                            <span className="text-[#10B981] text-[9px] bg-[#10B981]/10 px-2 py-0.5 rounded-lg border border-[#10B981]/20 font-bold uppercase tracking-widest">
+                              META: ${pote.monto_objetivo}
+                            </span>
+                          </h2>
+                          <p className="text-xs text-white/50 mt-1">Faltan $<AnimatedNum value={Math.max(pote.monto_objetivo - ahorrado, 0)} /> USD</p>
                         </div>
                         <div className="flex flex-col items-end gap-2">
-                          <span className={`text-sm md:text-base font-black text-emerald-400`}><AnimatedNum value={porcentaje} format="pct"/></span>
+                          <span className="text-base font-black text-[#10B981]"><AnimatedNum value={porcentaje} format="pct"/></span>
                         </div>
                       </div>
-                      <div className={`h-3 w-full bg-black/60 rounded-full border border-white/5 p-0.5 mt-2`}>
-                        <div className={`h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]`} style={{ width: `${porcentaje}%`, transition: 'width 1s ease-in-out' }}></div>
+
+                      {/* BARRA DE PROGRESO (Plana y Fintech, sin neón) */}
+                      <div className="h-3 w-full bg-[#121212] rounded-full border border-white/5 overflow-hidden mt-3">
+                        <div className="h-full bg-[#10B981] rounded-full transition-all duration-1000" style={{ width: `${porcentaje}%` }}></div>
                       </div>
                       
-                      <div className="flex gap-2 mt-4">
+                      <div className="flex gap-2 mt-5">
                         {porcentaje < 100 && (
                           <button 
                             onClick={(e) => {
@@ -2429,14 +2495,14 @@ const getPatrimonioNeto = () => {
                               const trigger = document.getElementById('nuevo-registro-trigger'); 
                               if (trigger) trigger.click(); 
                             }} 
-                            className="w-10 h-10 bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center rounded-full shadow-lg shadow-emerald-500/20 active:scale-90 transition-all"
+                            className="w-11 h-11 bg-[#10B981] hover:bg-[#059669] text-white flex items-center justify-center rounded-2xl active:scale-95 transition-all"
                           >
                             <Plus size={20} strokeWidth={3} />
                           </button>
                         )}
                         <button 
                           onClick={() => eliminarPote(pote.id)} 
-                          className="w-10 h-10 bg-white/5 hover:bg-rose-500/20 text-white/30 hover:text-rose-500 flex items-center justify-center rounded-full border border-white/5 transition-colors"
+                          className="w-11 h-11 bg-[#121212] hover:bg-rose-500/20 text-white/30 hover:text-rose-500 flex items-center justify-center rounded-2xl border border-white/5 transition-colors"
                         >
                           <Trash2 size={18}/>
                         </button>
@@ -2449,61 +2515,40 @@ const getPatrimonioNeto = () => {
             </div>
           )}
 
-          {/* CAJON DE ACCIONES PRINCIPALES (REDISEÑADO A 2x2) */}
-          <div className="mb-6 mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+ {/* === TARJETAS DE ACCESO RÁPIDO === */}
+          <div className="mb-8 mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
             
-            {/* BOTON 1: NUEVO REGISTRO */}
-            <div className="h-[100px]">
-              <TransactionDrawer
-                  tipo={tipo} setTipo={setTipo} categoria={categoria} setCategoria={setCategoria}
-                  customCategoria={customCategoria} setCustomCategoria={setCustomCategoria} categoriasList={categoriasList}
-                  monto={monto} setMonto={setMonto} moneda={moneda} setMoneda={setMoneda}
-                  descripcion={descripcion} setDescripcion={setDescripcion} rates={rates} theme={theme} onSubmit={handleManualSubmit}
-                  espacios={espacios} espacioActivo={espacioActivo} potes={potes}
-                  participantes={participantes} usuario={usuario} setUsuario={setUsuario}
-                  destinoTransferencia={destinoTransferencia} setDestinoTransferencia={setDestinoTransferencia}
-                >
-                  <button id="nuevo-registro-trigger" type="button" className="w-full h-full bg-[#1a1a1a] border border-[#333] hover:border-emerald-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
-                    <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] group-hover:scale-110 transition-transform">
-                      <Plus className="w-5 h-5 text-black" />
-                    </div>
-                    <span className="text-white font-black text-[10px] uppercase tracking-wider text-center">Nuevo Registro</span>
-                  </button>
-              </TransactionDrawer>
-            </div>
-
-            {/* BOTON 2: CAMBIO P2P */}
-            <button onClick={() => setIsP2POpen(true)} className="h-[100px] bg-[#1a1a1a] border border-[#333] hover:border-amber-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
-              <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.2)] group-hover:scale-110 transition-transform">
-                <ArrowLeftRight className="w-4 h-4 text-amber-400" />
-              </div>
-              <span className="text-white font-black text-[10px] uppercase tracking-wider text-center">Cambio P2P</span>
+            {/* BOTÓN 1: ESCÁNER IA 📸 */}
+            <button onClick={() => fileInputRef.current?.click()} disabled={isScanning} className={`h-[110px] bg-[#1C1C1E] border border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all hover:bg-[#2C2C2E] active:scale-95 group relative ${isScanning ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                {isScanning ? (
+                    <Loader2 className="w-8 h-8 text-[#10B981] animate-spin" />
+                ) : (
+                    <>
+                        <div className="w-12 h-12 rounded-full bg-[#10B981]/10 flex items-center justify-center border border-[#10B981]/20 group-hover:scale-110 transition-transform">
+                            <Camera className="w-6 h-6 text-[#10B981]" />
+                        </div>
+                        <span className="text-white font-bold text-xs uppercase tracking-wider">Escanear Factura</span>
+                        <span className="text-[9px] text-white/40 -mt-1 font-medium">Usa la IA para registrar rápido</span>
+                    </>
+                )}
+                <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleScanInvoice} className="hidden" />
             </button>
 
-            {/* BOTON 3: NUEVA META */}
-            {espacioActivo?.tipo !== 'vaca' && (
-              <button onClick={() => { setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true); }} className="h-[100px] bg-[#1a1a1a] border border-[#333] hover:border-fuchsia-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
-                <div className="w-10 h-10 rounded-full bg-fuchsia-500/10 border border-fuchsia-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(192,38,211,0.2)] group-hover:scale-110 transition-transform">
-                  <Target className="w-4 h-4 text-fuchsia-400" />
-                </div>
-                <span className="text-white font-black text-[10px] uppercase tracking-wider text-center">Nueva Meta</span>
-              </button>
-            )}
+            {/* BOTÓN 2: SIMULADOR (Azul) */}
+            <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="h-[110px] bg-[#1C1C1E] border border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all hover:bg-[#2C2C2E] active:scale-95 group">
+              <div className="w-12 h-12 rounded-full bg-[#3B82F6]/10 flex items-center justify-center border border-[#3B82F6]/20 group-hover:scale-110 transition-transform">
+                <Calculator className="w-6 h-6 text-[#3B82F6]" />
+              </div>
+              <span className="text-white font-bold text-xs uppercase tracking-wider">Simulador</span>
+            </button>
 
-            {/* BOTON 4: AÑADIR MIEMBRO O SIMULADOR */}
-            {espacioActivo?.tipo !== 'individual' ? (
-               <button onClick={() => setIsManageUsersOpen(true)} className="h-[100px] bg-[#1a1a1a] border border-[#333] hover:border-purple-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
-                 <div className="w-10 h-10 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.2)] group-hover:scale-110 transition-transform">
-                   <UserPlus className="w-4 h-4 text-purple-400" />
-                 </div>
-                 <span className="text-white font-black text-[10px] uppercase tracking-wider text-center leading-tight">Añadir<br/>Miembro</span>
-               </button>
-            ) : (
-              <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="h-[100px] bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-colors shadow-lg active:scale-95 group">
-                <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:scale-110 transition-transform">
-                  <Calculator className="w-4 h-4 text-blue-400" />
+            {/* BOTÓN 3: NUEVA META (Fucsia) */}
+            {espacioActivo?.tipo !== 'vaca' && (
+              <button onClick={() => { setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true); }} className="h-[110px] bg-[#1C1C1E] border border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all hover:bg-[#2C2C2E] active:scale-95 group">
+                <div className="w-12 h-12 rounded-full bg-[#C026D3]/10 flex items-center justify-center border border-[#C026D3]/20 group-hover:scale-110 transition-transform">
+                  <Target className="w-6 h-6 text-[#C026D3]" />
                 </div>
-                <span className="text-white font-black text-[10px] uppercase tracking-wider text-center leading-tight">Simulador<br/>Compras</span>
+                <span className="text-white font-bold text-xs uppercase tracking-wider">Nueva Meta</span>
               </button>
             )}
           </div>
@@ -2555,6 +2600,15 @@ const getPatrimonioNeto = () => {
                       </div>
                     </div>
 
+                    {/* Selector de Usuario para P2P */}
+                    <div>
+                      <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Responsable del Cambio</label>
+                      <select required value={p2pForm.usuario} onChange={e => setP2pForm({...p2pForm, usuario: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-amber-500 appearance-none">
+                        <option value="">Selecciona quién hizo el cambio...</option>
+                        {espacioActivo?.tipo === 'individual' ? <option value={(perfil?.nombre || session?.user?.email?.split('@')[0]) || "Tú"}>Tú</option> : participantes.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+
                     {/* Calculadora visual de resultado */}
                     <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 mt-2 flex flex-col items-center justify-center">
                        <p className="text-[10px] uppercase text-amber-500/80 font-bold tracking-widest mb-1">Total a recibir en {p2pForm.monedaPara.toUpperCase()}</p>
@@ -2569,6 +2623,74 @@ const getPatrimonioNeto = () => {
                     </div>
 
                     <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black py-5 rounded-3xl uppercase tracking-widest text-sm shadow-[0_0_20px_rgba(245,158,11,0.3)] mt-4 active:scale-95 transition-transform">Confirmar P2P</button>
+                  </form>
+                </div>
+              </Drawer.Content>
+            </Drawer.Portal>
+          </Drawer.Root>
+
+          {/* === DRAWER DE AÑADIR MIEMBRO === */}
+          <Drawer.Root open={isManageUsersOpen} onOpenChange={setIsManageUsersOpen}>
+            <Drawer.Portal>
+              <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
+              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-white/5">
+                <Drawer.Title className="sr-only">Añadir Miembro</Drawer.Title>
+                <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+                  <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+                  <h3 className="text-xl font-black text-white mb-6 text-center">Añadir Miembro</h3>
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {participantes.length === 0 ? (
+                      <p className="text-xs text-white/20 italic text-center w-full">No hay miembros agregados...</p>
+                    ) : (
+                      participantes.map((p: any) => (
+                        <div key={p.id} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-white/5 bg-[#1a1a1a] text-white group hover:border-rose-500/50 transition-colors">
+                          {p.nombre}
+                          <button onClick={() => eliminarParticipante(p.id, p.nombre)} className="text-white/20 hover:text-rose-500 transition-colors">
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <input type="text" placeholder="Nombre del integrante..." value={nuevoPart} onChange={(e) => setNuevoPart(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && agregarParticipante()} className="flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#A855F7] transition-all" />
+                    <button onClick={agregarParticipante} className={`p-4 rounded-xl ${theme.primary} text-white shadow-lg active:scale-95 transition-all`}>
+                      <UserPlus size={20} />
+                    </button>
+                  </div>
+                </div>
+              </Drawer.Content>
+            </Drawer.Portal>
+          </Drawer.Root>
+
+          {/* === DRAWER DE NUEVA META (POTE) === */}
+          <Drawer.Root open={isAddingPote} onOpenChange={setIsAddingPote}>
+            <Drawer.Portal>
+              <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
+              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[75vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#10b981]">
+                <Drawer.Title className="sr-only">Registrar Nueva Meta</Drawer.Title>
+                <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+                  <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+                  <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Nueva Meta</h3>
+                  <form onSubmit={guardarPote} className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿Para qué estamos ahorrando?</label>
+                        <select value={poteForm.tipo} onChange={(e) => setPoteForm({...poteForm, tipo: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-emerald-500">
+                          {POTE_OPCIONES.map(opt => <option key={opt} value={opt} className="bg-[#121212]">{opt}</option>)}
+                        </select>
+                      </div>
+                      {poteForm.tipo === "Personalizado ✍️" && (
+                        <div className="animate-in fade-in slide-in-from-top-2">
+                           <input type="text" placeholder="Ej: Viaje a Margarita" value={poteForm.nombreCustom} onChange={(e) => setPoteForm({...poteForm, nombreCustom: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-emerald-500" required />
+                        </div>
+                      )}
+                      <div className="min-h-[80px]">
+                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Objetivo ($)</label>
+                        <input type="number" step="0.01" placeholder="0.00" value={poteForm.monto_objetivo} onChange={(e) => setPoteForm({...poteForm, monto_objetivo: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-emerald-500" required />
+                      </div>
+                    </div>
+                    <button type="submit" className="w-full bg-emerald-500 text-black font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(16,185,129,0.3)] mt-6 active:scale-95 transition-transform">Guardar Meta</button>
                   </form>
                 </div>
               </Drawer.Content>
@@ -2809,23 +2931,97 @@ const getPatrimonioNeto = () => {
           <NavButtonDesktop icon={<Shield />} label="Por si acaso" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
         )}
       </nav>
-      
-      {showToast && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300 pointer-events-none">
-          <div className={`bg-[#1a0f2e] border-2 ${theme.border} p-8 md:p-12 rounded-[2.5rem] shadow-[0_0_50px_rgba(168,85,247,0.4)] flex flex-col items-center gap-5 max-w-md w-full animate-in zoom-in`}>
-            <div className="w-16 h-16 flex items-center justify-center rounded-3xl text-4xl shadow-2xl">
-              {toastType === 'ingreso' ? <img src="/pote.png" className="w-16 h-16 object-contain drop-shadow-[0_0_20px_rgba(251,191,36,0.6)]" /> : '📉'}
-            </div>
-            <div className="text-center space-y-2">
-              <p className="text-white font-black text-lg italic text-center leading-tight">"{mensajeMotivacional}"</p>
-            </div>
-          </div>
-        </div>
+
+{/* === BOTÓN FLOTANTE (FAB) + MENÚ RÁPIDO === */}
+      {activeTab === 'inicio' && (
+        <>
+          <Drawer.Root open={isFABMenuOpen} onOpenChange={setIsFABMenuOpen}>
+            <Drawer.Portal>
+              <Drawer.Overlay className="fixed inset-0 bg-black/70 z-[90] backdrop-blur-sm" />
+              
+              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] fixed bottom-0 left-0 right-0 z-[100] border-t border-white/5 shadow-2xl max-h-[85vh]">
+                
+                {/* Etiquetas para silenciar advertencias de accesibilidad de la consola */}
+                <Drawer.Title className="sr-only">Menú de Acciones Rápidas</Drawer.Title>
+                <Drawer.Description className="sr-only">Opciones para registrar ingresos, egresos y p2p</Drawer.Description>
+
+                <div className="p-6 md:p-8 bg-[#1C1C1E] rounded-t-[32px] flex-1 overflow-y-auto pb-12 border border-white/5">
+                  <div className="mx-auto w-12 h-1 flex-shrink-0 rounded-full bg-[#333] mb-8" />
+                  
+                  <h3 className="text-xl font-black text-white mb-8 text-center">Registrar Actividad</h3>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    
+                    {/* OPCIÓN 1: ESCANEAR FACTURA */}
+                    <label className="flex flex-col items-center justify-center gap-3 p-6 bg-blue-600/10 rounded-2xl border border-blue-500/20 cursor-pointer transition-all hover:bg-blue-600/20 text-center">
+                      <Camera className="w-8 h-8 text-blue-500" />
+                      <span className="text-[11px] font-bold text-blue-100 uppercase tracking-widest">Escanear</span>
+                      <input type="file" accept="image/*" capture="environment" onChange={(e) => { setIsFABMenuOpen(false); handleScanInvoice(e); }} className="hidden" disabled={isScanning} />
+                    </label>
+
+                    {/* OPCIÓN 2: REGISTRO MANUAL (Ahora solo da un clic al gatillo fantasma) */}
+                    <button onClick={() => { setIsFABMenuOpen(false); setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 150); }} className="w-full flex flex-col items-center justify-center gap-3 p-6 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] text-center">
+                      <Plus className="w-8 h-8 text-white/70" />
+                      <span className="text-[11px] font-bold text-white/80 uppercase tracking-widest">Manual</span>
+                    </button>
+
+                    {/* OPCIÓN 3: CAMBIO P2P */}
+                    <button onClick={() => { setIsFABMenuOpen(false); setIsP2POpen(true); }} className="flex flex-col items-center justify-center gap-3 p-6 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] text-center">
+                      <ArrowLeftRight className="w-8 h-8 text-white/70" />
+                      <span className="text-[11px] font-bold text-white/80 uppercase tracking-widest">Cambio P2P</span>
+                    </button>
+
+                    {/* OPCIÓN 4: DINÁMICA (AÑADIR MIEMBRO O ABONO META) */}
+                    {espacioActivo?.tipo !== 'individual' ? (
+                      <button onClick={() => { setIsFABMenuOpen(false); setIsManageUsersOpen(true); }} className="flex flex-col items-center justify-center gap-3 p-6 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] text-center">
+                        <UserPlus className="w-8 h-8 text-white/70" />
+                        <span className="text-[11px] font-bold text-white/80 uppercase tracking-widest">Miembro</span>
+                      </button>
+                    ) : (
+                      <button onClick={() => { setIsFABMenuOpen(false); setTipo("ingreso"); setCategoria("abono_pote"); setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 150); }} className="flex flex-col items-center justify-center gap-3 p-6 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] text-center">
+                        <Target className="w-8 h-8 text-white/70" />
+                        <span className="text-[11px] font-bold text-white/80 uppercase tracking-widest">Abono Meta</span>
+                      </button>
+                    )}
+
+                  </div>
+                </div>
+              </Drawer.Content>
+            </Drawer.Portal>
+          </Drawer.Root>
+
+          {/* ========================================================= */}
+          {/* BOTÓN FLOTANTE MATE BLUE */}
+          {/* ========================================================= */}
+          <button 
+            onClick={() => setIsFABMenuOpen(true)}
+            className={`fixed bottom-24 md:bottom-10 right-6 z-50 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 
+              ${isScanning ? 'scale-90 opacity-80 cursor-not-allowed' : 'hover:scale-110 active:scale-95'} 
+              bg-[#2563EB] text-white`}
+            style={{ boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.4)' }}
+          >
+            {isScanning ? <Loader2 className="w-8 h-8 animate-spin" /> : <Plus className="w-8 h-8" strokeWidth={3} />}
+          </button>
+
+          {/* ========================================================= */}
+          {/* 🟢 GHOST TRIGGER: SIEMPRE VIVO PARA RESPONDER A LA IA */}
+          {/* ========================================================= */}
+          <TransactionDrawer
+            tipo={tipo} setTipo={setTipo} categoria={categoria} setCategoria={setCategoria}
+            customCategoria={customCategoria} setCustomCategoria={setCustomCategoria} categoriasList={categoriasList}
+            monto={monto} setMonto={setMonto} moneda={moneda} setMoneda={setMoneda}
+            descripcion={descripcion} setDescripcion={setDescripcion} rates={rates} theme={theme} onSubmit={handleManualSubmit}
+            espacios={espacios} espacioActivo={espacioActivo} potes={potes}
+            participantes={participantes} usuario={usuario} setUsuario={setUsuario}
+            destinoTransferencia={destinoTransferencia} setDestinoTransferencia={setDestinoTransferencia}
+          >
+            <button id="nuevo-registro-trigger" className="hidden">Gatillo Oculto</button>
+          </TransactionDrawer>
+        </>
       )}
     </div>
   );
 }
-
 function NavButton({ icon, label, active, onClick, theme }: any) {
   return (
     <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all ${active ? `${theme.text} scale-110` : 'text-white/40 hover:text-white/80'}`}>
