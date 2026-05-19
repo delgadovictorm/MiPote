@@ -1398,9 +1398,10 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
         triggerToast("ingreso", "¡Datos listos! Confirma el registro.");
         setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 500);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error detallado:", error);
-      alert("Error leyendo la factura. Intenta manualmente.");
+      // ESTO MOSTRARÁ EL ERROR REAL EN LA PANTALLA DEL TELÉFONO
+      alert("Error técnico de IA: " + (error?.message || JSON.stringify(error) || "Error desconocido"));
     } finally {
       setIsScanning(false);
       if (event.target) event.target.value = '';
