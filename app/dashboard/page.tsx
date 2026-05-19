@@ -1388,7 +1388,7 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
            productos: data.productos || []
         });
 
-        triggerToast("ingreso", "¡Datos listos! Confirma el registro.");
+        
         setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 500);
       }
     } catch (error: any) {
