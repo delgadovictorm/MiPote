@@ -1057,6 +1057,9 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
   const [customCategoria, setCustomCategoria] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [usuario, setUsuario] = useState("");
+
+  const [pagoFijoActivo, setPagoFijoActivo] = useState<any>(null);
+  const [monedaFijo, setMonedaFijo] = useState('bs');
   
   // NUEVO: DESTINO DE LA TRANSFERENCIA
   const [destinoTransferencia, setDestinoTransferencia] = useState("");
@@ -1319,34 +1322,54 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
   };
 
 
-// 📸 MOTOR DE IA: ESCANEO DE FACTURAS CON GPT-4o
+// 📸 MOTOR DE IA: ESCANEO DE FACTURAS CON GPT-4o (CON COMPRESIÓN PARA CELULARES)
   const handleScanInvoice = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-    if (!apiKey) return alert("Falta la API Key en el archivo .env.local");
+    if (!apiKey) return alert("Falta la API Key en el entorno.");
 
     setIsScanning(true);
-    triggerToast("ingreso", "Leyendo factura con IA... 📸");
+    triggerToast("ingreso", "Procesando factura... 📸");
 
     try {
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve) => {
-        reader.onloadend = () => resolve(reader.result as string);
+      // --- NUEVO: MOTOR DE COMPRESIÓN DE IMAGEN ---
+      // Evita que la app colapse en celulares por fotos de 8MB
+      const base64Image = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 1200; // Reducimos a un ancho manejable
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+            
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // Comprimimos a JPEG con 70% de calidad
+            resolve(canvas.toDataURL('image/jpeg', 0.7)); 
+          };
+          img.src = e.target?.result as string;
+        };
         reader.readAsDataURL(file);
       });
-      const base64Image = await base64Promise;
+      
+      // Quitamos el prefijo 'data:image/jpeg;base64,'
       const imageUrl = base64Image.split(',')[1];
 
+      // --- LLAMADA A OPENAI ---
       const openai = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
-        messages: [{
+       messages: [{
             role: "user",
             content: [
-              { type: "text", text: "Analiza esta factura. Extrae: 'comercio', 'monto_total' (número), 'moneda' (bs o usdt), 'iva_total' (número), 'fecha', 'hora', 'categoria_sugerida' (comida, cashea, internet, mascotas, condominio, regalos, otro) y un arreglo llamado 'productos' que contenga objetos con 'nombre' y 'precio'. Responde SOLO un JSON." },
+              { type: "text", text: "Analiza esta factura, recibo o captura de transferencia (ej. Pago Móvil/Zelle). Extrae: 'comercio' (o a quién se le pagó), 'monto_total' (número puro), 'moneda' (bs o usdt), 'iva_total' (número), 'fecha', 'hora', 'categoria_sugerida' (comida, cashea, internet, mascotas, condominio, regalos, otro) y un arreglo llamado 'productos' que contenga objetos con 'nombre' y 'precio'. Responde SOLO un JSON puro." },
               { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageUrl}` } }
             ],
         }],
@@ -1358,14 +1381,12 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
         const jsonString = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
         const data = JSON.parse(jsonString);
 
-        // --- CARGAR DATOS EN EL FORMULARIO VISUAL ---
         setTipo("egreso");
         setMonto(data.monto_total?.toString() || "");
         setMoneda(data.moneda?.toLowerCase() === 'bs' ? 'bs' : 'usdt');
         setDescripcion(`${data.comercio || 'Comercio'} (${data.hora || ''})`);
         setCategoria(categoriasList.some(c => c.valor === data.categoria_sugerida) ? data.categoria_sugerida : "otro");
 
-        // --- NUEVO: GUARDAR LA DATA ESTRUCTURADA EN LOS BOLSILLOS OCULTOS ---
         setComercio(data.comercio || "");
         setMetadatosFactura({
            fecha: data.fecha,
@@ -1378,15 +1399,13 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
         setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 500);
       }
     } catch (error) {
-      console.error(error);
+      console.error("Error detallado:", error);
       alert("Error leyendo la factura. Intenta manualmente.");
     } finally {
       setIsScanning(false);
       if (event.target) event.target.value = '';
     }
   };
-  
-
 
   // 🔥 LÓGICA DE REGISTRO Y TRANSFERENCIAS
 const handleManualSubmit = async (e: React.FormEvent) => {
@@ -1618,6 +1637,40 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
     setIsAddingFijo(false);
     setFijoForm({ descripcion: "", monto: "", dia_pago: "1" });
+  };
+
+  const confirmarPagoFijo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pagoFijoActivo || !espacioActivo) return;
+
+    const costo_usd = parseFloat(pagoFijoActivo.monto);
+    const costo_bs = costo_usd * rates.usdt; // Asumimos tasa paralelo para gastos fijos
+    const desc = `Pago Fijo: ${pagoFijoActivo.descripcion}`;
+
+    // Modificamos el estado local para marcarlo como pagado
+    const updated = gastosFijos.map((gf:any) => gf.id === pagoFijoActivo.id ? { ...gf, pagado: true } : gf);
+    setGastosFijos(updated);
+    localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
+
+    if (!isGuest) {
+      await supabase.from("transacciones_saas").insert([{ 
+        descripcion: desc, 
+        monto_original: monedaFijo === 'bs' ? costo_bs : costo_usd, 
+        moneda_original: monedaFijo, 
+        monto_bs: costo_bs, 
+        monto_usd_bcv: costo_usd, 
+        monto_usd_paralelo: costo_usd, 
+        categoria: "internet", // Categoría genérica para fijos
+        usuario: perfil?.nombre || session?.user?.email?.split('@')[0] || "Tú", 
+        tipo: "egreso", 
+        espacio_id: espacioActivo.id, 
+        usuario_id: session.user.id 
+      }]);
+    }
+    
+    fetchData();
+    triggerToast("egreso", "Gasto Fijo descontado de tu liquidez.");
+    setPagoFijoActivo(null);
   };
 
   const toggleGastoFijo = (id: string) => {
@@ -2039,12 +2092,56 @@ const getPatrimonioNeto = () => {
               </Drawer.Portal>
             </Drawer.Root>
 
+            {/* DRAWER PARA CONFIRMAR PAGO DE GASTO FIJO */}
+            <Drawer.Root open={!!pagoFijoActivo} onOpenChange={(open) => !open && setPagoFijoActivo(null)}>
+              <Drawer.Portal>
+                <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
+                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-auto fixed bottom-0 left-0 right-0 z-[250] border-t border-emerald-500 pb-8">
+                  <Drawer.Title className="sr-only">Pagar Gasto Fijo</Drawer.Title>
+                  <div className="p-6">
+                    <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+                    <h3 className="text-xl font-black text-white mb-2 text-center">Pagar Gasto Fijo</h3>
+                    <p className="text-center text-white/50 text-sm mb-6">{pagoFijoActivo?.descripcion}</p>
+                    
+                    <form onSubmit={confirmarPagoFijo} className="flex flex-col gap-4">
+                      <div>
+                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿De qué cuenta salió el dinero?</label>
+                        <select value={monedaFijo} onChange={e => setMonedaFijo(e.target.value)} className="w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-sm font-bold text-white outline-none focus:border-emerald-500 appearance-none">
+                          <option value="bs">Bolívares (Pago Móvil / Banco)</option>
+                          <option value="usdt">USDT (Zinli / Binance)</option>
+                          <option value="cash">Efectivo (Cash)</option>
+                        </select>
+                      </div>
+                      
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center mt-2">
+                        <p className="text-[10px] text-emerald-400 uppercase tracking-widest mb-1 font-bold">Monto a descontar</p>
+                        <p className="text-2xl font-black text-emerald-400 font-sans tabular-nums">${parseFloat(pagoFijoActivo?.monto || '0').toFixed(2)}</p>
+                      </div>
+
+                      <button type="submit" className="w-full bg-emerald-500 text-black font-black uppercase tracking-widest py-4 rounded-2xl shadow-lg mt-4 active:scale-95 transition-transform">
+                        Confirmar y Descontar
+                      </button>
+                    </form>
+                  </div>
+                </Drawer.Content>
+              </Drawer.Portal>
+            </Drawer.Root>
+
             <div className="space-y-2">
               {gastosFijos.length === 0 ? (
                 <p className="text-[10px] md:text-xs text-white/50 italic px-2">No hay gastos fijos configurados.</p>
               ) : gastosFijos.map((gf:any) => (
                 <div key={gf.id} className={`group flex items-center justify-between p-3 md:p-4 rounded-2xl border ${gf.pagado ? 'bg-emerald-900/20 border-emerald-500/30' : `bg-black/40 ${theme.border}`}`}>
-                  <div className="flex items-center gap-2.5 md:gap-3 cursor-pointer" onClick={() => toggleGastoFijo(gf.id)}>
+                  <div className="flex items-center gap-2.5 md:gap-3 cursor-pointer" onClick={() => {
+    if (gf.pagado) {
+        // Si ya estaba pagado, lo desmarcamos sin devolver el dinero (para evitar duplicados)
+        const updated = gastosFijos.map((g:any) => g.id === gf.id ? { ...g, pagado: false } : g);
+        setGastosFijos(updated); localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
+    } else {
+        // Abrir el modal de pago
+        setPagoFijoActivo(gf);
+    }
+}}>
                     {gf.pagado ? <CheckSquare className="text-emerald-400 w-5 h-5"/> : <Square className={`${theme.text} w-5 h-5`}/>}
                     <div>
                       <p className="text-xs md:text-sm font-bold text-white">{gf.descripcion}</p>
@@ -2192,6 +2289,7 @@ const getPatrimonioNeto = () => {
 
       return (
         <div className="space-y-6">
+          
           
         {/* HEADER PRINCIPAL (PATRIMONIO O VACA) */}
           {espacioActivo?.tipo === 'vaca' ? (
@@ -2392,8 +2490,11 @@ const getPatrimonioNeto = () => {
           {espacioActivo?.tipo === 'individual' && (
             <div className="mb-6">
               <div className={`bg-[#1a1a1a] border border-[#333] p-6 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[220px]`}>
-                 <div className="flex justify-between items-start mb-4">
-                    <p className="text-white/80 font-bold text-sm">Tu Liquidez ({activeWallet.toUpperCase()})</p>
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-white/80 font-bold text-sm">Tu Liquidez ({activeWallet.toUpperCase()})</p>
+                      <p className="text-[10px] text-emerald-400/80 mt-0.5 font-medium">Dinero real y disponible para gastar hoy.</p>
+                    </div>
                     <Wallet className="w-6 h-6 text-white/30" />
                  </div>
                  
@@ -2539,7 +2640,7 @@ const getPatrimonioNeto = () => {
               <div className="w-12 h-12 rounded-full bg-[#3B82F6]/10 flex items-center justify-center border border-[#3B82F6]/20 group-hover:scale-110 transition-transform">
                 <Calculator className="w-6 h-6 text-[#3B82F6]" />
               </div>
-              <span className="text-white font-bold text-xs uppercase tracking-wider">Simulador</span>
+              <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest text-center leading-tight">Simulador<br/>de Compras</span>
             </button>
 
             {/* BOTÓN 3: NUEVA META (Fucsia) */}
@@ -2726,6 +2827,7 @@ const getPatrimonioNeto = () => {
                 </div>
              </div>
           )}
+          <div className="h-28 w-full"></div>
 
         </div>
       );
@@ -2905,7 +3007,8 @@ const getPatrimonioNeto = () => {
           <NavButton icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
           
           <div className="relative -top-5">
-            <button onClick={() => setIsSpacesMenuOpen(true)} className={`bg-blue-600 text-white p-4 rounded-full shadow-[0_5px_20px_rgba(37,99,235,0.4)] active:scale-95 transition-transform border-4 border-[#0d0714]`}>
+            {/* Botón Central sin sombra brillante */}
+            <button onClick={() => setIsSpacesMenuOpen(true)} className="bg-[#2563EB] text-white p-4 rounded-full active:scale-95 transition-transform border-4 border-[#0d0714]">
                <Layers className="w-6 h-6" />
             </button>
           </div>
@@ -2956,7 +3059,13 @@ const getPatrimonioNeto = () => {
                     <label className="flex flex-col items-center justify-center gap-3 p-6 bg-blue-600/10 rounded-2xl border border-blue-500/20 cursor-pointer transition-all hover:bg-blue-600/20 text-center">
                       <Camera className="w-8 h-8 text-blue-500" />
                       <span className="text-[11px] font-bold text-blue-100 uppercase tracking-widest">Escanear</span>
-                      <input type="file" accept="image/*" capture="environment" onChange={(e) => { setIsFABMenuOpen(false); handleScanInvoice(e); }} className="hidden" disabled={isScanning} />
+                      <input 
+  type="file" 
+  accept="image/*" 
+  onChange={(e) => { setIsFABMenuOpen(false); handleScanInvoice(e); }} 
+  className="hidden" 
+  disabled={isScanning} 
+/>
                     </label>
 
                     {/* OPCIÓN 2: REGISTRO MANUAL (Ahora solo da un clic al gatillo fantasma) */}
