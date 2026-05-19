@@ -3108,7 +3108,7 @@ const getPatrimonioNeto = () => {
           {/* ========================================================= */}
           {/* 🟢 GHOST TRIGGER: SIEMPRE VIVO PARA RESPONDER A LA IA */}
           {/* ========================================================= */}
-          <TransactionDrawer
+    <TransactionDrawer
             tipo={tipo} setTipo={setTipo} categoria={categoria} setCategoria={setCategoria}
             customCategoria={customCategoria} setCustomCategoria={setCustomCategoria} categoriasList={categoriasList}
             monto={monto} setMonto={setMonto} moneda={moneda} setMoneda={setMoneda}
@@ -3120,6 +3120,28 @@ const getPatrimonioNeto = () => {
             <button id="nuevo-registro-trigger" className="hidden">Gatillo Oculto</button>
           </TransactionDrawer>
         </>
+      )}
+
+      {/* === TOAST DE NOTIFICACIONES (MENSAJES DE MOTIVACIÓN) === */}
+      {showToast && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300 pointer-events-none">
+          <div className="bg-[#1C1C1E] border border-white/5 p-8 md:p-12 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col items-center gap-5 max-w-md w-full animate-in zoom-in">
+            <div className="w-20 h-20 flex items-center justify-center rounded-[2rem] shadow-lg bg-[#121212] border border-white/5">
+              <img 
+                src="/pote.png" 
+                alt="Logo Pote" 
+                className={`w-14 h-14 object-contain transition-all ${
+                  toastType === 'ingreso' 
+                    ? 'drop-shadow-[0_0_20px_rgba(16,185,129,0.5)]' 
+                    : 'drop-shadow-[0_0_20px_rgba(244,63,94,0.5)]'
+                }`} 
+              />
+            </div>
+            <div className="text-center space-y-2">
+              <p className="text-white font-black text-lg italic text-center leading-tight">"{mensajeMotivacional}"</p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
