@@ -1322,7 +1322,7 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
   };
 
 
-// 📸 MOTOR DE IA: ESCANEO DE FACTURAS CON GPT-4o (CON COMPRESIÓN PARA CELULARES)
+// 📸 MOTOR DE IA: ESCANEO DE FACTURAS CON GPT-4o (VÍA FETCH NATIVO PARA MÓVILES)
   const handleScanInvoice = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1334,59 +1334,72 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
     triggerToast("ingreso", "Procesando factura... 📸");
 
     try {
-      // --- NUEVO: MOTOR DE COMPRESIÓN DE IMAGEN ---
-      // Evita que la app colapse en celulares por fotos de 8MB
-      const base64Image = await new Promise<string>((resolve) => {
+      // 1. Motor de compresión de imagen para evitar colapso de memoria
+      const base64Image = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const img = new Image();
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 1200; // Reducimos a un ancho manejable
+            const MAX_WIDTH = 1000; // Reducimos aún más para asegurar conexión rápida
             const scaleSize = MAX_WIDTH / img.width;
             canvas.width = MAX_WIDTH;
             canvas.height = img.height * scaleSize;
             
             const ctx = canvas.getContext('2d');
             ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-            
-            // Comprimimos a JPEG con 70% de calidad
-            resolve(canvas.toDataURL('image/jpeg', 0.7)); 
+            resolve(canvas.toDataURL('image/jpeg', 0.6)); // Mayor compresión
           };
+          img.onerror = reject;
           img.src = e.target?.result as string;
         };
+        reader.onerror = reject;
         reader.readAsDataURL(file);
       });
       
-      // Quitamos el prefijo 'data:image/jpeg;base64,'
       const imageUrl = base64Image.split(',')[1];
 
-      // --- LLAMADA A OPENAI ---
-      const openai = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-       messages: [{
-            role: "user",
-            content: [
-              { type: "text", text: "Analiza esta factura, recibo o captura de transferencia (ej. Pago Móvil/Zelle). Extrae: 'comercio' (o a quién se le pagó), 'monto_total' (número puro), 'moneda' (bs o usdt), 'iva_total' (número), 'fecha', 'hora', 'categoria_sugerida' (comida, cashea, internet, mascotas, condominio, regalos, otro) y un arreglo llamado 'productos' que contenga objetos con 'nombre' y 'precio'. Responde SOLO un JSON puro." },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageUrl}` } }
-            ],
-        }],
-        temperature: 0,
+      // 2. CONEXIÓN NATIVA A OPENAI (Evita el 'Connection error' del SDK en móviles)
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [{
+              role: "user",
+              content: [
+                { type: "text", text: "Analiza esta factura, recibo o captura de transferencia (ej. Pago Móvil/Zelle). Extrae: 'comercio' (o a quién se le pagó), 'monto_total' (número puro), 'moneda' (bs o usdt), 'iva_total' (número), 'fecha', 'hora', 'categoria_sugerida' (comida, cashea, internet, mascotas, condominio, regalos, otro) y un arreglo llamado 'productos' que contenga objetos con 'nombre' y 'precio'. Responde SOLO un JSON puro." },
+                { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageUrl}` } }
+              ],
+          }],
+          temperature: 0,
+        })
       });
 
-      const aiResponse = response.choices[0]?.message?.content;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || "Error HTTP en la conexión con OpenAI");
+      }
+
+      const dataResult = await response.json();
+      const aiResponse = dataResult.choices[0]?.message?.content;
+      
       if (aiResponse) {
+        // Limpiamos el JSON por si GPT le pone comillas raras
         const jsonString = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
         const data = JSON.parse(jsonString);
 
+        // Preparamos los datos para el formulario
         setTipo("egreso");
         setMonto(data.monto_total?.toString() || "");
         setMoneda(data.moneda?.toLowerCase() === 'bs' ? 'bs' : 'usdt');
         setDescripcion(`${data.comercio || 'Comercio'} (${data.hora || ''})`);
         setCategoria(categoriasList.some(c => c.valor === data.categoria_sugerida) ? data.categoria_sugerida : "otro");
 
+        // Datos para el JSONB del estudio de mercado
         setComercio(data.comercio || "");
         setMetadatosFactura({
            fecha: data.fecha,
@@ -1400,14 +1413,13 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
       }
     } catch (error: any) {
       console.error("Error detallado:", error);
-      // ESTO MOSTRARÁ EL ERROR REAL EN LA PANTALLA DEL TELÉFONO
       alert("Error técnico de IA: " + (error?.message || JSON.stringify(error) || "Error desconocido"));
     } finally {
       setIsScanning(false);
       if (event.target) event.target.value = '';
     }
   };
-
+  
   // 🔥 LÓGICA DE REGISTRO Y TRANSFERENCIAS
 const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
