@@ -16,7 +16,61 @@ import { EmergenciaTab } from "@/components/Dashboard/EmergenciaTab";
 import { CalculadoraTab } from "@/components/Dashboard/CalculadoraTab";
 import OpenAI from "openai";
 import { Camera } from "lucide-react"; // Asegúrate de tener este icono
+import { motion, AnimatePresence } from "framer-motion"
 
+// ============================================================================
+// CONFIGURACIÓN VISUAL DE GAMIFICACIÓN (ESTILO DUOLINGO/OPAL)
+// ============================================================================
+
+const ASSETS_POTES = {
+  barro: "/pote-barro.png",
+  bronce: "/pote-bronce.png",
+  plata: "/pote-plata.png",
+  oro: "/pote-oro.png",
+  lobo: "/pote-lobo.png",
+};
+
+const RECOMPENSAS_RACHA = {
+  1: { 
+    nombre: "Hábito Iniciado", 
+    desc: "¡Felicidades! Tu racha financiera ha comenzado. ¡Sigue así para llegar lejos!", 
+    color: "#C2410C", // orange-700
+    bgGradient: "from-orange-950/40 to-black"
+  },
+  3: { 
+    nombre: "Consistencia Inicial", 
+    desc: "¡Tu constancia te está llevando lejos! ¡Sigue así para mantener el control!", 
+    color: "#EA580C", // orange-600
+    bgGradient: "from-orange-900/40 to-black"
+  },
+  7: { 
+    nombre: "Semana de Disciplina", 
+    desc: "¡Una semana bajo control! Estás demostrando una gran disciplina financiera. ¡Excelente!", 
+    color: "#B45309", // amber-700
+    bgGradient: "from-amber-950/40 to-black"
+  },
+  21: { 
+    nombre: "Hábito Formado", 
+    desc: "¡Hábito formado! Controlar tus finanzas es ahora parte de tu día a día. ¡Excelente trabajo!", 
+    color: "#94A3B8", // slate-400
+    bgGradient: "from-slate-900/50 to-black"
+  },
+  50: { 
+    nombre: "Dominio Presupuestario", 
+    desc: "¡Maestría Presupuestaria! Estás dominando tu presupuesto y futuro financiero. ¡Enhorabuena!", 
+    color: "#F59E0B", // amber-500
+    bgGradient: "from-yellow-950/50 to-black",
+    glow: "shadow-[0_0_60px_rgba(245,158,11,0.35)]"
+  },
+  100: { 
+    nombre: "Consciencia Absoluta", 
+    desc: "¡Consciencia Financiera Absoluta! Te has convertido en un verdadero experto en tu dinero. ¡Increíble!", 
+    color: "#22D3EE", // cyan-400
+    bgGradient: "from-cyan-950/60 to-black",
+    glow: "shadow-[0_0_70px_rgba(34,211,238,0.45)]",
+    pulse: true
+  }
+};
 // ============================================================================
 // 1. COMPONENTE TRANSACTION DRAWER (PANTALLA COMPLETA NATIVA PARA IOS)
 // ============================================================================
@@ -330,6 +384,10 @@ export default function MiPoteApp() {
   const [isPro, setIsPro] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [currentView, setCurrentView] = useState('auth'); 
+
+  // Estado para controlar la animación a pantalla completa de Duolingo
+  const [showStreakCelebration, setShowStreakCelebration] = useState(false);
+  const [celebrationData, setCelebrationData] = useState<any>(null);
   
   const [authStage, setAuthStage] = useState<'welcome'|'login'|'reg1'|'reg2'|'loading'>('welcome');
   const [email, setEmail] = useState("");
@@ -392,9 +450,55 @@ export default function MiPoteApp() {
       const { data: newPerfil } = await supabase.from('perfiles').insert([{ id: userId, is_pro: false, estado_pago: 'gratis', email: user?.email }]).select().single();
       perfilBd = newPerfil;
     }
+
+    // --- MOTOR DE RACHAS FINANCIERAS ---
+    const hoyStr = new Date().toISOString().slice(0, 10);
+    const ultimaConexionStr = perfilBd.ultima_conexion;
+    let nuevaRacha = perfilBd.racha_actual || 0;
+    let nuevaRachaMax = perfilBd.racha_maxima || 0;
+
+    if (!ultimaConexionStr) {
+      nuevaRacha = 1; nuevaRachaMax = 1;
+    } else {
+      const fechaHoy = new Date(hoyStr);
+      const fechaUltima = new Date(ultimaConexionStr);
+      const diferenciaDias = Math.floor((fechaHoy.getTime() - fechaUltima.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (diferenciaDias === 1) {
+        nuevaRacha += 1;
+        if (nuevaRacha > nuevaRachaMax) nuevaRachaMax = nuevaRacha;
+      } else if (diferenciaDias > 1) {
+        nuevaRacha = 1; // Racha rota
+      }
+    }
+
+  // Actualizar BD silenciosamente si cambió el día
+    if (ultimaConexionStr !== hoyStr) {
+      await supabase.from('perfiles').update({
+        racha_actual: nuevaRacha, racha_maxima: nuevaRachaMax, ultima_conexion: hoyStr
+      }).eq('id', userId);
+
+      perfilBd.racha_actual = nuevaRacha;
+      perfilBd.racha_maxima = nuevaRachaMax;
+      perfilBd.ultima_conexion = hoyStr;
+
+      // 🟢 GATILLO DE ANIMACIÓN PANTALLA COMPLETA
+      // Si la racha subió y tenemos una recompensa configurada para ese número exacto
+      if (nuevaRacha > (perfilBd.racha_actual || 0) && RECOMPENSAS_RACHA[nuevaRacha as keyof typeof RECOMPENSAS_RACHA]) {
+        setCelebrationData({
+          dias: nuevaRacha,
+          recompensa: RECOMPENSAS_RACHA[nuevaRacha as keyof typeof RECOMPENSAS_RACHA]
+        });
+        // Pequeño delay para que cargue el dashboard de fondo
+        setTimeout(() => setShowStreakCelebration(true), 1000); 
+      }
+    }
+    // ------------------------------------
+
     setIsPro(perfilBd?.is_pro || false);
     setPerfil(perfilBd);
 
+    // Carga de espacios (se mantiene igual...)
     const { data: espaciosData } = await supabase.from('espacios').select('*, espacio_miembros!inner(usuario_id)').eq('espacio_miembros.usuario_id', userId);
     
     if (espaciosData && espaciosData.length > 0) {
@@ -880,11 +984,19 @@ export default function MiPoteApp() {
                </div>
             )}
           </div>
-        </div>
+       </div>
       )}
 
+      {/* 🟢 AQUÍ PONES EL MODAL DE CELEBRACIÓN */}
+      <StreakCelebrationModal 
+        isOpen={showStreakCelebration} 
+        onClose={() => setShowStreakCelebration(false)} 
+        dias={celebrationData?.dias}
+        recompensa={celebrationData?.recompensa}
+      />
+
       <div className="w-full max-w-5xl relative">
-        <FinanzasDashboardContent 
+        <FinanzasDashboardContent
           key={`${session?.user?.id || 'guest'}-${espacioActivo?.id || 'none'}`}
           session={session} 
           espacios={espacios}
@@ -899,17 +1011,19 @@ export default function MiPoteApp() {
           perfil={perfil}
           onTriggerPaywall={() => setShowPaywall(true)}
           onChangeView={setCurrentView}
+          onShowCelebration={(data: any) => { setCelebrationData(data); setShowStreakCelebration(true); }}
         />
       </div>
     </div>
   );
 }
 
+
 // ============================================================================
 // 3. DASHBOARD PRINCIPAL - NÚCLEO DINÁMICO
 // ============================================================================
 function FinanzasDashboardContent({ 
-  session, espacios, setEspacioActivo, espacioActivo, onSelectModule, handleLogout, openProfileModal, openJoinModal, isGuest = false, perfil, onTriggerPaywall, forceTab, onChangeView
+  session, espacios, setEspacioActivo, espacioActivo, onSelectModule, handleLogout, openProfileModal, openJoinModal, isGuest = false, perfil, onTriggerPaywall, forceTab, onChangeView, onShowCelebration // <- AGREGADO AQUÍ AL FINAL
 }: any) {
 const getTheme = (tipo: string) => {
     switch(tipo) {
@@ -919,6 +1033,36 @@ const getTheme = (tipo: string) => {
     }
   };
   const theme = getTheme(espacioActivo?.tipo || 'individual');
+
+
+// 1. Calculador de rango visual
+  const obtenerRangoActual = (diasRacha: number) => {
+    const hitos = Object.keys(RECOMPENSAS_RACHA).map(Number).sort((a, b) => b - a);
+    const hitoActual = hitos.find(h => diasRacha >= h) || 1;
+    return RECOMPENSAS_RACHA[hitoActual as keyof typeof RECOMPENSAS_RACHA];
+  };
+
+  // 2. Registrador de hitos al finalizar un pote
+  const registrarMetaCumplida = async (poteId: string) => {
+    if (isGuest || !session?.user?.id) return;
+    try {
+      const nuevoContador = (perfil?.metas_cumplidas || 0) + 1;
+      await supabase.from('perfiles').update({ metas_cumplidas: nuevoContador }).eq('id', session.user.id);
+      
+      const hitoLogrado = RECOMPENSAS_METAS.find(h => h.requeridas === nuevoContador);
+      if (hitoLogrado) triggerToast("ingreso", `Logro Desbloqueado: ¡${hitoLogrado.nombre}!`);
+      
+      await eliminarPote(poteId); // Llama a tu función original para borrar el pote
+      triggerToast("ingreso", "¡Felicidades! Meta completada e historial actualizado.");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+const RECOMPENSAS_METAS = [
+  { requeridas: 1, nombre: "Primer Ahorro", desc: "Meta inicial completada" },
+  { requeridas: 3, nombre: "Planificador Eficiente", desc: "3 metas ejecutadas con éxito" },
+  { requeridas: 10, nombre: "Inversionista Disciplinado", desc: "10 metas fondeadas por completo" }
+];
 
   const eliminarEspacio = async (e: React.MouseEvent, idEspacio: string, tipo: string, nombre: string) => {
     e.stopPropagation();
@@ -2553,7 +2697,7 @@ const getPatrimonioNeto = () => {
                         <span className="text-3xl mb-1">🎉</span>
                         <h3 className="text-white font-black text-lg">¡Meta Alcanzada!</h3>
                         <p className="text-white/90 text-[10px] mb-3 font-bold">Lograron ahorrar ${pote.monto_objetivo}.</p>
-                        <button onClick={() => eliminarPote(pote.id)} className="bg-[#121212] text-white font-bold px-4 py-2 rounded-xl text-xs active:scale-95 transition-transform">Finalizar y Eliminar</button>
+                        <button onClick={() => registrarMetaCumplida(pote.id)} className="bg-[#121212] text-white font-bold px-4 py-2 rounded-xl text-xs active:scale-95 transition-transform">Reclamar y Finalizar</button>
                       </div>
                     )}
 
@@ -2855,8 +2999,30 @@ const getPatrimonioNeto = () => {
                    </>
                  )}
              </div>
-             <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2 mt-1">
                 <span className={`text-[9px] uppercase tracking-widest ${theme.text} ${theme.lightBg} px-2 py-0.5 rounded-md font-bold`}>{espacioActivo?.tipo || "Individual"}</span>
+                
+              {/* MEDALLA DE RACHA SÚPER LIMPIA (Sin cajas, sin fondos, sin resplandor) */}
+                 {perfil && (
+                   <button 
+                     onClick={(e) => {
+                       e.stopPropagation(); // Evita que se abra el perfil de atrás
+                       onShowCelebration({
+                         dias: perfil.racha_actual || 0,
+                         recompensa: obtenerRangoActual(perfil.racha_actual || 0)
+                       });
+                     }}
+                     // 🔴 Diseño puro: Solo flexbox y padding, sin fondos ni bordes 🔴
+                     className="flex items-center gap-1.5 px-2 py-1 text-sm font-black transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+                     // 🔴 Solo aplicamos el color de texto, nada de fondos ni sombras 🔴
+                     style={{ color: obtenerRangoActual(perfil.racha_actual || 0).color }}
+                   >
+                     <span className="drop-shadow-md">🔥</span>
+                     <span className="font-sans tabular-nums tracking-tight">
+                       {perfil.racha_actual || 0}
+                     </span>
+                   </button>
+                 )}
              </div>
           </div>
         </div>
@@ -3160,6 +3326,92 @@ function NavButtonDesktop({ icon, label, active, onClick, theme }: any) {
     <button onClick={onClick} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all ${active ? `${theme.primary} text-white shadow-lg` : `bg-[#1a0f2e] ${theme.text} border ${theme.border} hover:bg-white/5`}`}>
       {icon} {label}
     </button>
+  );
+}
+
+// ============================================================================
+// COMPONENTE DE CELEBRACIÓN DE RACHA (DISEÑO PREMIUM TEXTUAL CON BLINDAJE Y CORRECCIONES)
+// ============================================================================
+function StreakCelebrationModal({ isOpen, onClose, dias, recompensa }: any) {
+  if (!recompensa) return null;
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          key="backdrop" // CLAVE AGREGADA PARA EVITAR EL ERROR DE KEYS
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          // 🔴 FIJADO: z-index altísimo para blindar contra el panel de perfil 🔴
+          // 🔴 FIJADO: Eliminado el gradiente del fondo. Ahora es un overlay negro limpio 🔴
+          className="fixed inset-0 z-[1000000] flex flex-col items-center justify-center p-6 bg-black/80 backdrop-blur-md pointer-events-auto"
+          onClick={onClose} // Cerrar al tocar fuera del contenido
+        />
+      )}
+
+      {isOpen && (
+        <motion.div
+          key="content" // CLAVE AGREGADA PARA EVITAR EL ERROR DE KEYS y ANIMACIÓN DE SALIDA
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ type: "spring", stiffness: 200, damping: 20 }}
+          // 🔴 FIJADO: z-index superior para estar sobre el backdrop y el panel de perfil 🔴
+          className="fixed inset-0 z-[1000001] flex flex-col items-center justify-center p-8 pointer-events-none"
+        >
+          {/* Diseño centralizado y compacto. Aseguramos que el contenido sí reciba eventos */}
+          <div className="text-center w-full max-w-sm flex flex-col items-center gap-2 pointer-events-auto">
+            
+            {/* Texto de cabecera limpio */}
+            <motion.p
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-white/60 text-base md:text-xl uppercase font-black tracking-[0.2em] mb-2"
+            >
+              Días de racha financiera
+            </motion.p>
+
+            {/* 🔥 Número de racha gigante con efecto de fuego integrado 🔥 */}
+            <motion.div
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.5, type: "spring", stiffness: 150 }}
+              className={`relative flex items-center justify-center pt-2 pb-6 ${recompensa.glow || ''}`}
+            >
+              <span className="text-[140px] md:text-[200px] font-black leading-none font-sans tabular-nums tracking-tighter" style={{ color: recompensa.color, textShadow: `0 0 50px ${recompensa.color}80` }}>
+                {dias}
+              </span>
+              <span className="absolute -top-1 -right-1 text-[24px] drop-shadow-md">🔥</span>
+            </motion.div>
+            
+            {/* Mensaje de felicitación directo, sin recuadros toscos */}
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.7 }}
+              className={`text-center space-y-1 mb-8 ${recompensa.pulse ? 'animate-pulse' : ''}`}
+            >
+                <h2 className="text-2xl md:text-3xl font-black text-white">{recompensa.nombre}</h2>
+                <p className="text-white/80 text-base md:text-lg">{recompensa.desc}</p>
+            </motion.div>
+          
+            {/* Botón continuar prominent, parte del flujo */}
+            <motion.button
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 1.0 }}
+              // 🔴 FIJADO: Agregado onClick={onClose} para que sirva el botón 🔴
+              onClick={onClose}
+              className="mt-6 px-12 py-5 bg-white text-black font-black rounded-full text-xl shadow-2xl pointer-events-auto hover:scale-105 active:scale-95 transition-all cursor-pointer"
+            >
+              ¡CONTINUAR!
+            </motion.button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
