@@ -9,6 +9,7 @@ import {
   Sparkles, Star, ChevronDown, 
   Bell, Plus, Target, Calculator, ArrowDownCircle, Lock
 } from "lucide-react";
+import { InstallPWA } from "@/components/UI/InstallPWA";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -165,6 +166,10 @@ export default function LandingPage() {
           <Link href="/dashboard" className="w-full md:w-auto bg-purple-600 hover:bg-purple-500 text-black px-12 py-5 rounded-full font-black text-lg uppercase italic shadow-[0_0_40px_rgba(147,51,234,0.4)] transition-all hover:scale-105 flex items-center justify-center gap-3">
             Empezar ahora <ArrowRight className="w-6 h-6" />
           </Link>
+          {/* 📱 BOTÓN DE INSTALACIÓN (Solo visible en móviles) */}
+          <div className="mt-8">
+            <InstallPWA />
+          </div>
         </div>
       </section>
 

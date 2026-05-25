@@ -16,7 +16,17 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Mi Pote | Finanzas",
   description: "Control de finanzas compartidas y personales",
-  manifest: "/manifest.json", // <--- Conector PWA
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Mi Pote",
+    // Asegúrate de tener este archivo en tu carpeta /public
+    startupImage: "/pote.png", 
+  },
+  icons: {
+    apple: "/pote.png",
+  },
 };
 
 // app/layout.tsx o app/layout.jsx
