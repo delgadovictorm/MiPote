@@ -1,170 +1,214 @@
-"use client";
+import React, { useState, useRef } from 'react';
+import { ArrowLeft, Calculator, Camera, Loader2, RefreshCw, DollarSign, Wallet } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-import React, { useState, useEffect } from "react";
-import { ArrowLeft, ArrowDownCircle, Calculator, Copy } from "lucide-react";
+export function CalculadoraTab({ rates, theme, triggerToast, onBack }: any) {
+  const [inputValue, setInputValue] = useState("");
+  const [monedaOrigen, setMonedaOrigen] = useState<'usd'|'bs'>('usd');
+  const [isScanning, setIsScanning] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-interface CalculadoraTabProps {
-  rates: any;
-  theme: any;
-  triggerToast?: (msg: string, type?: string) => void;
-  onBack?: () => void;
-}
-
-export function CalculadoraTab({
-  rates,
-  theme,
-  triggerToast,
-  onBack,
-}: CalculadoraTabProps) {
-  const [calcAmount, setCalcAmount] = useState("");
-  const [calcBs, setCalcBs] = useState("");
-  const [currency, setCurrency] = useState("usd");
-  const [rateType, setRateType] = useState("paralelo");
-
-  // Determinar la tasa activa según la moneda y el tipo seleccionado
-  const activeRate = currency === 'usd' 
-    ? (rateType === 'paralelo' ? rates.usdt : rates.bcv)
-    : (rateType === 'paralelo' ? rates.eur_paralelo : rates.eur_bcv);
-
-  // Lógica Bidireccional
-  const handleCalcAmount = (val: string) => {
-    setCalcAmount(val);
-    const num = parseFloat(val) || 0;
-    setCalcBs((num * activeRate).toFixed(2));
+  // Formateador exacto para Venezuela (Ej: 1.234,50)
+  const formatVE = (num: number) => {
+    if (!num || isNaN(num)) return "0,00";
+    return num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const handleCalcBs = (val: string) => {
-    setCalcBs(val);
-    const num = parseFloat(val) || 0;
-    setCalcAmount(activeRate > 0 ? (num / activeRate).toFixed(2) : "0.00");
-  };
+  // Convertimos el input de texto a número para los cálculos (manejando las comas si el usuario las escribe)
+  const numValue = parseFloat(inputValue.replace(/\./g, '').replace(',', '.')) || 0;
 
-  // Recalcular si el usuario cambia la moneda (USD a EUR) o la tasa (Paralelo a BCV)
-  useEffect(() => {
-    if (calcAmount) {
-      const num = parseFloat(calcAmount) || 0;
-      setCalcBs((num * activeRate).toFixed(2));
+  // Cálculos Simultáneos
+  const bcvResult = monedaOrigen === 'usd' ? numValue * rates.bcv : rates.bcv > 0 ? numValue / rates.bcv : 0;
+  const paraleloResult = monedaOrigen === 'usd' ? numValue * rates.usdt : rates.usdt > 0 ? numValue / rates.usdt : 0;
+  // Para el tercero usamos Euro si existe, si no mostramos el equivalente inverso
+  const euroResult = monedaOrigen === 'usd' 
+    ? (rates.eur_bcv > 0 ? (numValue * rates.bcv) / rates.eur_bcv : 0) 
+    : (rates.eur_bcv > 0 ? numValue / rates.eur_bcv : 0);
+
+  // Escáner de IA adaptado para precios rápidos
+  const handleScanPrice = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    triggerToast("ingreso", "IA analizando la etiqueta... 📸");
+
+    try {
+      const base64Image = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800; 
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.6));
+          };
+          img.onerror = reject;
+          img.src = e.target?.result as string;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      
+      const imageUrl = base64Image.split(',')[1];
+
+      // Usamos el mismo endpoint, pero la IA detectará un ticket pequeño en vez de una factura larga
+      const response = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl })
+      });
+
+      if (!response.ok) throw new Error("Error procesando imagen");
+      
+      const dataResult = await response.json();
+      const aiResponse = dataResult.result;
+      
+      if (aiResponse) {
+        const jsonString = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+        const data = JSON.parse(jsonString);
+
+        if (data.monto_total) {
+          setInputValue(data.monto_total.toString());
+          setMonedaOrigen(data.moneda?.toLowerCase() === 'bs' ? 'bs' : 'usd');
+          triggerToast("ingreso", "¡Precio extraído con éxito!");
+        } else {
+          throw new Error("No se detectó un precio claro");
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      triggerToast("gasto", "No pude leer el precio. Intenta de nuevo.");
+    } finally {
+      setIsScanning(false);
+      if (event.target) event.target.value = '';
     }
-  }, [currency, rateType, activeRate]);
-
-  const handleCopy = () => {
-    const symbol = currency === 'usd' ? '$' : '€';
-    navigator.clipboard.writeText(`${symbol}${calcAmount} = Bs.${calcBs} (Tasa: ${rateType.toUpperCase()})`);
-    triggerToast?.("Cálculo copiado al portapapeles", "success");
   };
 
   return (
-    <div className="space-y-6">
-      <div className={`bg-[#1a0f2e] border ${theme.border} p-6 md:p-8 rounded-[2.5rem] shadow-xl w-full max-w-lg mx-auto relative overflow-hidden animate-in fade-in zoom-in-95 duration-300`}>
-        
-        {/* Efecto de luz detrás de la calculadora */}
-        <div className={`absolute inset-0 ${theme.primary} opacity-10 blur-[80px] rounded-full pointer-events-none`}></div>
-        
-        <div className="relative z-10">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xl font-black text-white flex items-center gap-3">
-              <Calculator className={`w-6 h-6 ${theme.text}`} /> Calculadora Libre
-            </h3>
-            <button
-              type="button"
-              onClick={handleCopy}
-              className={`inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black text-white/80 hover:bg-white/10 transition active:scale-95`}
-            >
-              <Copy className="w-3 h-3" />
-              Copiar
-            </button>
-          </div>
+    <div className="flex flex-col w-full pb-36 px-2 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-md mx-auto">
+      {/* Header Calculadora */}
+      <div className="flex items-center justify-between mb-8 mt-4">
+        <button onClick={onBack} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h2 className="text-xl font-black text-white flex items-center gap-2">
+          <Calculator className={`w-5 h-5 ${theme.text}`} /> Simulador
+        </h2>
+        <div className="w-10"></div>
+      </div>
 
-          {/* Selector de Tasa (Paralelo vs BCV) */}
-          <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 mb-6 shadow-inner">
-            <button 
-              onClick={() => setRateType('paralelo')} 
-              className={`flex-1 py-2 text-[11px] uppercase tracking-widest font-black rounded-lg transition-all ${rateType === 'paralelo' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}
-            >
-              Paralelo
-            </button>
-            <button 
-              onClick={() => setRateType('bcv')} 
-              className={`flex-1 py-2 text-[11px] uppercase tracking-widest font-black rounded-lg transition-all ${rateType === 'bcv' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}
-            >
-              BCV Oficial
-            </button>
-          </div>
+      {/* Botón IA */}
+      <button 
+        onClick={() => fileInputRef.current?.click()} 
+        disabled={isScanning}
+        className="mb-8 w-full bg-[#1C1C1E] border border-emerald-500/30 hover:bg-[#2C2C2E] p-4 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-95 group relative overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        {isScanning ? (
+          <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        ) : (
+          <Camera className="w-6 h-6 text-emerald-400 group-hover:scale-110 transition-transform" />
+        )}
+        <span className="text-emerald-400 font-black text-sm uppercase tracking-widest">
+          {isScanning ? 'Extrayendo precio...' : 'Escanear Precio con IA'}
+        </span>
+        <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleScanPrice} className="hidden" />
+      </button>
+
+      {/* Panel de Entrada Principal */}
+      <div className="bg-[#1C1C1E] border border-white/5 p-6 rounded-[2rem] shadow-xl mb-4">
+        <div className="flex justify-between items-center mb-6">
+          <span className="text-[10px] text-white/50 font-bold uppercase tracking-widest">Monto a Convertir</span>
           
-          <div className="space-y-6">
-            
-            {/* CAJA SUPERIOR: Moneda Extranjera */}
-            <div className={`bg-black/40 p-5 rounded-3xl border border-white/5 shadow-inner transition-colors focus-within:border-white/20`}>
-              <div className="flex justify-between items-center mb-2">
-                <label className={`text-[10px] uppercase text-white/50 font-bold tracking-widest block`}>Monto Extranjero</label>
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className={`bg-[#1a0f2e] ${theme.text} border ${theme.border} rounded-lg px-2 py-1.5 text-xs font-bold outline-none cursor-pointer focus:ring-2 focus:ring-white/10`}
-                >
-                  <option value="usd">Dólares (USD)</option>
-                  <option value="eur">Euros (EUR)</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={`text-3xl font-black ${theme.text} opacity-50`}>{currency === 'usd' ? '$' : '€'}</span>
-                <input 
-                  type="number" step="0.01" placeholder="0.00" 
-                  value={calcAmount} 
-                  onChange={(e) => handleCalcAmount(e.target.value)} 
-                  className="flex-1 bg-transparent text-4xl font-black text-white outline-none tabular-nums tracking-tight font-sans w-full" 
-                />
-              </div>
-            </div>
-            
-            {/* FLECHA DEL MEDIO */}
-            <div className="flex justify-center -my-3 relative z-10 pointer-events-none">
-               <div className={`bg-[#1a0f2e] p-2 rounded-full border ${theme.border}`}>
-                  <ArrowDownCircle className={`w-6 h-6 ${theme.text} opacity-50`} />
-               </div>
-            </div>
-
-            {/* CAJA INFERIOR: Bolívares */}
-            <div className={`bg-black/40 p-5 rounded-3xl border border-white/5 shadow-inner transition-colors focus-within:border-white/20`}>
-              <label className={`text-[10px] uppercase text-white/50 font-bold tracking-widest block mb-2`}>Equivalente en Bolívares</label>
-              <div className="flex items-center gap-3">
-                <span className={`text-2xl font-black ${theme.text} opacity-50`}>Bs.</span>
-                <input 
-                  type="number" step="0.01" placeholder="0.00" 
-                  value={calcBs} 
-                  onChange={(e) => handleCalcBs(e.target.value)} 
-                  className="flex-1 bg-transparent text-4xl font-black text-white outline-none tabular-nums tracking-tight font-sans w-full" 
-                />
-              </div>
-            </div>
-
-            {/* INFO DE TASAS ACTUALES */}
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
-              <div className="text-center">
-                <p className="text-[9px] uppercase text-white/30 font-bold mb-1 tracking-widest">1 {currency === 'usd' ? 'USD' : 'EUR'} (BCV)</p>
-                <p className="text-sm font-black text-white font-sans tabular-nums tracking-tight">Bs. {(currency === 'usd' ? rates.bcv : rates.eur_bcv).toFixed(2)}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-[9px] uppercase text-white/30 font-bold mb-1 tracking-widest">1 {currency === 'usd' ? 'USD' : 'EUR'} (Paralelo)</p>
-                <p className="text-sm font-black text-white font-sans tabular-nums tracking-tight">Bs. {(currency === 'usd' ? rates.usdt : rates.eur_paralelo).toFixed(2)}</p>
-              </div>
-            </div>
-            
+          {/* Toggle de Moneda */}
+          <div className="flex bg-[#121212] p-1 rounded-xl border border-white/5">
+            <button 
+              onClick={() => setMonedaOrigen('usd')} 
+              className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${monedaOrigen === 'usd' ? 'bg-blue-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
+            >
+              USD $
+            </button>
+            <button 
+              onClick={() => setMonedaOrigen('bs')} 
+              className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${monedaOrigen === 'bs' ? 'bg-emerald-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
+            >
+              BS
+            </button>
           </div>
         </div>
-        
-        {/* BOTÓN VOLVER */}
-        <div className="mt-8 flex justify-center border-t border-white/5 pt-6 relative z-10">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white/5 px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white/70 transition hover:bg-white/10 hover:text-white active:scale-95"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver al Inicio
-          </button>
+
+        <div className="relative flex items-center justify-center pb-4 border-b border-white/5">
+          <span className="text-3xl text-white/30 font-black mr-2 pb-1">{monedaOrigen === 'usd' ? '$' : 'Bs.'}</span>
+          <input 
+            type="number" 
+            placeholder="0"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            className="w-full bg-transparent text-5xl font-black text-white font-sans tabular-nums tracking-tight outline-none text-center"
+          />
         </div>
       </div>
+
+      {/* Cajas de Conversión Simultánea */}
+      <div className="space-y-3">
+        <div className="bg-[#121212] border border-emerald-500/20 p-5 rounded-2xl flex justify-between items-center relative overflow-hidden">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
+          <div>
+            <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
+              <RefreshCw className="w-3 h-3" /> Tasa Oficial (BCV)
+            </p>
+            <p className="text-2xl font-black text-white font-sans tabular-nums tracking-tight">
+              {monedaOrigen === 'usd' ? 'Bs. ' : '$ '}
+              {formatVE(bcvResult)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[9px] text-white/30 uppercase font-bold">Referencia</p>
+            <p className="text-xs text-white/50 font-sans tabular-nums font-medium">{formatVE(rates.bcv)}</p>
+          </div>
+        </div>
+
+        <div className="bg-[#121212] border border-blue-500/20 p-5 rounded-2xl flex justify-between items-center relative overflow-hidden">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
+          <div>
+            <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
+              <DollarSign className="w-3 h-3" /> Paralelo / USDT
+            </p>
+            <p className="text-2xl font-black text-white font-sans tabular-nums tracking-tight">
+              {monedaOrigen === 'usd' ? 'Bs. ' : '$ '}
+              {formatVE(paraleloResult)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[9px] text-white/30 uppercase font-bold">Referencia</p>
+            <p className="text-xs text-white/50 font-sans tabular-nums font-medium">{formatVE(rates.usdt)}</p>
+          </div>
+        </div>
+
+        <div className="bg-[#121212] border border-purple-500/20 p-5 rounded-2xl flex justify-between items-center relative overflow-hidden">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-500"></div>
+          <div>
+            <p className="text-[10px] text-purple-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
+              <Wallet className="w-3 h-3" /> Euro Oficial (€)
+            </p>
+            <p className="text-2xl font-black text-white font-sans tabular-nums tracking-tight">
+              {monedaOrigen === 'usd' ? '€ ' : '€ '}
+              {formatVE(euroResult)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[9px] text-white/30 uppercase font-bold">Referencia</p>
+            <p className="text-xs text-white/50 font-sans tabular-nums font-medium">{formatVE(rates.eur_bcv)}</p>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }

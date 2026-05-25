@@ -18,6 +18,8 @@ import OpenAI from "openai";
 import { Camera } from "lucide-react"; // Asegúrate de tener este icono
 import { motion, AnimatePresence } from "framer-motion"
 
+import { useReactMediaRecorder } from "react-media-recorder-2";
+
 // ============================================================================
 // CONFIGURACIÓN VISUAL DE GAMIFICACIÓN (ESTILO DUOLINGO/OPAL)
 // ============================================================================
@@ -71,6 +73,115 @@ const RECOMPENSAS_RACHA = {
     pulse: true
   }
 };
+
+// ============================================================================
+// MENSAJES DIARIOS DE RACHA (JERGA VENEZOLANA - 100% ENFOQUE Y MOTIVACIÓN)
+// ============================================================================
+const MENSAJES_RACHA_DIARIA = [
+  // --- BLOQUE 1: COMPROMISO Y ORGANIZACIÓN ---
+  "¡Tas activo, mi pana! Cuenta clara conserva la plata y la paz mental.",
+  "Mano, organizarse da flojera, pero pelar bola da más. ¡Sigue invicto hoy!",
+  "No le dejes tu futuro a la suerte. ¡Tas al mando de tus propios cobres!",
+  "El secreto no es cuánto ganas, sino cómo lo organizas. ¡Dale duro!",
+  "Cero excusas. Entraste, chequeaste y pusiste orden. ¡Eres un crack!",
+  "Tu yo del futuro te va a dar las gracias por la disciplina que metiste hoy.",
+  "La plata rinde cuando hay mente clara. ¡Hoy ganaste tú y tu presupuesto!",
+  "Ponerle orden a la paca a diario es lo que separa a los duros de los demás.",
+  "Querer es poder, pero organizarse es lograr. ¡Vas derechito al éxito!",
+  "Cada bolívar y dólar registrado es un parao' a la improvisación. ¡Firme!",
+  "Administrar bien no es limitarse, es asegurar el relajo de mañana, mano.",
+  "Tas construyendo un imperio bloque por bloque. ¡No le bajes al orden!",
+  "Mano, el dinero es una herramienta y hoy demostraste quién es el que manda.",
+  "Control total de la liquidez. Que nada te agarre fuera de base, chamo.",
+  "El despilfarro se cura con la constancia que tienes hoy. ¡Sigue así!",
+  "Pila con los gasticos hormiga. Hoy les pusiste el candado a tiempo.",
+  "Llevar las finanzas al día te hace dueño de tus decisiones. ¡No te detengas!",
+  "Tu bolsillo necesita estrategia, no milagros. ¡Excelente registro hoy!",
+  "Planificar es de cracks. Otro día más dominando el juego del dinero.",
+  "Que la quincena no se te vaya como un chisme. ¡Bien jugado hoy, pana!",
+  "La tranquilidad financiera no tiene precio. Hoy compraste otro pedazo.",
+  "Mucha mente y mucho orden. Así es como se progresa de verdad por aquí.",
+  "No gastes lo que no tienes para impresionar a quien no le importas. ¡Firme!",
+  "Cada anotación de hoy es un escudo contra la incertidumbre de mañana.",
+  "Disciplina pura, mi pana. Estás domando tus finanzas como los grandes.",
+  "El orden trae progreso, y tu racha es la prueba viviente de eso. ¡Plomo!",
+  "Mano, el que no planifica regala la plata. Tú vas volando con tu plan.",
+  "Pilas con las cuentas claras. El mapa lo dibujas tú con cada registro.",
+  "Hacer que cada centavo cuente es tremendo superpoder. ¡Tas activo!",
+  "Tu constancia es el motor que va a cambiar tu realidad económica. ¡Sigue!",
+  "Hoy decidiste no improvisar. Esa es la actitud de los que triunfan, chamo.",
+  "El dinero se esfuma si le das la espalda. Tú hoy lo miraste de frente.",
+  "La libertad financiera empieza con los registros que haces a diario. ¡Plomo!",
+
+  // --- BLOQUE 2: EL RADAR DEL DÓLAR (PROTECCIÓN DEL PATRIMONIO) ---
+  "Mano, el dólar no duerme, pero tu disciplina tampoco. ¡Tas ganando la carrera!",
+  "Revisaste la tasa, resguardaste los cobres y sumaste a la racha. ¡Un camión!",
+  "Pilas con el paralelo, oficiales y USDT. Monitorear el juego te hace pro.",
+  "El dólar vuela, pero tu planificación va más rápido. ¡No te descuadres!",
+  "Cada vez que miras el dólar aquí, le pones seriedad a tu esfuerzo, chamo.",
+  "Ajustar tus cuentas con el movimiento cambiario: el verdadero arte venezolano.",
+  "La inflación aprieta, pero tu orden no afloja ni un milímetro. ¡Mosca ahí!",
+  "Ver la tasa te da el mapa; registrar el gasto te da el control absoluto.",
+  "Protegiendo el patrimonio a diario. A ti no te agarra la devaluación dormido.",
+  "Mano, con esta disciplina le vamos a tener que dar clases al BCV. ¡Sigue así!",
+  "Estar pendiente de los monitores te ayuda a estirar los reales como es.",
+  "El mercado cambia a diario, pero tu compromiso con proteger tu plata es fijo.",
+  "Pilas con el tipo de cambio, pero más pilas con tu presupuesto. ¡Vas sobrao'!",
+  "Ahorrar e invertir con cabeza fría es tu mejor escudo en Venezuela.",
+  "Chamo, el dólar se mueve, pero tu meta sigue fija en el mismo norte. ¡Pilas!",
+  "El que batea en la economía venezolana batea en cualquier liga. ¡Sigue invicto!",
+  "Mirar las tasas te mantiene despierto; presupuestar te mantiene libre, pana.",
+  "No dejes que el vaivén del mercado te quite el sueño. Tu orden es la respuesta.",
+  "Estar un paso adelante del cambio es de gente inteligente. ¡Tas fino!",
+  "Cada dólar protegido de la devaluación hoy es una victoria para tu futuro.",
+  "Mosca con los precios en la calle. Hoy registraste y aseguraste tu valor.",
+  "Mano, el mercado está rudo, pero tu estrategia es más fuerte. ¡Dale con todo!",
+  "Saber exactamente cuánto tienes en Bs y en divisas te da el control total.",
+  "No le temas a los números de la calle cuando tienes un plan sólido en la app.",
+  "Guerra avisada no mata soldado. Al ver tus tasas hoy, blindaste tus cobres.",
+  "La economía cambia rápido, pero tu hábito diario es tu mejor garantía.",
+  "Ponerle el ojo al dólar y el candado al gasto: jugada maestra del día.",
+  "Chamo, tas cuidando tu patrimonio como un verdadero experto. ¡No aflojes!",
+  "El dólar sube, pero tu nivel como administrador sube el doble. ¡Tas sobrado!",
+  "Hacer valer cada dólar salvado es la meta real en este juego. ¡Activo ahí!",
+
+  // --- BLOQUE 3: MOTIVACIÓN Y VALOR DE LAS METAS (POTES) ---
+  "Esa meta no se va a pagar sola, mi pana. ¡Cada día cuenta para coronar!",
+  "Tus sueños valen oro, chamo. No dejes que los gusticos locos los desangren.",
+  "Echándole pichón al mañana. ¡Ese pote va a reventar de lo gordo!",
+  "Tu meta es prioridad. Cada bolívar salvado te acerca más a lo que de verdad importa.",
+  "¡Qué molleja de constancia! Con este ritmo vas a comprar tu meta antes de tiempo.",
+  "Mano, la racha es el puente de acero entre tus ganas y tus metas. ¡Dale plomo!",
+  "Ahorrar con un propósito claro cambia las reglas del juego. ¡Vas a coronar!",
+  "Tus potes son sagrados. El esfuerzo que le metes hoy es el relajo de tu mañana.",
+  "Esa meta que tienes entre ceja y ceja se lo merece todo. ¡No la dejes morir!",
+  "Cada abono o resguardo para tu meta es un frenazo directo a la incertidumbre.",
+  "Chamo, qué nota ver que estás remando hacia tus sueños con tanto orden.",
+  "Tus metas no son un capricho, son tu próximo nivel de vida. ¡No le bajes!",
+  "No dejes que la emoción de un momento te sople los reales de tu meta principal.",
+  "Ahorrar con metas es como sembrar: hoy le echas pichón, mañana cosechas sabroso.",
+  "Esa meta ya te está guiñando el ojo de lo cerca que está. ¡Mantén la racha!",
+  "Qué rico es ver cómo crece tu propio sudor reflejado en tus potes de ahorro.",
+  "Trabajar con un norte claro te hace invencible. ¡Fuego con esa meta!",
+  "Cada día de racha es un día menos para celebrar que lo lograste, mano.",
+  "Tus metas valen cada segundo que pasas planificando y organizando aquí.",
+  "Ahorrar es el arte de valorar tu propio trabajo. ¡No regales tus sueños!",
+  "Mano, mantén el foco. El pote se llena gotita a gotita, pero sin parar.",
+  "No cambies lo que más deseas a largo plazo por un antojo de cinco minutos.",
+  "Tu meta no es un imposible, es solo cuestión de tiempo y de esta racha tuya.",
+  "Ponerle nombre y monto a tus sueños los hace reales. ¡Hoy los defendiste!",
+  "Chamo, ver que te estás moviendo por lo tuyo da tremenda satisfacción. ¡Sigue!",
+  "Cada registro te recuerda por qué estás sudando la camiseta. ¡Por esa meta!",
+  "El camino es largo, pero con este orden vas a llegar limpiecito a la meta.",
+  "Tu pote de ahorros es tu paz mental del mañana. ¡Sigue engordándolo!",
+  "No desmayes, pana. Estás invirtiendo en la única persona que lo merece: tú.",
+  "Ese sueño grande se divide en días pequeños, y hoy cumpliste con el tuyo.",
+  "La racha es el escudo de tus potes. Mientras siga prendida, tus metas están vivas.",
+  "¡Plomo con esos objetivos! Estás demostrando que juegas para ganar en grande.",
+  "Mano, tu racha diaria es la promesa de que sí vas a lograr todo lo que te propongas.",
+  "Tus metas son la recompensa de tu disciplina. ¡Sigue sumando días como un pro!"
+];
+
 // ============================================================================
 // 1. COMPONENTE TRANSACTION DRAWER (PANTALLA COMPLETA NATIVA PARA IOS)
 // ============================================================================
@@ -414,6 +525,31 @@ export default function MiPoteApp() {
   const [enviandoPago, setEnviandoPago] = useState(false);
   const [tasaCheckout, setTasaCheckout] = useState(45.00);
 
+const abrirCelebracionManual = () => {
+    if (!perfil) return;
+    
+    // Buscamos los datos en tiempo real
+    const hitos = Object.keys(RECOMPENSAS_RACHA).map(Number).sort((a, b) => b - a);
+    const hitoActual = hitos.find(h => (perfil.racha_actual || 0) >= h) || 1;
+    const rangoVisual = RECOMPENSAS_RACHA[hitoActual as keyof typeof RECOMPENSAS_RACHA];
+    
+    // Elegimos el mensaje basado en la racha actual
+    const racha = perfil.racha_actual || 0;
+    const mensajeDiario = MENSAJES_RACHA_DIARIA[(racha - 1) % MENSAJES_RACHA_DIARIA.length];
+
+    setCelebrationData({
+      dias: racha,
+      recompensa: {
+        ...rangoVisual,
+        desc: mensajeDiario
+      }
+    });
+
+    setShowStreakCelebration(true);
+  };
+
+
+  
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -482,15 +618,28 @@ export default function MiPoteApp() {
       perfilBd.racha_maxima = nuevaRachaMax;
       perfilBd.ultima_conexion = hoyStr;
 
-      // 🟢 GATILLO DE ANIMACIÓN PANTALLA COMPLETA
-      // Si la racha subió y tenemos una recompensa configurada para ese número exacto
-      if (nuevaRacha > (perfilBd.racha_actual || 0) && RECOMPENSAS_RACHA[nuevaRacha as keyof typeof RECOMPENSAS_RACHA]) {
+    ///🟢 GATILLO DE ANIMACIÓN DIARIA (PANTALLA COMPLETA)
+      // Si la racha subió, celebramos el día, sin importar qué número sea
+      if (nuevaRacha > (perfilBd.racha_actual || 0)) {
+        
+        // 1. Buscamos qué color/brillo le toca según su rango (1, 3, 7, 21...)
+        const hitos = Object.keys(RECOMPENSAS_RACHA).map(Number).sort((a, b) => b - a);
+        const hitoActual = hitos.find(h => nuevaRacha >= h) || 1;
+        const rangoVisual = RECOMPENSAS_RACHA[hitoActual as keyof typeof RECOMPENSAS_RACHA];
+
+        // 2. Elegimos un mensaje rotativo de nuestra jerga venezolana
+        const mensajeDiario = MENSAJES_RACHA_DIARIA[(nuevaRacha - 1) % MENSAJES_RACHA_DIARIA.length];
+
         setCelebrationData({
           dias: nuevaRacha,
-          recompensa: RECOMPENSAS_RACHA[nuevaRacha as keyof typeof RECOMPENSAS_RACHA]
+          recompensa: {
+            ...rangoVisual,
+            desc: mensajeDiario // Reemplazamos la descripción seria por la jerga
+          }
         });
-        // Pequeño delay para que cargue el dashboard de fondo
-        setTimeout(() => setShowStreakCelebration(true), 1000); 
+        
+        // Pequeño delay para que cargue el dashboard de fondo y luego ¡BAM!
+        setTimeout(() => setShowStreakCelebration(true), 1200); 
       }
     }
     // ------------------------------------
@@ -859,10 +1008,28 @@ export default function MiPoteApp() {
 
   if (currentView === 'calculadora-libre') {
     return (
-      <div className="min-h-screen bg-[#0d0714] p-4 flex flex-col items-center pt-10">
-        <div className="w-full max-w-md relative">
-          <button onClick={() => setCurrentView('dashboard')} className="absolute -top-10 left-0 text-purple-400 flex items-center gap-2 text-sm font-bold"><ArrowLeft className="w-4 h-4"/> Volver</button>
-          <FinanzasDashboardContent session={session} espacios={espacios} setEspacios={setEspacios} espacioActivo={espacioActivo} setEspacioActivo={setEspacioActivo} onSelectModule={seleccionarModulo} handleLogout={handleLogout} openJoinModal={() => setShowJoinModal(true)} openProfileModal={() => setShowProfileModal(true)} isGuest={isGuest} perfil={perfil} forceTab="calculadora" onChangeView={setCurrentView} />
+      // 🔴 FIJADO: Agregamos fixed, inset-0 y overflow-y-auto para forzar el scroll 🔴
+      <div 
+        className="fixed inset-0 w-full h-[100dvh] bg-[#0d0714] overflow-y-auto overflow-x-hidden flex flex-col items-center p-0 md:p-4 scroll-smooth" 
+        style={{ pointerEvents: 'auto' }}
+      >
+        {/* Eliminamos el botón "Volver" viejo porque la nueva calculadora ya trae el suyo */}
+        <div className="w-full max-w-5xl relative">
+          <FinanzasDashboardContent 
+            session={session} 
+            espacios={espacios} 
+            setEspacios={setEspacios} 
+            espacioActivo={espacioActivo} 
+            setEspacioActivo={setEspacioActivo} 
+            onSelectModule={seleccionarModulo} 
+            handleLogout={handleLogout} 
+            openJoinModal={() => setShowJoinModal(true)} 
+            openProfileModal={() => setShowProfileModal(true)} 
+            isGuest={isGuest} 
+            perfil={perfil} 
+            forceTab="calculadora" 
+            onChangeView={setCurrentView} 
+          />
         </div>
       </div>
     );
@@ -1103,6 +1270,7 @@ const RECOMPENSAS_METAS = [
   
   // NAV STATES
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false); 
+  const [isRatesDrawerOpen, setIsRatesDrawerOpen] = useState(false);
   const [isSpacesMenuOpen, setIsSpacesMenuOpen] = useState(false); 
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); 
 
@@ -1146,6 +1314,32 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
   const [isFABMenuOpen, setIsFABMenuOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [showAITerms, setShowAITerms] = useState(false);
+  const [hasAcceptedAI, setHasAcceptedAI] = useState(false);
+
+  // Al cargar, revisamos si ya las había aceptado antes
+  React.useEffect(() => {
+    if (localStorage.getItem('mipote_ai_accepted') === 'true') {
+      setHasAcceptedAI(true);
+    }
+  }, []);
+
+  // Función interceptora: En vez de abrir la cámara directo, verifica las políticas
+  const handleTryScan = () => {
+    if (!hasAcceptedAI) {
+      setShowAITerms(true);
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const acceptAITerms = () => {
+    localStorage.setItem('mipote_ai_accepted', 'true');
+    setHasAcceptedAI(true);
+    setShowAITerms(false);
+    // Abrimos la cámara automáticamente después de aceptar
+    setTimeout(() => fileInputRef.current?.click(), 300);
+  };
 
   // --- ESTADOS PARA CAMBIO P2P ---
   const [isP2POpen, setIsP2POpen] = useState(false);
@@ -2264,6 +2458,66 @@ const getPatrimonioNeto = () => {
               </Drawer.Portal>
             </Drawer.Root>
 
+
+{/* ========================================================= */}
+      {/* DRAWER: TÉRMINOS Y CONDICIONES DE INTELIGENCIA ARTIFICIAL */}
+      {/* ========================================================= */}
+      <Drawer.Root open={showAITerms} onOpenChange={setShowAITerms}>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[300] backdrop-blur-sm" />
+          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] mt-24 fixed bottom-0 left-0 right-0 z-[350] max-h-[85vh]">
+            <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-12">
+              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-8" />
+              
+              <div className="flex justify-center mb-4">
+                {/* Ícono de Cerebro estilo Nola */}
+                <div className="text-5xl drop-shadow-lg">🧠</div>
+              </div>
+              
+              <h3 className="text-2xl font-black text-white text-center mb-3 tracking-tight">Pote usa inteligencia artificial</h3>
+              <p className="text-sm text-white/50 text-center mb-8 px-4 leading-relaxed">
+                Para analizar tus recibos, fotos y voz, enviamos datos a modelos de IA seguros. A continuación te explicamos cómo.
+              </p>
+
+              <div className="space-y-4 mb-8">
+                <div className="bg-[#1C1C1E] p-5 rounded-[2rem]">
+                  <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
+                    <span className="text-rose-400">📄</span> Qué datos se envían
+                  </h4>
+                  <ul className="text-xs text-white/60 space-y-2 list-disc pl-5">
+                    <li>Texto que escribes para agregar transacciones.</li>
+                    <li>Fotos de recibos, estados de cuenta o capturas de pantalla.</li>
+                    <li>Grabaciones de voz para el asistente inteligente.</li>
+                  </ul>
+                </div>
+
+                <div className="bg-[#1C1C1E] p-5 rounded-[2rem]">
+                  <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
+                    <span className="text-rose-400">🔒</span> Cómo se procesan
+                  </h4>
+                  <ul className="text-xs text-white/60 space-y-2 list-disc pl-5">
+                    <li>Servicios externos de OpenAI procesan tus datos para extraer montos y comercios.</li>
+                    <li>Los datos se transmiten de forma encriptada y no se usan para entrenar modelos públicos.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Botón estilo Nola (Coral/Red) */}
+              <button 
+                onClick={acceptAITerms} 
+                className="w-full bg-rose-500 hover:bg-rose-400 text-white font-black py-4 rounded-full text-base active:scale-95 transition-transform shadow-[0_0_20px_rgba(244,63,94,0.3)] mb-4"
+              >
+                Acepto, continuar
+              </button>
+              <button onClick={() => setShowAITerms(false)} className="w-full text-white/40 font-bold text-sm hover:text-white transition-colors">
+                No, gracias
+              </button>
+            </div>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
+
+
             <div className="space-y-2">
               {gastosFijos.length === 0 ? (
                 <p className="text-[10px] md:text-xs text-white/50 italic px-2">No hay gastos fijos configurados.</p>
@@ -3004,82 +3258,101 @@ const getPatrimonioNeto = () => {
                 
               {/* MEDALLA DE RACHA SÚPER LIMPIA (Sin cajas, sin fondos, sin resplandor) */}
                  {perfil && (
-                   <button 
-                     onClick={(e) => {
-                       e.stopPropagation(); // Evita que se abra el perfil de atrás
-                       onShowCelebration({
-                         dias: perfil.racha_actual || 0,
-                         recompensa: obtenerRangoActual(perfil.racha_actual || 0)
-                       });
-                     }}
-                     // 🔴 Diseño puro: Solo flexbox y padding, sin fondos ni bordes 🔴
-                     className="flex items-center gap-1.5 px-2 py-1 text-sm font-black transition-transform hover:scale-105 active:scale-95 cursor-pointer"
-                     // 🔴 Solo aplicamos el color de texto, nada de fondos ni sombras 🔴
-                     style={{ color: obtenerRangoActual(perfil.racha_actual || 0).color }}
-                   >
-                     <span className="drop-shadow-md">🔥</span>
-                     <span className="font-sans tabular-nums tracking-tight">
-                       {perfil.racha_actual || 0}
-                     </span>
-                   </button>
-                 )}
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Usamos onShowCelebration directamente, que ya viene como prop
+                        onShowCelebration({
+                          dias: perfil.racha_actual || 0,
+                          recompensa: {
+                            ...obtenerRangoActual(perfil.racha_actual || 0),
+                            desc: MENSAJES_RACHA_DIARIA[(perfil.racha_actual - 1) % MENSAJES_RACHA_DIARIA.length]
+                          }
+                        });
+                      }}
+                      className="flex items-center gap-1.5 px-2 py-1 text-sm font-black transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+                      style={{ color: obtenerRangoActual(perfil.racha_actual || 0).color }}
+                    >
+                      <span className="drop-shadow-md">🔥</span>
+                      <span className="font-sans tabular-nums tracking-tight">
+                        {perfil.racha_actual || 0}
+                      </span>
+                    </button>
+                  )}
              </div>
           </div>
         </div>
         
-        {/* LADO DERECHO: TASAS DE USD Y EUR */}
+        {/* LADO DERECHO: TASA OFICIAL CLICKABLE */}
         <div className="text-right flex flex-col items-end">
-          <p className="text-[9px] text-white/40 uppercase font-bold tracking-widest flex items-center gap-1">
-            BCV <button onClick={fetchRates} disabled={syncing}><RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`}/></button>
-          </p>
-          <p className="text-xs font-black text-white tabular-nums mt-0.5">
-            <span className="text-emerald-400">$</span> {rates.bcv.toFixed(2)} <span className="text-white/20 mx-1">|</span> <span className="text-blue-400">€</span> {rates.eur_bcv.toFixed(2)}
-          </p>
-          
-          <p className="text-[9px] text-white/40 uppercase font-bold tracking-widest mt-1.5">
-            Paralelo
-          </p>
-          <p className="text-xs font-black text-white tabular-nums mt-0.5">
-            <span className="text-emerald-400">$</span> {rates.usdt.toFixed(2)} <span className="text-white/20 mx-1">|</span> <span className="text-blue-400">€</span> {rates.eur_paralelo.toFixed(2)}
-          </p>
+          <button 
+            onClick={() => setIsRatesDrawerOpen(true)} 
+            className="flex items-center gap-2 bg-[#1a1a1a] border border-white/5 hover:border-emerald-500/40 px-3 py-2 rounded-xl transition-all active:scale-95"
+          >
+            <div className="text-right">
+              <p className="text-[9px] text-emerald-400/80 font-bold uppercase tracking-widest mb-0.5 leading-none">Tasa Oficial</p>
+              <p className="text-xs font-black text-white tabular-nums leading-none">Bs. {rates.bcv.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})}</p>
+            </div>
+            <ChevronDown className="w-3 h-3 text-white/30" />
+          </button>
         </div>
-      </div>
-      
-      {/* DRAWER DE PERFIL Y CONFIGURACIÓN */}
-      <Drawer.Root open={isProfileMenuOpen} onOpenChange={setIsProfileMenuOpen}>
+      </div> {/* <-- Fin del Header principal (Asegúrate de no borrar esto si ya estaba) */}
+
+      {/* ========================================================= */}
+      {/* DRAWER DEL PANEL DETALLADO DE TASAS (ESTILO AL CAMBIO) */}
+      {/* ========================================================= */}
+      <Drawer.Root open={isRatesDrawerOpen} onOpenChange={setIsRatesDrawerOpen}>
         <Drawer.Portal>
           <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
-          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-auto fixed bottom-0 left-0 right-0 z-[250] border-t border-white/10 pb-8">
-            <Drawer.Title className="sr-only">Perfil y Configuración</Drawer.Title>
-            <div className="p-6">
+          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-emerald-500">
+            <Drawer.Title className="sr-only">Panel de Tasas de Cambio</Drawer.Title>
+            <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
               <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-              <div className="flex items-center gap-4 mb-8 bg-[#1a1a1a] p-4 rounded-2xl border border-white/5">
-                <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center border border-purple-500/30">
-                  <UserPlus className="w-6 h-6 text-purple-400" />
-                </div>
-                <div>
-                  <p className="text-white font-bold">{perfil?.nombre || session?.user?.email?.split('@')[0] || "Invitado"}</p>
-                  <p className="text-[10px] text-white/50">{session?.user?.email || "Modo de prueba"}</p>
-                </div>
-              </div>
               
-              <div className="space-y-2">
-                {!isGuest && (
-                  <>
-                    <button onClick={() => { setIsProfileMenuOpen(false); openProfileModal(); }} className="w-full flex items-center gap-3 p-4 rounded-2xl bg-[#1a1a1a] hover:bg-white/10 text-white font-bold transition-colors">
-                      <Edit2 className="w-5 h-5 text-white/50"/> Editar Mi Perfil
-                    </button>
-                    {espacioActivo?.tipo !== 'individual' && (
-                       <button onClick={() => {setNewSpaceName(espacioActivo.nombre); setIsEditingSpaceName(true); setIsProfileMenuOpen(false);}} className="w-full flex items-center gap-3 p-4 rounded-2xl bg-[#1a1a1a] hover:bg-white/10 text-white font-bold transition-colors">
-                         <Edit3 className="w-5 h-5 text-white/50"/> Renombrar este espacio
-                       </button>
-                    )}
-                  </>
-                )}
-                <button onClick={() => { setIsProfileMenuOpen(false); handleLogout(); }} className="w-full flex items-center gap-3 p-4 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold transition-colors mt-4">
-                  <LogOut className="w-5 h-5"/> Cerrar Sesión
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-emerald-400" /> Monitores
+                </h3>
+                <button onClick={fetchRates} disabled={syncing} className="bg-[#1a1a1a] border border-white/5 p-2 rounded-lg text-white/50 hover:text-white transition-colors">
+                  <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin text-emerald-400' : ''}`} />
                 </button>
               </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                {/* BCV USD */}
+                <div className="bg-[#1C1C1E] border border-emerald-500/20 p-4 rounded-2xl flex flex-col justify-between">
+                  <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2 flex items-center justify-between">
+                    BCV Dólar
+                    <span className="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded">OFICIAL</span>
+                  </p>
+                  <p className="text-xl font-black text-emerald-400 font-sans tabular-nums tracking-tight">Bs. {rates.bcv.toLocaleString('es-VE', {minimumFractionDigits:2})}</p>
+                </div>
+
+                {/* USDT (Binance/Zinli) */}
+                <div className="bg-[#1C1C1E] border border-blue-500/20 p-4 rounded-2xl flex flex-col justify-between">
+                  <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2 flex items-center justify-between">
+                    PARALELO
+                    <span className="bg-blue-500/20 text-blue-400 text-[8px] px-1.5 py-0.5 rounded">DIGITAL</span>
+                  </p>
+                  <p className="text-xl font-black text-blue-400 font-sans tabular-nums tracking-tight">Bs. {rates.usdt.toLocaleString('es-VE', {minimumFractionDigits:2})}</p>
+                </div>
+
+                {/* EURO BCV */}
+                <div className="bg-[#1C1C1E] border border-purple-500/20 p-4 rounded-2xl flex flex-col justify-between">
+                  <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2 flex items-center justify-between">
+                    Euro BCV
+                    <span className="bg-purple-500/20 text-purple-400 text-[8px] px-1.5 py-0.5 rounded">EUROPA</span>
+                  </p>
+                  <p className="text-xl font-black text-purple-400 font-sans tabular-nums tracking-tight">Bs. {rates.eur_bcv.toLocaleString('es-VE', {minimumFractionDigits:2})}</p>
+                </div>
+              </div>
+
+              <div className="text-center mt-6">
+                <p className="text-[10px] text-white/30 uppercase tracking-widest">
+                   Actualizado diariamente.
+                </p>
+              </div>
+
             </div>
           </Drawer.Content>
         </Drawer.Portal>
@@ -3203,61 +3476,102 @@ const getPatrimonioNeto = () => {
               
               <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] fixed bottom-0 left-0 right-0 z-[100] border-t border-white/5 shadow-2xl max-h-[85vh]">
                 
-                {/* Etiquetas para silenciar advertencias de accesibilidad de la consola */}
+                {/* Etiquetas para accesibilidad */}
                 <Drawer.Title className="sr-only">Menú de Acciones Rápidas</Drawer.Title>
                 <Drawer.Description className="sr-only">Opciones para registrar ingresos, egresos y p2p</Drawer.Description>
 
                 <div className="p-6 md:p-8 bg-[#1C1C1E] rounded-t-[32px] flex-1 overflow-y-auto pb-12 border border-white/5">
                   <div className="mx-auto w-12 h-1 flex-shrink-0 rounded-full bg-[#333] mb-8" />
                   
-                  <h3 className="text-xl font-black text-white mb-8 text-center">Registrar Actividad</h3>
+                  <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Actividad</h3>
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    
-                    {/* OPCIÓN 1: ESCANEAR FACTURA */}
-                    <label className="flex flex-col items-center justify-center gap-3 p-6 bg-blue-600/10 rounded-2xl border border-blue-500/20 cursor-pointer transition-all hover:bg-blue-600/20 text-center">
-                      <Camera className="w-8 h-8 text-blue-500" />
-                      <span className="text-[11px] font-bold text-blue-100 uppercase tracking-widest">Escanear</span>
+                  <div className="flex flex-col gap-4">
+                    {/* OPCIÓN 1: ESCANEAR GASTO (Destacado Full Width) */}
+                    <label className="flex items-center justify-between p-5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 cursor-pointer transition-all hover:bg-emerald-500/20 group">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <Camera className="w-6 h-6 text-emerald-400" />
+                        </div>
+                        <div className="text-left">
+                          <span className="block font-black text-emerald-400 uppercase tracking-widest text-sm">Escanear Gasto</span>
+                          <span className="text-[10px] text-emerald-400/60 font-bold">Usa la IA para registrar rápido</span>
+                        </div>
+                      </div>
+                      <Sparkles className="w-5 h-5 text-emerald-500" />
                       <input 
-  type="file" 
-  accept="image/*" 
-  onChange={(e) => { setIsFABMenuOpen(false); handleScanInvoice(e); }} 
-  className="hidden" 
-  disabled={isScanning} 
-/>
+                        type="file" 
+                        accept="image/*" 
+                        capture="environment"
+                        onChange={(e) => { setIsFABMenuOpen(false); handleScanInvoice(e); }} 
+                        className="hidden" 
+                        disabled={isScanning} 
+                      />
                     </label>
 
-                    {/* OPCIÓN 2: REGISTRO MANUAL (Ahora solo da un clic al gatillo fantasma) */}
-                    <button onClick={() => { setIsFABMenuOpen(false); setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 150); }} className="w-full flex flex-col items-center justify-center gap-3 p-6 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] text-center">
-                      <Plus className="w-8 h-8 text-white/70" />
-                      <span className="text-[11px] font-bold text-white/80 uppercase tracking-widest">Manual</span>
-                    </button>
-
-                    {/* OPCIÓN 3: CAMBIO P2P */}
-                    <button onClick={() => { setIsFABMenuOpen(false); setIsP2POpen(true); }} className="flex flex-col items-center justify-center gap-3 p-6 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] text-center">
-                      <ArrowLeftRight className="w-8 h-8 text-white/70" />
-                      <span className="text-[11px] font-bold text-white/80 uppercase tracking-widest">Cambio P2P</span>
-                    </button>
-
-                    {/* OPCIÓN 4: DINÁMICA (AÑADIR MIEMBRO O ABONO META) */}
-                    {espacioActivo?.tipo !== 'individual' ? (
-                      <button onClick={() => { setIsFABMenuOpen(false); setIsManageUsersOpen(true); }} className="flex flex-col items-center justify-center gap-3 p-6 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] text-center">
-                        <UserPlus className="w-8 h-8 text-white/70" />
-                        <span className="text-[11px] font-bold text-white/80 uppercase tracking-widest">Miembro</span>
+                    {/* BOTONES DIRECTOS: INGRESO, GASTO Y EXTRAS */}
+                    <div className="grid grid-cols-2 gap-4">
+                      
+                      {/* NUEVO INGRESO DIRECTO */}
+                      <button onClick={() => { 
+                          setIsFABMenuOpen(false); 
+                          setTipo("ingreso"); 
+                          setCategoria("salario");
+                          setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 150); 
+                        }} 
+                        className="flex flex-col items-center justify-center gap-3 p-5 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] hover:border-emerald-500/30 group"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                          <ArrowUpCircle className="w-7 h-7 text-emerald-400" />
+                        </div>
+                        <span className="text-[11px] font-bold text-white/80 uppercase tracking-widest">Ingreso</span>
                       </button>
-                    ) : (
-                      <button onClick={() => { setIsFABMenuOpen(false); setTipo("ingreso"); setCategoria("abono_pote"); setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 150); }} className="flex flex-col items-center justify-center gap-3 p-6 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] text-center">
-                        <Target className="w-8 h-8 text-white/70" />
-                        <span className="text-[11px] font-bold text-white/80 uppercase tracking-widest">Abono Meta</span>
-                      </button>
-                    )}
 
+                      {/* NUEVO GASTO MANUAL DIRECTO */}
+                      <button onClick={() => { 
+                          setIsFABMenuOpen(false); 
+                          setTipo("egreso"); 
+                          setCategoria("comida");
+                          setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 150); 
+                        }} 
+                        className="flex flex-col items-center justify-center gap-3 p-5 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] hover:border-rose-500/30 group"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 transition-colors">
+                          <ArrowDownCircle className="w-7 h-7 text-rose-400" />
+                        </div>
+                        <span className="text-[11px] font-bold text-white/80 uppercase tracking-widest">Gasto Manual</span>
+                      </button>
+
+                      {/* CAMBIO P2P */}
+                      <button onClick={() => { setIsFABMenuOpen(false); setIsP2POpen(true); }} className="flex flex-col items-center justify-center gap-3 p-5 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] group">
+                        <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+                          <ArrowLeftRight className="w-5 h-5 text-amber-400" />
+                        </div>
+                        <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Cambio P2P</span>
+                      </button>
+
+                      {/* DINÁMICA (AÑADIR MIEMBRO O ABONO META) */}
+                      {espacioActivo?.tipo !== 'individual' ? (
+                        <button onClick={() => { setIsFABMenuOpen(false); setIsManageUsersOpen(true); }} className="flex flex-col items-center justify-center gap-3 p-5 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] group">
+                          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                            <UserPlus className="w-5 h-5 text-blue-400" />
+                          </div>
+                          <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Miembro</span>
+                        </button>
+                      ) : (
+                        <button onClick={() => { setIsFABMenuOpen(false); setTipo("ingreso"); setCategoria("abono_pote"); setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 150); }} className="flex flex-col items-center justify-center gap-3 p-5 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] group">
+                          <div className="w-10 h-10 rounded-full bg-fuchsia-500/10 flex items-center justify-center group-hover:bg-fuchsia-500/20 transition-colors">
+                            <Target className="w-5 h-5 text-fuchsia-400" />
+                          </div>
+                          <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Abono Meta</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </Drawer.Content>
             </Drawer.Portal>
           </Drawer.Root>
-
+          
           {/* ========================================================= */}
           {/* BOTÓN FLOTANTE MATE BLUE */}
           {/* ========================================================= */}
