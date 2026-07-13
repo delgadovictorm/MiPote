@@ -14,7 +14,6 @@ const withPWA = require("@ducanh2912/next-pwa").default({
 const nextConfig = {
   // Ya no necesitamos limitar los CPUs porque esta librería es eficiente
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
 };
 
 module.exports = withPWA(nextConfig);

@@ -129,7 +129,7 @@ export function RecordatoriosTab({
                     </button>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-white truncate">
-                        {recordatorio.descripcion}
+                        {recordatorio.texto}
                       </p>
                       <p className="text-[9px] text-white/40">
                         Creado {new Date(recordatorio.created_at).toLocaleDateString()}
@@ -167,7 +167,7 @@ export function RecordatoriosTab({
                     </button>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-white/60 truncate line-through">
-                        {recordatorio.descripcion}
+                        {recordatorio.texto}
                       </p>
                       <p className="text-[9px] text-white/30">
                         Completado {new Date(recordatorio.updated_at).toLocaleDateString()}

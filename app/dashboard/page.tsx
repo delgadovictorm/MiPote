@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { 
   ArrowDownCircle, ArrowUpCircle, Wallet, Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, Target, Home, CreditCard, Calculator, Lock, Mail, LogIn, UserPlus, Sparkles, ArrowLeft, Shield, Key, Copy, UploadCloud, Phone, Menu, LogOut, Globe, ChevronRight, Loader2,
-  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3, ChevronLeft, ArrowRight, ListTodo, ChevronDown, ArrowLeftRight, Layers
+  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3, ChevronLeft, ArrowRight, ChevronDown, ArrowLeftRight, Layers, Eye, EyeOff, Heart, PartyPopper
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Drawer } from "vaul";
@@ -14,11 +14,14 @@ import { PagosTab } from "@/components/Dashboard/PagosTab";
 import { RecordatoriosTab } from "@/components/Dashboard/RecordatoriosTab";
 import { EmergenciaTab } from "@/components/Dashboard/EmergenciaTab";
 import { CalculadoraTab } from "@/components/Dashboard/CalculadoraTab";
+import { MercadoSession } from "@/components/Dashboard/MercadoSession";
+import { TASAS_DISPONIBLES, TASAS_DEFECTO, TASAS_STORAGE_KEY, getValorTasa, type TasaId } from "@/components/Dashboard/tasasConfig";
 import OpenAI from "openai";
 import { Camera } from "lucide-react"; // Asegúrate de tener este icono
 import { motion, AnimatePresence } from "framer-motion"
 
 import { useReactMediaRecorder } from "react-media-recorder-2";
+import { TransactionDrawer } from "@/components/TransactionDrawer";
 
 // ============================================================================
 // CONFIGURACIÓN VISUAL DE GAMIFICACIÓN (ESTILO DUOLINGO/OPAL)
@@ -74,7 +77,6 @@ const RECOMPENSAS_RACHA = {
   }
 };
 
-// ============================================================================
 // MENSAJES DIARIOS DE RACHA (JERGA VENEZOLANA - 100% ENFOQUE Y MOTIVACIÓN)
 // ============================================================================
 const MENSAJES_RACHA_DIARIA = [
@@ -183,332 +185,28 @@ const MENSAJES_RACHA_DIARIA = [
 ];
 
 // ============================================================================
-// 1. COMPONENTE TRANSACTION DRAWER (PANTALLA COMPLETA NATIVA PARA IOS)
-// ============================================================================
-function TransactionDrawer({ 
-  children,
-  tipo, setTipo,
-  categoria, setCategoria,
-  customCategoria, setCustomCategoria, categoriasList,
-  monto, setMonto,
-  moneda, setMoneda,
-  descripcion, setDescripcion,
-  rates,
-  theme,
-  onSubmit,
-  espacioActivo,
-  participantes,
-  usuario, setUsuario,
-  espacios,
-  potes,
-  destinoTransferencia, setDestinoTransferencia
-}: any) {
-  
-  const [isOpen, setIsOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Bloqueamos el scroll del fondo en iOS
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-      const timer = setTimeout(() => {
-        setMonto("");
-        setDescripcion("");
-        setCategoria("");
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [isOpen, setMonto, setDescripcion, setCategoria]);
-
-  const categories = {
-    ingreso: [
-      { id: "salario", label: "Sueldo", icon: <DollarSign size={18} /> },
-      { id: "inversiones", label: "Inversiones", icon: <TrendingUp size={18} /> },
-      { id: "ventas", label: "Ventas", icon: <ShoppingCart size={18} /> },
-      { id: "tigritos", label: "Tigritos", icon: <Rocket size={18} /> },
-      { id: "abono_pote", label: "Abonar a Meta 🍯", icon: <Plus size={18} /> },
-      { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
-    ],
-    egreso: [
-      { id: "comida", label: "Comida", icon: <ShoppingCart size={18} /> },
-      { id: "cashea", label: "Cashea", icon: <DollarSign size={18} /> },
-      { id: "internet", label: "Internet", icon: <Wifi size={18} /> },
-      { id: "mascotas", label: "Mascotas", icon: <Dog size={18} /> },
-      { id: "condominio", label: "Condominio", icon: <Home size={18} /> },
-      { id: "regalos", label: "Regalos", icon: <Gift size={18} /> },
-      { id: "retiro_pote", label: "Retirar de Meta 📉", icon: <ArrowDownCircle size={18} /> }, // <-- ESTA LÍNEA
-      { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
-    ]
-  };
-
-  const handleLocalSubmit = (e: any) => {
-    e.preventDefault();
-    if (tipo === 'transferencia' && !destinoTransferencia) return alert("Selecciona a qué espacio vas a transferir");
-    if (categoria === 'abono_pote' && !destinoTransferencia) return alert("Selecciona a qué Meta vas a mandar la plata");
-    
-    const isValidDesc = (tipo === 'ingreso' || categoria === 'abono_pote' || tipo === 'transferencia') ? true : descripcion.trim() !== "";
-    const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
-    const isOtroValid = categoria === 'otro' ? customCategoria.trim() !== "" : true;
-    
-    if (monto && (categoria || tipo === 'transferencia') && isValidDesc && isValidUser && isOtroValid) {
-      onSubmit(e);
-      setIsOpen(false);
-    } else {
-      onSubmit(e); 
-    }
-  };
-
-  return (
-    <>
-      {React.cloneElement(children, { onClick: () => setIsOpen(true) })}
-
-      {mounted && isOpen && createPortal(
-        <div className="fixed inset-0 z-[99999] bg-[#0d0714] w-full h-[100dvh] flex flex-col animate-in slide-in-from-bottom-8 fade-in duration-200">
-          
-          <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#121212] shrink-0 shadow-md z-20">
-            <div className="flex items-center gap-3">
-              <button 
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="p-2 bg-white/5 rounded-full text-white/70 hover:text-white hover:bg-rose-500 transition-colors"
-              >
-                <ChevronLeft size={24} />
-              </button>
-              <h3 className="text-white font-black text-lg">Nuevo Registro</h3>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32 bg-[#0d0714] overscroll-contain">
-            
-            <div className="flex bg-[#1a1a1a] p-1 rounded-2xl mb-6 flex-wrap gap-1">
-              <button 
-                type="button"
-                onClick={() => {setTipo("ingreso"); setCategoria("");}}
-                className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'ingreso' ? 'bg-emerald-500 text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
-              >
-                INGRESO
-              </button>
-              <button 
-                type="button"
-                onClick={() => {setTipo("egreso"); setCategoria("");}}
-                className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
-              >
-                GASTO
-              </button>
-              {espacios?.length > 1 && espacioActivo?.tipo === 'individual' && (
-                <button 
-                  type="button" 
-                  onClick={() => {setTipo("transferencia"); setCategoria("transferencia");}} 
-                  className={`flex-1 py-3 text-xs font-black rounded-xl transition-colors cursor-pointer ${tipo === 'transferencia' ? 'bg-blue-500 text-white shadow-lg' : 'text-white/40 hover:bg-white/5'}`}
-                >
-                  TRANSFERIR
-                </button>
-              )}
-            </div>
-
-            {tipo === 'transferencia' ? (
-               <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-blue-500/30 mb-6 animate-in zoom-in-95">
-                 <label className="text-[10px] text-blue-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2"><ArrowRight size={14}/> Enviar dinero a un Espacio</label>
-                 <select value={destinoTransferencia} onChange={(e) => setDestinoTransferencia(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer mb-4">
-                    <option value="">Selecciona Pote o Vaca destino...</option>
-                    {espacios?.filter((e:any) => e.id !== espacioActivo.id && e.tipo !== 'individual').map((e:any) => (
-                      <option key={e.id} value={e.id}>{e.nombre}</option>
-                    ))}
-                 </select>
-                 <p className="text-xs text-white/50 leading-relaxed">El dinero se descontará de <b>{espacioActivo.nombre}</b> y se enviará al espacio compartido.</p>
-               </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2 mb-6">
-                {categories[tipo as keyof typeof categories].map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => {
-                      setCategoria(cat.id);
-                      setDescripcion(cat.id === 'otro' || cat.id === 'abono_pote' ? '' : cat.label);
-                    }}
-                    className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
-                      categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
-                    }`}
-                  >
-                    {cat.icon}
-                    <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {categoria === 'otro' && tipo !== 'transferencia' && (
-              <div className="bg-purple-500/5 p-4 rounded-2xl border border-purple-500/20 mb-6 animate-in zoom-in-95">
-                <label className="text-[10px] text-purple-400 uppercase font-bold tracking-widest block mb-2">Nombre de tu categoría</label>
-                <input 
-                  type="text" 
-                  list="custom-cats"
-                  placeholder="Ej: Taxi 🚕, Cine 🍿, etc." 
-                  value={customCategoria} 
-                  onChange={(e) => setCustomCategoria(e.target.value)} 
-                  className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-purple-500" 
-                />
-                {/* Esto hace que le sugiera categorías que ya haya inventado antes */}
-                <datalist id="custom-cats">
-                  {categoriasList?.filter((c: any) => !['salario','comida','internet','mascotas','cashea','otro'].includes(c.valor)).map((c: any) => (
-                    <option key={c.valor} value={c.label} />
-                  ))}
-                </datalist>
-              </div>
-            )}
-
-           {(categoria === 'abono_pote' || categoria === 'retiro_pote') && tipo !== 'transferencia' && (
-               <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-emerald-500/30 mb-6 animate-in zoom-in-95">
-                 <label className="text-[10px] text-emerald-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2">¿De qué meta es el movimiento?</label>
-                 <select value={destinoTransferencia} onChange={(e) => setDestinoTransferencia(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer mb-2">
-                    <option value="">Selecciona la meta destino...</option>
-                    {potes?.map((p:any) => (
-                      <option key={p.id} value={p.id}>{p.nombre}</option>
-                    ))}
-                 </select>
-               </div>
-            )}
-
-            {espacioActivo?.tipo !== 'individual' && tipo !== 'transferencia' && (
-              <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 mb-6">
-                <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest pointer-events-none">¿Quién realizó el movimiento?</label>
-                <select 
-                  value={usuario} 
-                  onChange={(e) => setUsuario(e.target.value)}
-                  className="w-full bg-transparent text-white font-bold outline-none appearance-none cursor-pointer"
-                  required
-                >
-                  <option value="" className="bg-[#1a1a1a]">Seleccionar integrante...</option>
-                  {participantes?.map((p: any) => <option key={p.id} value={p.nombre} className="bg-[#1a1a1a]">{p.nombre}</option>)}
-                  <option value="Ambos" className="bg-[#1a1a1a]">Ambos (Mitad y mitad)</option>
-                </select>
-              </div>
-            )}
-
-            <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 space-y-4 mb-6">
-              <div>
-                <label className="text-[9px] uppercase font-black text-white/30 block mb-1 tracking-widest pointer-events-none">Monto</label>
-                <input 
-                  type="number" step="0.01" placeholder="0.00"
-                  value={monto} 
-                  onChange={(e) => setMonto(e.target.value)}
-                  className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums tracking-tight font-sans"
-                />
-              </div>
-              
-              <div className="flex gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
-                <button type="button" onClick={() => setMoneda('usdt')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>USDT</button>
-                <button type="button" onClick={() => setMoneda('bs')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>BS</button>
-                <button type="button" onClick={() => setMoneda('cash')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>CASH</button>
-              </div>
-
-              {monto && rates.bcv > 0 && moneda !== 'cash' && (
-                <div className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 text-center text-sm pointer-events-none">
-                  {moneda === 'bs' ? (
-                    <>
-                      <div className="flex-1">
-                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
-                        <p className="text-white font-bold font-sans tracking-tight">${(parseFloat(monto) / rates.bcv).toFixed(2)}</p>
-                      </div>
-                      <div className="h-6 w-px bg-white/10"></div>
-                      <div className="flex-1">
-                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
-                        <p className="text-white font-bold font-sans tracking-tight">${(parseFloat(monto) / rates.usdt).toFixed(2)}</p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex-1">
-                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
-                        <p className="text-white font-bold font-sans tracking-tight">Bs. {(parseFloat(monto) * rates.bcv).toFixed(2)}</p>
-                      </div>
-                      <div className="h-6 w-px bg-white/10"></div>
-                      <div className="flex-1">
-                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
-                        <p className="text-white font-bold font-sans tracking-tight">Bs. {(parseFloat(monto) * rates.usdt).toFixed(2)}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {categoria === 'cashea' && tipo !== 'transferencia' && (
-              <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-2xl mb-6">
-                <p className="text-[10px] font-black text-purple-400 uppercase mb-3 text-center pointer-events-none">¿En cuántas cuotas?</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {[3, 6, 9].map(n => (
-                    <button 
-                      key={n} 
-                      type="button"
-                      onClick={() => (window as any).numCuotasCashea = n}
-                      className="cursor-pointer py-3 bg-purple-600/20 border border-purple-500/30 rounded-xl font-black text-white hover:bg-purple-600 transition-colors focus:ring-2 ring-purple-400 tabular-nums"
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {tipo === 'egreso' && categoria !== 'abono_pote' && tipo !== 'transferencia' && (
-              <div className="mb-6">
-                <input 
-                  type="text" placeholder="¿En qué se fue la plata? (Ej: Pizza)"
-                  value={descripcion} 
-                  onChange={(e) => setDescripcion(e.target.value)}
-                  className="w-full bg-[#1a1a1a] border border-white/5 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-purple-500 transition-colors"
-                />
-              </div>
-            )}
-
-            <button 
-              type="button"
-              onClick={handleLocalSubmit}
-              className={`cursor-pointer w-full text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-transform text-sm uppercase tracking-widest shrink-0 ${tipo === 'transferencia' ? 'bg-blue-600 hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.3)]' : 'bg-purple-600 hover:bg-purple-500 shadow-[0_0_20px_rgba(147,51,234,0.3)]'}`}
-            >
-              {tipo === 'transferencia' ? 'Confirmar Transferencia' : 'Confirmar Registro'}
-            </button>
-
-          </div>
-        </div>,
-        document.body
-      )}
-    </>
-  );
-}
-
-// ============================================================================
 // APP PRINCIPAL
 // ============================================================================
 export default function MiPoteApp() {
-  const [session, setSession] = useState<any>(null);
-  const [perfil, setPerfil] = useState<any>(null); 
+  const [session, setSession] = useState(null as any);
+  const [perfil, setPerfil] = useState(null as any); 
   const [isPro, setIsPro] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [currentView, setCurrentView] = useState('auth'); 
 
   // Estado para controlar la animación a pantalla completa de Duolingo
   const [showStreakCelebration, setShowStreakCelebration] = useState(false);
-  const [celebrationData, setCelebrationData] = useState<any>(null);
+  const [celebrationData, setCelebrationData] = useState(null as any);
   
-  const [authStage, setAuthStage] = useState<'welcome'|'login'|'reg1'|'reg2'|'loading'>('welcome');
+  const [authStage, setAuthStage] = useState('welcome' as 'welcome'|'login'|'reg1'|'reg2'|'loading');
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [telefono, setTelefono] = useState(""); 
   const [regNombre, setRegNombre] = useState("");
   const [authError, setAuthError] = useState("");
 
-  const [espacios, setEspacios] = useState<any[]>([]);
-  const [espacioActivo, setEspacioActivo] = useState<any>(null);
+  const [espacios, setEspacios] = useState([] as any[]);
+  const [espacioActivo, setEspacioActivo] = useState(null as any);
   const [isGuest, setIsGuest] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   
@@ -521,7 +219,7 @@ export default function MiPoteApp() {
   const [checkoutPaso, setCheckoutPaso] = useState(1);
   const [metodoPago, setMetodoPago] = useState("pagomovil");
   const [referencia, setReferencia] = useState("");
-  const [archivo, setArchivo] = useState<File | null>(null);
+  const [archivo, setArchivo] = useState(null as File | null);
   const [enviandoPago, setEnviandoPago] = useState(false);
   const [tasaCheckout, setTasaCheckout] = useState(45.00);
 
@@ -571,9 +269,14 @@ const abrirCelebracionManual = () => {
       }
     });
 
-    fetch("/api/rates").then(res => res.json()).then(data => { if(data.success) setTasaCheckout(data.usdt) });
+    // Tasa BCV para el checkout PRO (Bs. a tasa oficial) - se refresca sola cada minuto
+    const cargarTasaCheckout = () => {
+      fetch("/api/rates").then(res => res.json()).then(data => { if (data.success && data.bcv) setTasaCheckout(data.bcv); });
+    };
+    cargarTasaCheckout();
+    const intervalTasaCheckout = setInterval(cargarTasaCheckout, 60000);
 
-    return () => subscription.unsubscribe();
+    return () => { subscription.unsubscribe(); clearInterval(intervalTasaCheckout); };
   }, []);
 
   const cargarDatosUsuario = async (userId: string) => {
@@ -744,7 +447,7 @@ const abrirCelebracionManual = () => {
     formData.append("photo", archivo);
     
     const ordenNumero = (200000 + (parseInt(session.user.id.substring(0, 4), 16) % 90000)).toString();
-    const mensaje = `💰 *NUEVO REPORTE DE PAGO MI POTE*\n\n📧 *Usuario:* ${session.user.email}\n🔢 *Orden:* #${ordenNumero}\n💳 *Método:* ${metodoPago.toUpperCase()}\n🧾 *Ref:* ${referencia}\n💲 *Monto:* $2.99\n\n_Acción: Revisa el panel Admin para aprobar._`;
+    const mensaje = `💰 *NUEVO REPORTE DE PAGO MI POTE*\n\n📧 *Usuario:* ${session.user.email}\n🔢 *Orden:* #${ordenNumero}\n💳 *Método:* ${metodoPago.toUpperCase()}\n🧾 *Ref:* ${referencia}\n💲 *Monto:* $2\n\n_Acción: Revisa el panel Admin para aprobar._`;
     formData.append("caption", mensaje);
 
     try {
@@ -793,25 +496,25 @@ const abrirCelebracionManual = () => {
     setLoadingAuth(false);
   };
 
-  const seleccionarModulo = async (tipoModulo: string, eId?: string) => {
+  const seleccionarModulo = async (tipoModulo: string, eId?: string, opts?: { nombre?: string; monto_objetivo?: number }) => {
     if (!session) {
-      if (tipoModulo === 'individual') { 
-        setIsGuest(true); 
-        setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' }); 
-        setCurrentView('dashboard'); 
-      } else { 
-        setShowPaywall(true); 
+      if (tipoModulo === 'individual') {
+        setIsGuest(true);
+        setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' });
+        setCurrentView('dashboard');
+      } else {
+        setShowPaywall(true);
       }
       return;
     }
 
     setIsGuest(false);
-    
+
     // Si pasamos 'NEW', obligamos a crear uno de cero
     if (eId === 'NEW') {
       const titulos: Record<string, string> = { 'pote': 'Nuevo Pote', 'vaca': 'Nueva Vaca' };
       const { data: newSpace } = await supabase.from('espacios').insert([{
-        nombre: titulos[tipoModulo],
+        nombre: opts?.nombre?.trim() || titulos[tipoModulo],
         tipo: tipoModulo,
         creador_id: session.user.id,
         codigo_invitacion: generarCodigo()
@@ -819,6 +522,10 @@ const abrirCelebracionManual = () => {
 
       if (newSpace) {
         await supabase.from('espacio_miembros').insert([{ espacio_id: newSpace.id, usuario_id: session.user.id, rol: 'admin' }]);
+        // Una Vaca es un plan con una sola meta: la reunimos desde el arranque para que la billetera se construya en función de ella.
+        if (tipoModulo === 'vaca' && opts?.monto_objetivo && opts.monto_objetivo > 0) {
+          await supabase.from('metas').insert([{ nombre: newSpace.nombre, monto_objetivo: opts.monto_objetivo, espacio_id: newSpace.id }]);
+        }
         await cargarDatosUsuario(session.user.id);
         setEspacioActivo(newSpace);
         localStorage.setItem('mipote_last_space', newSpace.id);
@@ -837,7 +544,7 @@ const abrirCelebracionManual = () => {
     }
   };
 
-  if (loadingAuth) return ( <div className="min-h-screen bg-[#0d0714] flex items-center justify-center"><Loader2 className="w-8 h-8 text-purple-500 animate-spin"/></div> );
+  if (loadingAuth) return ( <div className="min-h-screen bg-[#0d0714] flex items-center justify-center" suppressHydrationWarning><Loader2 className="w-8 h-8 text-purple-500 animate-spin"/></div> );
 
   if (currentView === 'auth') {
     if (authStage === 'welcome') {
@@ -1013,6 +720,7 @@ const abrirCelebracionManual = () => {
         className="fixed inset-0 w-full h-[100dvh] bg-[#0d0714] overflow-y-auto overflow-x-hidden flex flex-col items-center p-0 md:p-4 scroll-smooth" 
         style={{ pointerEvents: 'auto' }}
       >
+
         {/* Eliminamos el botón "Volver" viejo porque la nueva calculadora ya trae el suyo */}
         <div className="w-full max-w-5xl relative">
           <FinanzasDashboardContent 
@@ -1078,7 +786,7 @@ const abrirCelebracionManual = () => {
               <>
                 <div className="w-16 h-16 bg-amber-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-amber-500/20"><Sparkles className="w-8 h-8 text-amber-400" /></div>
                 <h3 className="text-xl font-black text-white mb-2">Desbloquea Mi Pote PRO</h3>
-                <p className="text-sm text-white/70 mb-6">Crea una cuenta para pagar tu suscripción ($2.99/mes) y desbloquear funciones premium como Presupuesto, Cashea y Espacios Compartidos.</p>
+                <p className="text-sm text-white/70 mb-6">Crea una cuenta para pagar tu suscripción ($2/mes) y desbloquear Potes en pareja/familia, Vacas entre amigos y Hacer Mercado.</p>
                 <button onClick={() => {setShowPaywall(false); setCurrentView('auth');}} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black py-3.5 rounded-xl shadow-lg mb-3 hover:scale-105 transition-transform">CREAR CUENTA GRATIS</button>
               </>
             ) : perfil?.estado_pago === 'pendiente' ? (
@@ -1088,12 +796,38 @@ const abrirCelebracionManual = () => {
                  <p className="text-blue-200 text-sm">Ya enviamos tu pago. Un administrador lo aprobará pronto y se te habilitará el acceso.</p>
                </div>
             ) : checkoutPaso === 1 ? (
-              <>
-                <div className="w-16 h-16 bg-amber-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-amber-500/20"><Sparkles className="w-8 h-8 text-amber-400" /></div>
-                <h3 className="text-2xl font-black text-white mb-2">Hazte PRO</h3>
-                <p className="text-amber-200 text-sm mb-6">Acceso a Potes compartidos y Las Vacas infinitas por <span className="font-black">$2.99 / mes</span>.</p>
-                <button onClick={()=>setCheckoutPaso(2)} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black py-4 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.3)] mb-3 hover:scale-105 transition-transform text-lg">PAGAR AHORA</button>
-              </>
+              <div className="text-left">
+                <div className="flex items-center justify-between mb-5">
+                  <span className="bg-amber-500/15 text-amber-400 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest border border-amber-500/30">Mi Pote Pro</span>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-black text-white">$2</span>
+                    <span className="text-white/40 text-xs font-bold">/mes</span>
+                  </div>
+                </div>
+
+                <h3 className="text-lg font-black text-white mb-4">Todo lo que desbloqueas</h3>
+
+                <div className="space-y-2 mb-6">
+                  {[
+                    { icon: <Heart className="w-4 h-4 text-fuchsia-400" />, bg: "bg-fuchsia-500/10", label: "Potes compartidos", desc: "Finanzas en pareja o en familia" },
+                    { icon: <PartyPopper className="w-4 h-4 text-emerald-400" />, bg: "bg-emerald-500/10", label: "Las Vacas", desc: "Planes y metas entre amigos" },
+                    { icon: <ShoppingCart className="w-4 h-4 text-blue-400" />, bg: "bg-blue-500/10", label: "Hacer Mercado", desc: "Lista de compras en vivo con total al instante" },
+                    { icon: <Camera className="w-4 h-4 text-amber-400" />, bg: "bg-amber-500/10", label: "Escaneos con IA ilimitados", desc: "Sin el tope de 15 fotos al mes" },
+                  ].map((f) => (
+                    <div key={f.label} className="flex items-center gap-3 bg-white/5 border border-white/5 rounded-2xl p-3">
+                      <div className={`w-9 h-9 rounded-xl ${f.bg} flex items-center justify-center shrink-0`}>{f.icon}</div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-white leading-tight">{f.label}</p>
+                        <p className="text-[10px] text-white/40 leading-tight mt-0.5">{f.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button onClick={()=>setCheckoutPaso(2)} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-4 rounded-2xl transition-colors active:scale-95 text-sm uppercase tracking-widest">
+                  Continuar al pago
+                </button>
+              </div>
             ) : checkoutPaso === 2 ? (
               <form onSubmit={procesarPagoPRO} className="text-left space-y-4">
                 <h3 className="text-xl font-black text-white text-center mb-4 border-b border-white/10 pb-4">Realizar Pago</h3>
@@ -1107,14 +841,14 @@ const abrirCelebracionManual = () => {
                   {metodoPago === 'binance' ? (
                     <>
                       <p className="text-[10px] text-amber-400 uppercase font-bold font-sans">Enviar exactamente:</p>
-                      <p className="text-2xl font-black text-white font-sans">$2.99 USDT</p>
+                      <p className="text-2xl font-black text-white font-sans">$2 USDT</p>
                       <p className="mt-2 text-xs font-sans text-white/50">Correo Binance Pay:</p>
                       <div className="flex justify-between items-center bg-white/5 p-2 rounded"><span>dmvictorbalboa@gmail.com</span> <Copy className="w-4 h-4 cursor-pointer hover:text-white" onClick={()=>navigator.clipboard.writeText("dmvictorbalboa@gmail.com")}/></div>
                     </>
                   ) : (
                     <>
-                      <p className="text-[10px] text-blue-400 uppercase font-bold font-sans">Monto a Pagar en Bs (Tasa Paralelo):</p>
-                      <p className="text-2xl font-black text-white font-sans">Bs. {(4.99 * tasaCheckout).toFixed(2)}</p>
+                      <p className="text-[10px] text-blue-400 uppercase font-bold font-sans">Monto a Pagar en Bs (Tasa BCV):</p>
+                      <p className="text-2xl font-black text-white font-sans">Bs. {(2 * tasaCheckout).toFixed(2)}</p>
                       <p className="mt-2 text-xs font-sans text-white/50">Datos del Pago Móvil:</p>
                       <div className="bg-white/5 p-3 rounded space-y-1 text-xs">
                         <p>📱 Teléfono: <strong>0412-301-6936</strong></p>
@@ -1201,6 +935,15 @@ const getTheme = (tipo: string) => {
   };
   const theme = getTheme(espacioActivo?.tipo || 'individual');
 
+  const getIdentidadEspacio = (tipo: string) => {
+    switch (tipo) {
+      case 'pote': return { Icono: Heart, etiqueta: 'Pote en pareja/familia' };
+      case 'vaca': return { Icono: PartyPopper, etiqueta: 'Vaca grupal' };
+      default: return { Icono: Wallet, etiqueta: 'Billetera personal' };
+    }
+  };
+  const identidadEspacio = getIdentidadEspacio(espacioActivo?.tipo || 'individual');
+
 
 // 1. Calculador de rango visual
   const obtenerRangoActual = (diasRacha: number) => {
@@ -1250,13 +993,29 @@ const RECOMPENSAS_METAS = [
     if(!confirm("¿Seguro que deseas eliminar este registro?")) return;
     if (isGuest) {
       const updatedTx = transactions.filter(t => t.id !== id);
-      setTransactions(updatedTx); 
+      setTransactions(updatedTx);
       localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
     } else {
       const { error } = await supabase.from("transacciones_saas").delete().eq("id", id);
       if (error) alert("Error: " + error.message);
       else fetchData();
     }
+  };
+
+  const reiniciarMovimientos = async () => {
+    if (!confirm("🚨 Esto borrará TODO el historial de movimientos de este espacio (todos los meses, no solo el actual) y tu Patrimonio Neto quedará en $0.00. Las metas, presupuestos y gastos fijos no se tocan. ¿Deseas continuar?")) return;
+    if (!confirm("Última confirmación: esta acción no se puede deshacer. ¿Reiniciar todos los movimientos?")) return;
+
+    if (isGuest) {
+      setTransactions([]);
+      localStorage.removeItem('mipote_guest_tx');
+    } else {
+      if (!espacioActivo) return;
+      const { error } = await supabase.from("transacciones_saas").delete().eq("espacio_id", espacioActivo.id);
+      if (error) { alert("🚨 Error al reiniciar: " + error.message); return; }
+      fetchData();
+    }
+    triggerToast("ingreso", "Movimientos reiniciados. ¡Empecemos de cero! 🔄");
   };
 
   const [activeTab, setActiveTab] = useState(forceTab || "inicio");
@@ -1269,25 +1028,54 @@ const RECOMPENSAS_METAS = [
   }, [activeTab]);
   
   // NAV STATES
-  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false); 
+  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
   const [isRatesDrawerOpen, setIsRatesDrawerOpen] = useState(false);
-  const [isSpacesMenuOpen, setIsSpacesMenuOpen] = useState(false); 
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); 
+  const [isSpacesMenuOpen, setIsSpacesMenuOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isBalanceHidden, setIsBalanceHidden] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('mipote_balance_hidden') === 'true';
+  });
+  const toggleBalanceHidden = () => {
+    setIsBalanceHidden(prev => {
+      const next = !prev;
+      localStorage.setItem('mipote_balance_hidden', String(next));
+      return next;
+    });
+  };
 
-  const [activeWallet, setActiveWallet] = useState<'usdt'|'bs'|'cash'>('usdt'); 
-  const [patrimonioRate, setPatrimonioRate] = useState<'paralelo' | 'bcv'>('paralelo');
+  const [activeWallet, setActiveWallet] = useState('usdt' as 'usdt'|'bs'|'cash'); 
+  const [patrimonioRate, setPatrimonioRate] = useState('paralelo' as 'paralelo' | 'bcv');
   const [filtroHistorial, setFiltroHistorial] = useState("Todos");
 
-  const [rates, setRates] = useState({ bcv: 0, usdt: 0, eur_bcv: 0, eur_paralelo: 0 });
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [cuotasCashea, setCuotasCashea] = useState<any[]>([]);
-  const [presupuestos, setPresupuestos] = useState<any[]>([]);
-  const [potes, setPotes] = useState<any[]>([]);
-  const [participantes, setParticipantes] = useState<any[]>([]);
-  const [gastosFijos, setGastosFijos] = useState<any[]>([]);
+  const [rates, setRates] = useState({ bcv: 0, usdt: 0, eur_bcv: 0, eur_paralelo: 0, cop_usd: 0, mxn_usd: 0 });
+  const [activeRates, setActiveRates] = useState<TasaId[]>(TASAS_DEFECTO);
+  const [showAddTasa, setShowAddTasa] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(TASAS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) setActiveRates(parsed);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(TASAS_STORAGE_KEY, JSON.stringify(activeRates)); } catch {}
+  }, [activeRates]);
+  const [transactions, setTransactions] = useState([] as any[]);
+  const [cuotasCashea, setCuotasCashea] = useState([] as any[]);
+  const [presupuestos, setPresupuestos] = useState([] as any[]);
+  const [potes, setPotes] = useState([] as any[]);
+  const [participantes, setParticipantes] = useState([] as any[]);
+  const [gastosFijos, setGastosFijos] = useState([] as any[]);
   
   const [isAddingPote, setIsAddingPote] = useState(false);
-  const POTE_OPCIONES = espacioActivo?.tipo === 'vaca' 
+  const [isCreatingVaca, setIsCreatingVaca] = useState(false);
+  const [nuevaVacaForm, setNuevaVacaForm] = useState({ nombre: "", monto_objetivo: "" });
+  const POTE_OPCIONES = espacioActivo?.tipo === 'vaca'
     ? ["La rumba 🪩", "Pa' la caña 🍻", "El viaje ✈️", "La nave 🚗", "Personalizado ✍️"]
     : ["La nave 🚗", "Los estrenos 👕", "El gustico 🍔", "El semestre 📚", "Teléfono 📱", "Viaje ✈️", "Hogar 🏠", "Personalizado ✍️"];
   
@@ -1306,14 +1094,15 @@ const RECOMPENSAS_METAS = [
   const [isAddingFijo, setIsAddingFijo] = useState(false);
 
   const [comercio, setComercio] = useState("");
-const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
+const [metadatosFactura, setMetadatosFactura] = useState(null as any);
   
   const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
+  const [isMercadoOpen, setIsMercadoOpen] = useState(false);
 
   // --- ESTADOS PARA REDISEÑO Y VISION IA ---
   const [isFABMenuOpen, setIsFABMenuOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const fileInputRef = React.useRef(null as HTMLInputElement | null);
   const [showAITerms, setShowAITerms] = useState(false);
   const [hasAcceptedAI, setHasAcceptedAI] = useState(false);
 
@@ -1324,13 +1113,29 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
     }
   }, []);
 
+  // --- LÍMITE DE ESCANEOS IA (15/mes para cuentas gratis) ---
+  const LIMITE_ESCANEOS_MES = 15;
+  const getScanKey = () => `mipote_scans_${perfil?.id || 'invitado'}_${new Date().toISOString().slice(0, 7)}`;
+  const getEscaneosUsados = () => parseInt(localStorage.getItem(getScanKey()) || '0', 10);
+  const puedeEscanear = () => !!perfil?.is_pro || getEscaneosUsados() < LIMITE_ESCANEOS_MES;
+  const registrarEscaneo = () => {
+    if (!perfil?.is_pro) localStorage.setItem(getScanKey(), String(getEscaneosUsados() + 1));
+  };
+
   // Función interceptora: En vez de abrir la cámara directo, verifica las políticas
   const handleTryScan = () => {
     if (!hasAcceptedAI) {
       setShowAITerms(true);
-    } else {
-      fileInputRef.current?.click();
+      return;
     }
+
+    if (!puedeEscanear()) {
+      setIsFABMenuOpen(false);
+      setTimeout(() => onTriggerPaywall?.(), 300);
+      return;
+    }
+
+    fileInputRef.current?.click();
   };
 
   const acceptAITerms = () => {
@@ -1363,18 +1168,19 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
   const [newSpaceName, setNewSpaceName] = useState(espacioActivo?.nombre || "");
 
   // NUEVO: ESTADO PARA RECORDATORIOS (LISTA DE TAREAS)
-  const [recordatorios, setRecordatorios] = useState<any[]>([]);
+  const [recordatorios, setRecordatorios] = useState([] as any[]);
   const [nuevoRecordatorio, setNuevoRecordatorio] = useState("");
 
   const DEFAULT_CATEGORIES = [
     { valor: "salario", label: "Ingreso / Salario 💰" },
     { valor: "comida", label: "Comida 🍔" },
+    { valor: "mercado", label: "Mercado 🛒" },
     { valor: "internet", label: "Internet / Servicios 🌐" },
     { valor: "mascotas", label: "Mascotas 🐾" },
     { valor: "cashea", label: "Cashea 🛍️" },
     { valor: "otro", label: "Otro (Personalizado) ✍️" }
   ];
-  const [categoriasList, setCategoriasList] = useState<any[]>(DEFAULT_CATEGORIES);
+  const [categoriasList, setCategoriasList] = useState(DEFAULT_CATEGORIES as any[]);
 
   const [casheaForm, setCasheaForm] = useState({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" });
   const [budgetForm, setBudgetForm] = useState({ categoria: "", monto_limite: "" });
@@ -1384,9 +1190,10 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
   const [mensajeMotivacional, setMensajeMotivacional] = useState("");
   const [toastType, setToastType] = useState("ingreso");
 
-  const [calcAmount, setCalcAmount] = useState("");
-  const [calcCurrency, setCalcCurrency] = useState("usd");
-  const [calcBs, setCalcBs] = useState("");
+  // --- MINI SIMULADOR EMBEBIDO EN INICIO ---
+  const [miniSimMoneda, setMiniSimMoneda] = useState('usd' as 'usd'|'bs');
+  const [miniSimTasa, setMiniSimTasa] = useState('paralelo' as 'bcv'|'paralelo'|'eur');
+  const [miniSimMonto, setMiniSimMonto] = useState("");
 
   const [monto, setMonto] = useState("");
   const [moneda, setMoneda] = useState("usd");
@@ -1396,22 +1203,31 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
   const [descripcion, setDescripcion] = useState("");
   const [usuario, setUsuario] = useState("");
 
-  const [pagoFijoActivo, setPagoFijoActivo] = useState<any>(null);
+  const [pagoFijoActivo, setPagoFijoActivo] = useState(null as any);
   const [monedaFijo, setMonedaFijo] = useState('bs');
   
   // NUEVO: DESTINO DE LA TRANSFERENCIA
   const [destinoTransferencia, setDestinoTransferencia] = useState("");
 
-  const handleCalcUsd = (val: string) => {
-    setCalcAmount(val);
-    const num = parseFloat(val) || 0;
-    setCalcBs((num * rates.usdt).toFixed(2));
+  const formatMiniNum = (num: number) => {
+    if (!num || isNaN(num)) return "0";
+    return num.toLocaleString('es-VE', { maximumFractionDigits: 0 });
   };
 
-  const handleCalcBs = (val: string) => {
-    setCalcBs(val);
-    const num = parseFloat(val) || 0;
-    setCalcAmount(rates.usdt > 0 ? (num / rates.usdt).toFixed(2) : "0.00");
+  const miniSimNum = parseFloat(miniSimMonto) || 0;
+  const miniSimResultado = miniSimTasa === 'eur'
+    ? (miniSimMoneda === 'usd'
+        ? (rates.eur_bcv > 0 ? (miniSimNum * rates.bcv) / rates.eur_bcv : 0)
+        : (rates.eur_bcv > 0 ? miniSimNum / rates.eur_bcv : 0))
+    : (() => {
+        const tasaValor = miniSimTasa === 'bcv' ? rates.bcv : rates.usdt;
+        return miniSimMoneda === 'usd' ? miniSimNum * tasaValor : (tasaValor > 0 ? miniSimNum / tasaValor : 0);
+      })();
+  const miniSimSimbolo = miniSimTasa === 'eur' ? '€' : 'Bs';
+
+  const handleSwapMiniSim = () => {
+    setMiniSimMonto(miniSimResultado > 0 ? miniSimResultado.toFixed(0) : "");
+    setMiniSimMoneda(prev => prev === 'usd' ? 'bs' : 'usd');
   };
 
   const getMensajes = (tipoApp: string, tipoTx: string) => {
@@ -1532,35 +1348,75 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
     setTimeout(() => setShowToast(false), 4500);
   };
 
-  const fetchRates = async () => { 
-    setSyncing(true); 
-    try { 
-      // Traer Dólar (Tu API)
-      const resUsd = await fetch("/api/rates"); 
-      const dataUsd = await resUsd.json(); 
-      
-      // Traer Euro (DolarAPI)
-      const resEur = await fetch("https://ve.dolarapi.com/v1/euros");
-      const dataEur = await resEur.json();
-
-      // Extraer los datos del Euro del arreglo
-      const eurOficial = dataEur.find((e: any) => e.fuente === "oficial")?.promedio || 0;
-      const eurParalelo = dataEur.find((e: any) => e.fuente === "paralelo")?.promedio || 0;
-
-      // Guardar todo junto en el estado
-      if (dataUsd.success) {
-        setRates({ 
-          bcv: dataUsd.bcv, 
-          usdt: dataUsd.usdt,
-          eur_bcv: eurOficial,
-          eur_paralelo: eurParalelo
-        }); 
+  const fetchRates = async () => {
+    setSyncing(true);
+    try {
+      // 1. Traer Dólar (Tu API) - Con manejo de errores suave (igual que el resto de fuentes)
+      let dataUsd: any = null;
+      try {
+        const resUsd = await fetch("/api/rates");
+        if (resUsd.ok) dataUsd = await resUsd.json();
+        else console.warn("API Tasas falló, se mantienen las tasas BCV/Paralelo anteriores");
+      } catch (err) {
+        console.warn("API Tasas no respondió, se mantienen las tasas BCV/Paralelo anteriores");
       }
+
+      // 2. Traer Euro (DolarAPI) - Con manejo de errores suave
+      let eurOficial = 0;
+      let eurParalelo = 0;
+
+      try {
+        const resEur = await fetch("https://ve.dolarapi.com/v1/euros");
+        if (resEur.ok) {
+           const dataEur = await resEur.json();
+           eurOficial = dataEur.find((e: any) => e.fuente === "oficial")?.promedio || 0;
+           eurParalelo = dataEur.find((e: any) => e.fuente === "paralelo")?.promedio || 0;
+        }
+      } catch (err) {
+        console.warn("DolarAPI falló, usando valores por defecto para el Euro");
+      }
+
+      // 2.1 Traer Peso Colombiano (DolarAPI Colombia) - Con manejo de errores suave
+      let copUsd = 0;
+      try {
+        const resCop = await fetch("https://co.dolarapi.com/v1/cotizaciones");
+        if (resCop.ok) {
+           const dataCop = await resCop.json();
+           const usdCop = dataCop.find((c: any) => c.moneda === "USD");
+           if (usdCop) copUsd = ((usdCop.compra || 0) + (usdCop.venta || 0)) / 2;
+        }
+      } catch (err) {
+        console.warn("DolarAPI Colombia falló, usando valores por defecto para el Peso");
+      }
+
+      // 2.2 Traer Peso Mexicano (DolarAPI México) - Con manejo de errores suave
+      let mxnUsd = 0;
+      try {
+        const resMxn = await fetch("https://mx.dolarapi.com/v1/cotizaciones");
+        if (resMxn.ok) {
+           const dataMxn = await resMxn.json();
+           const usdMxn = dataMxn.find((c: any) => c.moneda === "USD");
+           if (usdMxn) mxnUsd = ((usdMxn.compra || 0) + (usdMxn.venta || 0)) / 2;
+        }
+      } catch (err) {
+        console.warn("DolarAPI México falló, usando valores por defecto para el Peso Mexicano");
+      }
+
+      // 3. Guardar tasas: si el dólar (BCV/Paralelo) falló, mantenemos las últimas conocidas
+      // en vez de resetear a 0 (el resto de la app asume rates.bcv > 0 para varios cálculos).
+      setRates(prev => ({
+        bcv: (dataUsd && dataUsd.success) ? (dataUsd.bcv || prev.bcv) : prev.bcv,
+        usdt: (dataUsd && dataUsd.success) ? (dataUsd.usdt || prev.usdt) : prev.usdt,
+        eur_bcv: eurOficial || prev.eur_bcv,
+        eur_paralelo: eurParalelo || prev.eur_paralelo,
+        cop_usd: copUsd || prev.cop_usd,
+        mxn_usd: mxnUsd || prev.mxn_usd
+      }));
     } catch (e) {
-      console.error("Error trayendo tasas:", e);
-    } finally { 
-      setSyncing(false); 
-    } 
+      console.error("Error crítico trayendo tasas:", e);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const fetchData = useCallback(async () => {
@@ -1670,7 +1526,7 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
 
     try {
       // 1. Compresión de imagen (¡Se mantiene igual!)
-      const base64Image = await new Promise<string>((resolve, reject) => {
+      const base64Image = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const img = new Image();
@@ -1726,7 +1582,8 @@ const [metadatosFactura, setMetadatosFactura] = useState<any>(null);
            productos: data.productos || []
         });
 
-        
+        registrarEscaneo();
+
         setTimeout(() => document.getElementById('nuevo-registro-trigger')?.click(), 500);
       }
     } catch (error: any) {
@@ -2071,6 +1928,31 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     await supabase.from("metas").delete().eq("id", id); fetchData();
   };
 
+  // Al cerrar una sesión de "Hacer Mercado" se crea UNA sola transacción de egreso con el
+  // total (real si lo dieron, estimado si no); el detalle de productos vive en items_mercado.
+  const finalizarSesionMercado = async ({ totalUsd, cantidadItems }: { totalUsd: number; cantidadItems: number }) => {
+    if (!espacioActivo || isGuest) return;
+    const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(totalUsd, 'usdt');
+    const usuarioNombre = (perfil?.nombre || session?.user?.email?.split('@')[0]) || "Tú";
+
+    const { error } = await supabase.from("transacciones_saas").insert([{
+      descripcion: `Mercado (${cantidadItems} producto${cantidadItems === 1 ? '' : 's'})`,
+      monto_original: totalUsd,
+      moneda_original: 'usd',
+      monto_bs,
+      monto_usd_bcv,
+      monto_usd_paralelo,
+      categoria: 'mercado',
+      usuario: usuarioNombre,
+      tipo: 'egreso',
+      espacio_id: espacioActivo.id,
+      usuario_id: session.user.id,
+    }]);
+
+    if (error) alert("🚨 Error registrando el mercado: " + error.message);
+    else fetchData();
+  };
+
   const handleEmergenciaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!descripcion.trim() || (!usuario.trim() && espacioActivo?.tipo !== 'individual')) { 
@@ -2185,7 +2067,17 @@ const handleManualSubmit = async (e: React.FormEvent) => {
 const getPatrimonioNeto = () => {
     let totalEnBolivaresVirtuales = 0;
 
-    transactions.forEach(tx => {
+    // 🔥 FILTRAMOS SOLO LAS TRANSACCIONES DEL ESPACIO ACTIVO
+    // Y EXCLUIMOS CATEGORÍAS QUE NO SON PATRIMONIO REAL
+    const transaccionesValidas = transactions.filter(tx => {
+      // Excluir transferencias entre espacios (se duplic​an)
+      if (tx.categoria === 'transferencia_salida' || tx.categoria === 'transferencia_entrada') return false;
+      // Excluir transacciones que son simplemente movimientos internos
+      if (tx.categoria === 'cambio_p2p') return false;
+      return true;
+    });
+
+    transaccionesValidas.forEach(tx => {
       const signo = tx.tipo === "ingreso" ? 1 : -1;
       const montoOriginal = tx.monto_original || 0;
       const moneda = tx.moneda_original || (montoOriginal > 1000 ? 'bs' : 'usd');
@@ -2271,7 +2163,19 @@ const getPatrimonioNeto = () => {
     }
 
     if (activeTab === 'calculadora' || forceTab === 'calculadora') {
-      return <CalculadoraTab rates={rates} theme={theme} triggerToast={triggerToast} onBack={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} />;
+      return (
+        <CalculadoraTab
+          rates={rates}
+          activeRates={activeRates}
+          setActiveRates={setActiveRates}
+          theme={theme}
+          triggerToast={triggerToast}
+          onBack={() => { onChangeView('dashboard'); setActiveTab('inicio'); }}
+          puedeEscanear={puedeEscanear}
+          registrarEscaneo={registrarEscaneo}
+          onTriggerPaywall={onTriggerPaywall}
+        />
+      );
     }
 
     if (activeTab === 'emergencia') {
@@ -2458,66 +2362,6 @@ const getPatrimonioNeto = () => {
               </Drawer.Portal>
             </Drawer.Root>
 
-
-{/* ========================================================= */}
-      {/* DRAWER: TÉRMINOS Y CONDICIONES DE INTELIGENCIA ARTIFICIAL */}
-      {/* ========================================================= */}
-      <Drawer.Root open={showAITerms} onOpenChange={setShowAITerms}>
-        <Drawer.Portal>
-          <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[300] backdrop-blur-sm" />
-          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] mt-24 fixed bottom-0 left-0 right-0 z-[350] max-h-[85vh]">
-            <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-12">
-              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-8" />
-              
-              <div className="flex justify-center mb-4">
-                {/* Ícono de Cerebro estilo Nola */}
-                <div className="text-5xl drop-shadow-lg">🧠</div>
-              </div>
-              
-              <h3 className="text-2xl font-black text-white text-center mb-3 tracking-tight">Pote usa inteligencia artificial</h3>
-              <p className="text-sm text-white/50 text-center mb-8 px-4 leading-relaxed">
-                Para analizar tus recibos, fotos y voz, enviamos datos a modelos de IA seguros. A continuación te explicamos cómo.
-              </p>
-
-              <div className="space-y-4 mb-8">
-                <div className="bg-[#1C1C1E] p-5 rounded-[2rem]">
-                  <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
-                    <span className="text-rose-400">📄</span> Qué datos se envían
-                  </h4>
-                  <ul className="text-xs text-white/60 space-y-2 list-disc pl-5">
-                    <li>Texto que escribes para agregar transacciones.</li>
-                    <li>Fotos de recibos, estados de cuenta o capturas de pantalla.</li>
-                    <li>Grabaciones de voz para el asistente inteligente.</li>
-                  </ul>
-                </div>
-
-                <div className="bg-[#1C1C1E] p-5 rounded-[2rem]">
-                  <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
-                    <span className="text-rose-400">🔒</span> Cómo se procesan
-                  </h4>
-                  <ul className="text-xs text-white/60 space-y-2 list-disc pl-5">
-                    <li>Servicios externos de OpenAI procesan tus datos para extraer montos y comercios.</li>
-                    <li>Los datos se transmiten de forma encriptada y no se usan para entrenar modelos públicos.</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Botón estilo Nola (Coral/Red) */}
-              <button 
-                onClick={acceptAITerms} 
-                className="w-full bg-rose-500 hover:bg-rose-400 text-white font-black py-4 rounded-full text-base active:scale-95 transition-transform shadow-[0_0_20px_rgba(244,63,94,0.3)] mb-4"
-              >
-                Acepto, continuar
-              </button>
-              <button onClick={() => setShowAITerms(false)} className="w-full text-white/40 font-bold text-sm hover:text-white transition-colors">
-                No, gracias
-              </button>
-            </div>
-          </Drawer.Content>
-        </Drawer.Portal>
-      </Drawer.Root>
-
-
             <div className="space-y-2">
               {gastosFijos.length === 0 ? (
                 <p className="text-[10px] md:text-xs text-white/50 italic px-2">No hay gastos fijos configurados.</p>
@@ -2623,7 +2467,16 @@ const getPatrimonioNeto = () => {
              <div className={`p-3 border-b border-white/5 bg-black/20 flex flex-col gap-3`}>
                 <div className={`flex justify-between items-center text-xs font-bold uppercase text-white/70`}>
                   <span>Historial del Mes</span>
-                  <input type="month" value={mesActual} onChange={(e) => setMesActual(e.target.value)} className={`bg-black/50 border ${theme.border} rounded-lg p-1 text-white outline-none text-[10px]`} />
+                  <div className="flex items-center gap-2">
+                    <input type="month" value={mesActual} onChange={(e) => setMesActual(e.target.value)} className={`bg-black/50 border ${theme.border} rounded-lg p-1 text-white outline-none text-[10px]`} />
+                    <button
+                      onClick={reiniciarMovimientos}
+                      title="Reiniciar todos los movimientos"
+                      className="flex items-center gap-1 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-rose-400 px-2 py-1 rounded-lg text-[10px] font-black normal-case tracking-normal transition-colors"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Reiniciar Todo
+                    </button>
+                  </div>
                 </div>
                 {espacioActivo?.tipo !== 'individual' && filterOptions.length > 1 && (
                   <div className="flex flex-wrap gap-2 p-1 bg-black/50 rounded-xl">
@@ -2674,170 +2527,124 @@ const getPatrimonioNeto = () => {
     }
 
     if (activeTab === 'inicio') {
-      const nombreUsuario = (perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado";
-      const saldoPrincipal = getSaldosAislados(nombreUsuario); 
       const patrimonioTotal = getPatrimonioNeto();
+      const saldoPrincipal = getSaldosAislados((perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado");
+      const participantesVisibles = espacioActivo?.tipo !== 'individual' && participantes.length > 0;
+      const metasActivas = potes.length > 0;
 
       return (
         <div className="space-y-6">
-          
-          
-        {/* HEADER PRINCIPAL (PATRIMONIO O VACA) */}
-          {espacioActivo?.tipo === 'vaca' ? (
-            <div className="mt-2 mb-4">
-               {potes.length === 0 ? (
-                 <div className="bg-emerald-500/10 border border-emerald-500/30 p-10 rounded-[2.5rem] text-center animate-in zoom-in-95">
-                   <Target className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
-                   <h3 className="text-xl font-black text-white mb-2">Define tu Vaca</h3>
-                   <p className="text-sm text-white/50 mb-8">¿Cuánto dinero necesitan reunir?</p>
-                   <button onClick={() => { setPoteForm({ id: null, tipo: "Personalizado ✍️", nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true); }} className="w-full bg-emerald-500 text-black font-black py-4 rounded-2xl active:scale-95 transition-all">ESTABLECER META</button>
-                 </div>
-               ) : (
-                 <div onClick={() => setIsBalanceModalOpen(true)} className={`bg-[#1a0f2e] border-2 border-emerald-500/30 p-5 md:p-6 rounded-[2rem] shadow-[0_0_15px_rgba(16,185,129,0.1)] relative overflow-hidden group hover:border-emerald-500/60 transition-colors cursor-pointer`}>
-                    {(() => {
-                      const ahorrado = getPoteAhorrado(potes[0].id, potes[0].nombre);
-                      const porcentaje = Math.min((ahorrado / potes[0].monto_objetivo) * 100, 100);
-                      const faltante = Math.max(potes[0].monto_objetivo - ahorrado, 0);
+          <div className="relative flex flex-col items-center justify-center py-10 text-center overflow-hidden">
+            <div
+              className={`absolute -top-10 w-64 h-64 rounded-full ${theme.primary} opacity-20 blur-3xl pointer-events-none`}
+              aria-hidden="true"
+            ></div>
 
-                      return (
-                        <div className="relative z-10">
-                          {porcentaje >= 100 && (
-                            <div className="absolute inset-0 bg-emerald-600/90 backdrop-blur-sm flex flex-col items-center justify-center z-20 text-center p-4 rounded-xl">
-                              <span className="text-3xl mb-1">🎉</span>
-                              <h3 className="text-white font-black text-lg">¡Vaca Completada!</h3>
-                            </div>
-                          )}
-
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <h2 className="text-base md:text-lg font-black text-white flex items-center gap-2">
-                                {potes[0].nombre} 
-                                <span className={`text-emerald-400 text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20`}>META: ${potes[0].monto_objetivo} USDT</span>
-                              </h2>
-                              <p className={`text-xs text-white/50 mt-1`}>Faltan $<AnimatedNum value={faltante} /> USD</p>
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <span className={`text-sm md:text-base font-black text-emerald-400`}><AnimatedNum value={porcentaje} format="pct"/></span>
-                            </div>
-                          </div>
-                          
-                          <div className={`h-3 w-full bg-black/60 rounded-full border border-white/5 p-0.5 mt-2`}>
-                            <div className={`h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]`} style={{ width: `${porcentaje}%`, transition: 'width 1s ease-in-out' }}></div>
-                          </div>
-                          
-                          <div className="flex justify-between items-center mt-4">
-                            <div className="flex gap-2">
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation(); // <-- IMPORTANTE: Evita que se abra el modal al tocar el botón
-                                  setTipo("ingreso"); 
-                                  setCategoria("abono_pote"); 
-                                  setDestinoTransferencia(potes[0].id); 
-                                  const trigger = document.getElementById('nuevo-registro-trigger'); 
-                                  if (trigger) trigger.click(); 
-                                }} 
-                                className="w-10 h-10 bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center rounded-full shadow-lg shadow-emerald-500/20 active:scale-90 transition-all"
-                              >
-                                <Plus size={20} strokeWidth={3} />
-                              </button>
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation(); // <-- IMPORTANTE: Evita que se abra el modal
-                                  eliminarPote(potes[0].id);
-                                }} 
-                                className="w-10 h-10 bg-white/5 hover:bg-rose-500/20 text-white/30 hover:text-rose-500 flex items-center justify-center rounded-full border border-white/5 transition-colors"
-                              >
-                                <Trash2 size={18}/>
-                              </button>
-                            </div>
-                            <p className="text-[9px] text-white/30 uppercase flex items-center gap-1">Ver aportes <ArrowDownCircle size={10}/></p>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                 </div>
-               )}
+            <div className={`relative w-11 h-11 rounded-2xl ${theme.lightBg} border ${theme.border} flex items-center justify-center mb-4`}>
+              <identidadEspacio.Icono className={`w-5 h-5 ${theme.text}`} />
             </div>
-        ) : (
-            <div className="mt-2 mb-4">
-                 <div onClick={() => setIsBalanceModalOpen(true)} className="cursor-pointer flex flex-col items-center justify-center p-8 bg-[#1C1C1E] rounded-[2rem] transition-transform active:scale-95 border border-white/5">
-                   <p className="text-[11px] text-white/50 uppercase font-bold tracking-widest mb-2 flex items-center gap-2">
-                     <Globe className="w-4 h-4"/> {espacioActivo?.tipo === 'individual' ? 'Patrimonio Neto Total' : 'Balance Global'}
-                   </p>
-                   
-{/* Texto blanco sólido, sin gradientes */}
-                   <p className="text-5xl font-bold text-white tabular-nums font-sans tracking-tight leading-none mb-5">
-                     $<AnimatedNum 
-                         value={patrimonioRate === 'paralelo' ? getPatrimonioNeto().paralelo : getPatrimonioNeto().bcv} 
-                         format="usd" 
-                       />
-                   </p>
 
-                   {/* Selector Plano con acento Verde Fintech */}
-                   <div className="flex bg-[#121212] p-1 rounded-xl w-max mb-5 border border-white/5" onClick={(e) => e.stopPropagation()}>
-                     <button onClick={() => setPatrimonioRate('paralelo')} className={`px-5 py-2 text-[10px] font-bold rounded-lg transition-colors ${patrimonioRate === 'paralelo' ? 'bg-[#10B981] text-white' : 'text-white/40 hover:text-white/80'}`}>PARALELO</button>
-                     <button onClick={() => setPatrimonioRate('bcv')} className={`px-5 py-2 text-[10px] font-bold rounded-lg transition-colors ${patrimonioRate === 'bcv' ? 'bg-[#10B981] text-white' : 'text-white/40 hover:text-white/80'}`}>BCV OFICIAL</button>
-                   </div>
-
-                   <div className="flex gap-3 mt-2">
-                       <p className="text-[10px] text-white/40 font-medium bg-[#121212] px-3 py-2 rounded-lg border border-white/5">
-                         Tasa BCV: Bs. {rates.bcv.toFixed(2)}
-                       </p>
-                       <p className="text-[10px] text-white/40 font-medium bg-[#121212] px-3 py-2 rounded-lg border border-white/5">
-                         Paralelo: Bs. {rates.usdt.toFixed(2)}
-                       </p>
-                   </div>
-                   
-                   <p className="text-[9px] text-white/30 uppercase mt-5 flex items-center gap-1">
-                     <ArrowDownCircle size={10}/> Toque para ver detalle
-                   </p>
-                 </div>
-              </div>
-          )}
+            <div className="relative flex items-center gap-2 mb-4">
+              <p className="text-[10px] uppercase tracking-[0.4em] text-white/40">Patrimonio Neto</p>
+              <button
+                onClick={toggleBalanceHidden}
+                className="text-white/30 hover:text-white transition-colors"
+                title={isBalanceHidden ? "Mostrar saldo" : "Ocultar saldo"}
+              >
+                {isBalanceHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <button
+              onClick={() => setIsBalanceModalOpen(true)}
+              className="relative flex flex-col items-center active:scale-95 transition-transform cursor-pointer"
+            >
+              <p className="text-6xl md:text-7xl font-black text-white tabular-nums leading-none">
+                {isBalanceHidden ? "••••••" : (<>$<AnimatedNum value={patrimonioRate === 'paralelo' ? patrimonioTotal.paralelo : patrimonioTotal.bcv} format="usd" /></>)}
+              </p>
+            </button>
+            <p className="relative text-sm text-white/50 mt-4 max-w-xl">
+              {espacioActivo?.tipo === 'individual' ? 'Toca el monto para ver el desglose.' : `${identidadEspacio.etiqueta} · toca el monto para ver el desglose.`}
+            </p>
+            <div className="relative mt-8 inline-flex rounded-full bg-white/5 p-1 shadow-inner shadow-black/20">
+              <button onClick={() => setPatrimonioRate('paralelo')} className={`px-5 py-2 text-[10px] font-black rounded-full transition ${patrimonioRate === 'paralelo' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}>
+                PARALELO
+              </button>
+              <button onClick={() => setPatrimonioRate('bcv')} className={`px-5 py-2 text-[10px] font-black rounded-full transition ${patrimonioRate === 'bcv' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}>
+                BCV OFICIAL
+              </button>
+            </div>
+          </div>
 
           <Drawer.Root open={isBalanceModalOpen} onOpenChange={setIsBalanceModalOpen}>
             <Drawer.Portal>
               <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
-              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[55vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-purple-500">
+              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[55vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t-2" style={{ borderTopColor: theme.stroke }}>
                 <Drawer.Title className="sr-only">Detalle de Liquidez</Drawer.Title>
                 <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
                   <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
                   <h3 className="text-xl font-black text-white mb-6 text-center">Detalle de Liquidez</h3>
                   
-                  {espacioActivo?.tipo === 'individual' ? (
-                    // VISTA PARA TU BILLETERA INDIVIDUAL (Mantiene el detalle por moneda)
-                    <div className="space-y-3">
-                      <div className="bg-[#1a1a1a] p-4 rounded-2xl flex justify-between items-center border border-white/5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center"><DollarSign className="text-purple-400 w-5 h-5"/></div>
-                          <div><p className="text-sm font-bold text-white">Dólares Digitales</p><p className="text-[10px] text-white/40 uppercase">Zinli, Binance, etc.</p></div>
+               {espacioActivo?.tipo === 'individual' ? (
+                    // VISTA DE LISTA MINIMALISTA (Basado en tu diseño de iOS)
+                    <div className="space-y-3 px-1 mt-2">
+                      
+                      {/* Fila 1: Dólares Digitales */}
+                      <div className="bg-[#1C1C1E] p-4 md:p-5 rounded-[1.25rem] flex justify-between items-center border border-white/5 transition-colors hover:border-purple-500/30">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+                            <DollarSign className="text-purple-400 w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-white">Dólares Digitales</p>
+                            <p className="text-[9px] text-white/40 uppercase tracking-widest mt-0.5">ZINLI, BINANCE, ETC.</p>
+                          </div>
                         </div>
-                        <p className="text-xl font-black text-white font-sans">${saldoPrincipal.usdt.toFixed(2)}</p>
+                        <p className="text-xl font-black text-white font-sans tabular-nums tracking-tight">
+                          $<AnimatedNum value={saldoPrincipal.usdt} format="usd" />
+                        </p>
                       </div>
 
-                      <div className="bg-[#1a1a1a] p-4 rounded-2xl flex justify-between items-center border border-white/5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center"><Wallet className="text-blue-400 w-5 h-5"/></div>
-                          <div><p className="text-sm font-bold text-white">Bolívares</p><p className="text-[10px] text-white/40 uppercase">Pago Móvil, Bancos</p></div>
+                      {/* Fila 2: Bolívares */}
+                      <div className="bg-[#1C1C1E] p-4 md:p-5 rounded-[1.25rem] flex justify-between items-center border border-white/5 transition-colors hover:border-blue-500/30">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                            <Wallet className="text-blue-400 w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-white">Bolívares</p>
+                            <p className="text-[9px] text-white/40 uppercase tracking-widest mt-0.5">PAGO MÓVIL, BANCOS</p>
+                          </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-xl font-black text-white font-sans">Bs. {saldoPrincipal.bs.toFixed(2)}</p>
-                          <p className="text-[10px] text-blue-400 font-bold">Eqv: ${(rates.bcv > 0 ? saldoPrincipal.bs / rates.bcv : 0).toFixed(2)}</p>
+                          <p className="text-xl font-black text-white font-sans tabular-nums tracking-tight">
+                            Bs. <AnimatedNum value={saldoPrincipal.bs} format="bs" />
+                          </p>
+                          <p className="text-[10px] text-blue-400 font-bold mt-0.5">
+                            Eqv: $<AnimatedNum value={rates.bcv > 0 ? saldoPrincipal.bs / rates.bcv : 0} format="usd" />
+                          </p>
                         </div>
                       </div>
 
-                      <div className="bg-[#1a1a1a] p-4 rounded-2xl flex justify-between items-center border border-white/5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center"><CheckSquare className="text-amber-400 w-5 h-5"/></div>
-                          <div><p className="text-sm font-bold text-white">Efectivo</p><p className="text-[10px] text-white/40 uppercase">Cash Físico</p></div>
+                      {/* Fila 3: Efectivo */}
+                      <div className="bg-[#1C1C1E] p-4 md:p-5 rounded-[1.25rem] flex justify-between items-center border border-white/5 transition-colors hover:border-amber-500/30">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
+                            <CheckSquare className="text-amber-400 w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-white">Efectivo</p>
+                            <p className="text-[9px] text-white/40 uppercase tracking-widest mt-0.5">CASH FÍSICO</p>
+                          </div>
                         </div>
-                        <p className="text-xl font-black text-white font-sans">${saldoPrincipal.cash.toFixed(2)}</p>
+                        <p className="text-xl font-black text-white font-sans tabular-nums tracking-tight">
+                          $<AnimatedNum value={saldoPrincipal.cash} format="usd" />
+                        </p>
                       </div>
+
                     </div>
                   ) : (
-                    // VISTA PARA POTES Y VACAS (Detalle por participante con el diseño de filas)
+                    // VISTA PARA POTES Y VACAS COMPARTIDAS
                     <div className="space-y-3">
-                      {/* 1. FILA DEL PATRIMONIO GLOBAL */}
                       <div className="bg-emerald-900/20 p-4 rounded-2xl flex justify-between items-center border border-emerald-500/30">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center"><Globe className="text-emerald-400 w-5 h-5"/></div>
@@ -2849,11 +2656,9 @@ const getPatrimonioNeto = () => {
                         <p className="text-xl font-black text-emerald-400 font-sans">${patrimonioTotal.paralelo.toFixed(2)}</p>
                       </div>
 
-                      {/* 2. FILAS DE LOS INTEGRANTES */}
                       {participantes.map((p: any) => {
                         const saldoP = getSaldosAislados(p.nombre, true);
                         const totalP = saldoP.usdt + saldoP.cash + (rates.usdt > 0 ? saldoP.bs / rates.usdt : 0);
-                        
                         return (
                           <div key={p.id} className="bg-[#1a1a1a] p-4 rounded-2xl flex justify-between items-center border border-white/5 transition-colors hover:border-purple-500/30">
                             <div className="flex items-center gap-3">
@@ -2871,334 +2676,195 @@ const getPatrimonioNeto = () => {
                       })}
                     </div>
                   )}
-
                 </div>
               </Drawer.Content>
             </Drawer.Portal>
           </Drawer.Root>
 
-          {/* LIQUIDEZ INDIVIDUAL (SOLO EN BILLETERA) */}
-          {espacioActivo?.tipo === 'individual' && (
-            <div className="mb-6">
-              <div className={`bg-[#1a1a1a] border border-[#333] p-6 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[220px]`}>
-                <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <p className="text-white/80 font-bold text-sm">Tu Liquidez ({activeWallet.toUpperCase()})</p>
-                      <p className="text-[10px] text-emerald-400/80 mt-0.5 font-medium">Dinero real y disponible para gastar hoy.</p>
-                    </div>
-                    <Wallet className="w-6 h-6 text-white/30" />
-                 </div>
-                 
-                 <div className="mb-6">
-                    {activeWallet === 'usdt' && (
-                       <div className="animate-in fade-in">
-                         <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
-                           $<AnimatedNum value={saldoPrincipal.usdt} format="usd" />
-                         </p>
-                         <p className="text-emerald-400 text-xs font-bold mt-2">
-                           Eqv: Bs. <AnimatedNum value={saldoPrincipal.usdt * rates.usdt} format="bs" /> (Paralelo)
-                         </p>
-                       </div>
-                    )}
-                    {activeWallet === 'bs' && (
-                       <div className="animate-in fade-in">
-                         <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
-                           Bs. <AnimatedNum value={saldoPrincipal.bs} format="bs" />
-                         </p>
-                         <p className="text-blue-400 text-xs font-bold mt-2">
-                           Eqv: $<AnimatedNum value={rates.bcv > 0 ? saldoPrincipal.bs / rates.bcv : 0} format="usd" /> (Tasa BCV)
-                         </p>
-                       </div>
-                    )}
-                    {activeWallet === 'cash' && (
-                       <div className="animate-in fade-in">
-                         <p className="text-5xl font-black text-white tracking-tight tabular-nums font-sans">
-                           $<AnimatedNum value={saldoPrincipal.cash} format="usd" />
-                         </p>
-                         <p className="text-amber-400 text-xs font-bold mt-2 uppercase">Monto Físico Exacto</p>
-                       </div>
-                    )}
-                 </div>
-
-                 <div className="flex bg-black/40 p-1 rounded-xl w-max border border-white/5 shadow-inner">
-                   <button onClick={() => setActiveWallet('usdt')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'usdt' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>USDT</button>
-                   <button onClick={() => setActiveWallet('bs')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'bs' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>BS</button>
-                   <button onClick={() => setActiveWallet('cash')} className={`px-4 py-2 text-[10px] font-black rounded-lg transition-all ${activeWallet === 'cash' ? `${theme.primary} text-white shadow-md` : 'text-white/40 hover:text-white/80'}`}>CASH</button>
-                 </div>
+          {/* ========================================================= */}
+          {/* SIMULADOR RÁPIDO EMBEBIDO (CONVERSIÓN INSTANTÁNEA $ <-> BS/€) */}
+          {/* ========================================================= */}
+          <div className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-5 mx-2">
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }}
+                  title="Abrir simulador completo"
+                  className={`w-7 h-7 rounded-lg ${theme.lightBg} flex items-center justify-center ${theme.text} hover:brightness-125 transition-colors shrink-0 active:scale-90`}
+                >
+                  <Calculator className="w-4 h-4" />
+                </button>
+                <h3 className="font-black text-sm text-white">Simulador al instante</h3>
               </div>
             </div>
-          )}
 
-          {/* MIS POTES (NO SE MUESTRA EN VACA) */}
-          {espacioActivo?.tipo !== 'vaca' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center px-2">
-                <h2 className={`text-base font-black ${theme.text} uppercase tracking-widest flex items-center gap-2`}>
-                  <img src="/pote.png" alt="pote" className="w-6 h-6 object-contain drop-shadow-md" /> Mis Potes
-                </h2>
-              </div>
-
-{potes.map(pote => {
-                const ahorrado = getPoteAhorrado(pote.id, pote.nombre);
-                const porcentaje = Math.min((ahorrado / pote.monto_objetivo) * 100, 100);
-                
-                return (
-                  <div key={pote.id} className="bg-[#1C1C1E] border border-white/5 p-6 rounded-[2rem] relative overflow-hidden group transition-colors">
-                    
-                    {/* Pantalla de éxito cuando se llega al 100% */}
-                    {porcentaje >= 100 && (
-                      <div className="absolute inset-0 bg-[#10B981]/95 backdrop-blur-sm flex flex-col items-center justify-center z-20 text-center p-4">
-                        <span className="text-3xl mb-1">🎉</span>
-                        <h3 className="text-white font-black text-lg">¡Meta Alcanzada!</h3>
-                        <p className="text-white/90 text-[10px] mb-3 font-bold">Lograron ahorrar ${pote.monto_objetivo}.</p>
-                        <button onClick={() => registrarMetaCumplida(pote.id)} className="bg-[#121212] text-white font-bold px-4 py-2 rounded-xl text-xs active:scale-95 transition-transform">Reclamar y Finalizar</button>
-                      </div>
-                    )}
-
-                    <div className="relative z-10">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                            {pote.nombre} 
-                            <span className="text-[#10B981] text-[9px] bg-[#10B981]/10 px-2 py-0.5 rounded-lg border border-[#10B981]/20 font-bold uppercase tracking-widest">
-                              META: ${pote.monto_objetivo}
-                            </span>
-                          </h2>
-                          <p className="text-xs text-white/50 mt-1">Faltan $<AnimatedNum value={Math.max(pote.monto_objetivo - ahorrado, 0)} /> USD</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <span className="text-base font-black text-[#10B981]"><AnimatedNum value={porcentaje} format="pct"/></span>
-                        </div>
-                      </div>
-
-                      {/* BARRA DE PROGRESO (Plana y Fintech, sin neón) */}
-                      <div className="h-3 w-full bg-[#121212] rounded-full border border-white/5 overflow-hidden mt-3">
-                        <div className="h-full bg-[#10B981] rounded-full transition-all duration-1000" style={{ width: `${porcentaje}%` }}></div>
-                      </div>
-                      
-                      <div className="flex gap-2 mt-5">
-                        {porcentaje < 100 && (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation(); 
-                              setTipo("ingreso"); 
-                              setCategoria("abono_pote"); 
-                              setDestinoTransferencia(pote.id); 
-                              const trigger = document.getElementById('nuevo-registro-trigger'); 
-                              if (trigger) trigger.click(); 
-                            }} 
-                            className="w-11 h-11 bg-[#10B981] hover:bg-[#059669] text-white flex items-center justify-center rounded-2xl active:scale-95 transition-all"
-                          >
-                            <Plus size={20} strokeWidth={3} />
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => eliminarPote(pote.id)} 
-                          className="w-11 h-11 bg-[#121212] hover:bg-rose-500/20 text-white/30 hover:text-rose-500 flex items-center justify-center rounded-2xl border border-white/5 transition-colors"
-                        >
-                          <Trash2 size={18}/>
-                        </button>
-                      </div>
-
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="flex gap-1.5 mb-4 flex-wrap">
+              <button onClick={() => setMiniSimTasa('bcv')} className={`text-[9px] font-bold px-2.5 py-1 rounded-full transition-colors ${miniSimTasa === 'bcv' ? 'bg-white text-black' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}>
+                BCV {rates.bcv.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </button>
+              <button onClick={() => setMiniSimTasa('paralelo')} className={`text-[9px] font-bold px-2.5 py-1 rounded-full transition-colors ${miniSimTasa === 'paralelo' ? 'bg-white text-black' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'}`}>
+                USDT {rates.usdt.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </button>
+              <button onClick={() => setMiniSimTasa('eur')} className={`text-[9px] font-bold px-2.5 py-1 rounded-full transition-colors ${miniSimTasa === 'eur' ? 'bg-white text-black' : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'}`}>
+                EUR {rates.eur_bcv.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </button>
             </div>
-          )}
 
- {/* === TARJETAS DE ACCESO RÁPIDO === */}
-          <div className="mb-8 mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-            
-            {/* BOTÓN 1: ESCÁNER IA 📸 */}
-            <button onClick={() => fileInputRef.current?.click()} disabled={isScanning} className={`h-[110px] bg-[#1C1C1E] border border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all hover:bg-[#2C2C2E] active:scale-95 group relative ${isScanning ? 'opacity-70 cursor-not-allowed' : ''}`}>
-                {isScanning ? (
-                    <Loader2 className="w-8 h-8 text-[#10B981] animate-spin" />
-                ) : (
-                    <>
-                        <div className="w-12 h-12 rounded-full bg-[#10B981]/10 flex items-center justify-center border border-[#10B981]/20 group-hover:scale-110 transition-transform">
-                            <Camera className="w-6 h-6 text-[#10B981]" />
-                        </div>
-                        <span className="text-white font-bold text-xs uppercase tracking-wider">Escanear Factura</span>
-                        <span className="text-[9px] text-white/40 -mt-1 font-medium">Usa la IA para registrar rápido</span>
-                    </>
-                )}
-                <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleScanInvoice} className="hidden" />
-            </button>
-
-            {/* BOTÓN 2: SIMULADOR (Azul) */}
-            <button onClick={() => { onChangeView('calculadora-libre'); setActiveTab('calculadora'); }} className="h-[110px] bg-[#1C1C1E] border border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all hover:bg-[#2C2C2E] active:scale-95 group">
-              <div className="w-12 h-12 rounded-full bg-[#3B82F6]/10 flex items-center justify-center border border-[#3B82F6]/20 group-hover:scale-110 transition-transform">
-                <Calculator className="w-6 h-6 text-[#3B82F6]" />
-              </div>
-              <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest text-center leading-tight">Simulador<br/>de Compras</span>
-            </button>
-
-            {/* BOTÓN 3: NUEVA META (Fucsia) */}
-            {espacioActivo?.tipo !== 'vaca' && (
-              <button onClick={() => { setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" }); setIsAddingPote(true); }} className="h-[110px] bg-[#1C1C1E] border border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all hover:bg-[#2C2C2E] active:scale-95 group">
-                <div className="w-12 h-12 rounded-full bg-[#C026D3]/10 flex items-center justify-center border border-[#C026D3]/20 group-hover:scale-110 transition-transform">
-                  <Target className="w-6 h-6 text-[#C026D3]" />
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-black/30 border border-white/10 rounded-full px-4 py-3 transition-colors">
+                <span className="text-[9px] text-white/40 font-bold uppercase block mb-0.5">Monto en {miniSimMoneda === 'usd' ? '$' : 'Bs'}</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-lg font-black text-white/40">{miniSimMoneda === 'usd' ? '$' : 'Bs'}</span>
+                  <input type="number" placeholder="0" value={miniSimMonto} onChange={(e) => setMiniSimMonto(e.target.value)} className="w-full bg-transparent text-lg font-black text-white outline-none tabular-nums" />
                 </div>
-                <span className="text-white font-bold text-xs uppercase tracking-wider">Nueva Meta</span>
+              </div>
+              <button
+                onClick={handleSwapMiniSim}
+                title="Cambiar moneda de origen"
+                className={`w-9 h-9 rounded-full ${theme.lightBg} border ${theme.border} flex items-center justify-center shrink-0 hover:brightness-125 transition-colors active:scale-90`}
+              >
+                <ArrowLeftRight className={`w-4 h-4 ${theme.text}`} />
+              </button>
+              <div className={`flex-1 ${theme.lightBg} border ${theme.border} rounded-full px-4 py-3`}>
+                <span className={`text-[9px] ${theme.text} opacity-70 font-bold uppercase block mb-0.5`}>
+                  {miniSimTasa === 'eur' ? 'Equivale en €' : (miniSimMoneda === 'usd' ? 'Pagas en Bs' : 'Recibes en $')}
+                </span>
+                <div className="flex items-center gap-1">
+                  <span className={`text-lg font-black ${theme.text} opacity-50`}>{miniSimSimbolo}</span>
+                  <span className={`text-lg font-black ${theme.text} tabular-nums`}>{formatMiniNum(miniSimResultado)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ========================================================= */}
+          {/* TARJETAS DE ACCESO RÁPIDO REBRANDING */}
+          {/* ========================================================= */}
+          <div className="flex items-center justify-between gap-3 px-4 mt-6 mb-8">
+
+            {/* BOTÓN ESCANEAR */}
+            <button
+              onClick={handleTryScan}
+              disabled={isScanning}
+              className="flex-1 flex flex-col items-center gap-3 py-4 rounded-[2rem] bg-[#1C1C1E] border border-white/10 hover:bg-[#27272a] transition-all active:scale-95"
+            >
+              <div className="w-14 h-14 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <Camera className="w-7 h-7 text-emerald-400" />
+              </div>
+              <span className="text-[9px] font-bold text-white/80 uppercase tracking-widest">Escanear Factura</span>
+            </button>
+
+            {/* BOTÓN META / VACA */}
+            {espacioActivo && (
+              <button
+                onClick={() => {
+                  if (espacioActivo.tipo === 'vaca' && potes.length > 0) {
+                    // Una vaca tiene una sola meta: este botón edita el monto necesario, no crea otra.
+                    const metaActual = potes[0];
+                    const opcionCoincide = POTE_OPCIONES.includes(metaActual.nombre);
+                    setPoteForm({
+                      id: metaActual.id,
+                      tipo: opcionCoincide ? metaActual.nombre : "Personalizado ✍️",
+                      nombreCustom: opcionCoincide ? "" : metaActual.nombre,
+                      monto_objetivo: String(metaActual.monto_objetivo ?? ""),
+                    });
+                  } else {
+                    setPoteForm({ id: null, tipo: POTE_OPCIONES[0], nombreCustom: "", monto_objetivo: "" });
+                  }
+                  setIsAddingPote(true);
+                }}
+                className="flex-1 flex flex-col items-center gap-3 py-4 rounded-[2rem] bg-[#1C1C1E] border border-white/10 hover:bg-[#27272a] transition-all active:scale-95"
+              >
+                <div className={`w-14 h-14 rounded-3xl ${theme.lightBg} border ${theme.border} flex items-center justify-center`}>
+                  <Target className={`w-7 h-7 ${theme.text}`} />
+                </div>
+                <span className="text-[9px] font-bold text-white/80 uppercase tracking-widest">
+                  {espacioActivo.tipo === 'vaca' ? (potes.length > 0 ? 'Editar Meta' : 'Nueva Vaca') : 'Nueva Meta'}
+                </span>
               </button>
             )}
           </div>
 
-          {/* === DRAWER DEL CAMBIO P2P === */}
-          <Drawer.Root open={isP2POpen} onOpenChange={setIsP2POpen}>
-            <Drawer.Portal>
-              <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[85vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-amber-500">
-                <Drawer.Title className="sr-only">Cambio P2P</Drawer.Title>
-                <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
-                  <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-                  <div className="flex justify-center mb-4">
-                     <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center"><ArrowLeftRight className="text-amber-400 w-6 h-6"/></div>
-                  </div>
-                  <h3 className="text-xl font-black text-white mb-2 text-center">Cambio de Divisas</h3>
-                  <p className="text-xs text-white/50 text-center mb-6">Actualiza tu liquidez sin afectar tu presupuesto mensual.</p>
-                  
-                  <form onSubmit={realizarCambioP2P} className="flex flex-col gap-5">
-                    
-                    {/* Selectores de Moneda */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1">
-                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Entregas</label>
-                        <select value={p2pForm.monedaDe} onChange={(e) => setP2pForm({...p2pForm, monedaDe: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-amber-500">
-                          <option value="usdt">USDT</option>
-                          <option value="bs">Bolívares (BS)</option>
-                        </select>
+          <input type="file" accept="image/*" ref={fileInputRef} onChange={handleScanInvoice} className="hidden" />
+
+          {/* ========================================================= */}
+          {/* INTEGRANTES DEL ESPACIO (VACA O POTE COMPARTIDO) */}
+          {/* ========================================================= */}
+          {participantesVisibles && (
+            <div className="space-y-4 px-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Participantes</p>
+                <span className="text-[10px] text-white/30">{participantes.length} miembro{participantes.length === 1 ? '' : 's'}</span>
+              </div>
+              <div className="space-y-3">
+                {participantes.map((p: any) => {
+                  const saldoP = getSaldosAislados(p.nombre, true);
+                  const totalP = saldoP.usdt + saldoP.cash + (rates.usdt > 0 ? saldoP.bs / rates.usdt : 0);
+                  return (
+                    <div key={p.id} className="border border-white/5 rounded-3xl p-4 flex items-center justify-between gap-3 hover:bg-white/5 transition-colors">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-white truncate">{p.nombre}</p>
+                        <p className="text-[9px] text-white/40 mt-1">
+                          USDT: ${saldoP.usdt.toFixed(2)} · BS: {saldoP.bs.toFixed(2)} · CASH: ${saldoP.cash.toFixed(2)}
+                        </p>
                       </div>
-                      <div className="pt-6"><ArrowLeftRight className="text-white/20 w-5 h-5"/></div>
-                      <div className="flex-1">
-                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Recibes</label>
-                        <select value={p2pForm.monedaPara} onChange={(e) => setP2pForm({...p2pForm, monedaPara: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-amber-500">
-                          <option value="bs">Bolívares (BS)</option>
-                          <option value="usdt">USDT</option>
-                        </select>
-                      </div>
+                      <p className="text-lg font-black text-white tabular-nums">${totalP.toFixed(2)}</p>
                     </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-                    {/* Inputs de Monto y Tasa */}
-                    <div className="flex gap-3">
-                      <div className="flex-[2]">
-                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto a cambiar</label>
-                        <input type="number" step="0.01" placeholder="0.00" value={p2pForm.monto} onChange={(e) => setP2pForm({...p2pForm, monto: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-2xl font-black text-white font-sans tabular-nums outline-none focus:border-amber-500" required />
+          {metasActivas && (
+            <div className="space-y-4 px-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Metas activas</p>
+              </div>
+              <div className="space-y-3">
+                {potes.map((pote) => {
+                  const ahorrado = getPoteAhorrado(pote.id, pote.nombre);
+                  const objetivo = Number(pote.monto_objetivo || 0);
+                  const porcentaje = objetivo > 0 ? Math.min((ahorrado / objetivo) * 100, 100) : 0;
+
+                  return (
+                    <div key={pote.id} className="border border-white/5 rounded-3xl p-5 hover:border-emerald-500/30 transition-colors flex items-center gap-4">
+                      <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
+                        <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                          <path className="text-white/5" strokeWidth="4" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                          <path className="text-emerald-400" strokeWidth="4" strokeDasharray={`${porcentaje}, 100`} strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        </svg>
+                        <span className="absolute text-xs font-black text-white tabular-nums">{porcentaje.toFixed(0)}%</span>
                       </div>
-                      <div className="flex-1">
-                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Tasa Pactada</label>
-                        <input type="number" step="0.001" placeholder="0.00" value={p2pForm.tasa} onChange={(e) => setP2pForm({...p2pForm, tasa: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-base font-bold text-white font-sans tabular-nums outline-none focus:border-amber-500" required />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-base font-bold text-white truncate">{pote.nombre}</p>
+                        <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">Ahorrado ${ahorrado.toFixed(2)} de ${pote.monto_objetivo}</p>
+                        <p className="text-[10px] text-emerald-400/70 mt-0.5 font-semibold">Falta ${Math.max(objetivo - ahorrado, 0).toFixed(2)}</p>
                       </div>
+                      <button
+                        onClick={() => { if (confirm(`¿Eliminar la meta "${pote.nombre}"? Esto no borra las transacciones ya registradas.`)) eliminarPote(pote.id); }}
+                        className="p-2 rounded-xl text-white/20 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
+                        title="Eliminar meta"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-                    {/* Selector de Usuario para P2P */}
-                    <div>
-                      <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Responsable del Cambio</label>
-                      <select required value={p2pForm.usuario} onChange={e => setP2pForm({...p2pForm, usuario: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-amber-500 appearance-none">
-                        <option value="">Selecciona quién hizo el cambio...</option>
-                        {espacioActivo?.tipo === 'individual' ? <option value={(perfil?.nombre || session?.user?.email?.split('@')[0]) || "Tú"}>Tú</option> : participantes.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Calculadora visual de resultado */}
-                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 mt-2 flex flex-col items-center justify-center">
-                       <p className="text-[10px] uppercase text-amber-500/80 font-bold tracking-widest mb-1">Total a recibir en {p2pForm.monedaPara.toUpperCase()}</p>
-                       <p className="text-3xl font-black text-amber-400 font-sans tabular-nums">
-                         {p2pForm.monedaPara === 'bs' ? 'Bs. ' : '$'}
-                         {p2pForm.monto && p2pForm.tasa ? 
-                            (p2pForm.monedaDe === 'usdt' && p2pForm.monedaPara === 'bs' ? (parseFloat(p2pForm.monto) * parseFloat(p2pForm.tasa)).toLocaleString('es-VE', {minimumFractionDigits: 2}) : 
-                             p2pForm.monedaDe === 'bs' && p2pForm.monedaPara === 'usdt' ? (parseFloat(p2pForm.monto) / parseFloat(p2pForm.tasa)).toLocaleString('en-US', {minimumFractionDigits: 2}) : '0.00'
-                            ) : '0.00'
-                         }
-                       </p>
-                    </div>
-
-                    <button type="submit" className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black py-5 rounded-3xl uppercase tracking-widest text-sm shadow-[0_0_20px_rgba(245,158,11,0.3)] mt-4 active:scale-95 transition-transform">Confirmar P2P</button>
-                  </form>
-                </div>
-              </Drawer.Content>
-            </Drawer.Portal>
-          </Drawer.Root>
-
-          {/* === DRAWER DE AÑADIR MIEMBRO === */}
-          <Drawer.Root open={isManageUsersOpen} onOpenChange={setIsManageUsersOpen}>
-            <Drawer.Portal>
-              <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-white/5">
-                <Drawer.Title className="sr-only">Añadir Miembro</Drawer.Title>
-                <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
-                  <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-                  <h3 className="text-xl font-black text-white mb-6 text-center">Añadir Miembro</h3>
-                  <div className="flex flex-wrap gap-2 mb-6">
-                    {participantes.length === 0 ? (
-                      <p className="text-xs text-white/20 italic text-center w-full">No hay miembros agregados...</p>
-                    ) : (
-                      participantes.map((p: any) => (
-                        <div key={p.id} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-white/5 bg-[#1a1a1a] text-white group hover:border-rose-500/50 transition-colors">
-                          {p.nombre}
-                          <button onClick={() => eliminarParticipante(p.id, p.nombre)} className="text-white/20 hover:text-rose-500 transition-colors">
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <input type="text" placeholder="Nombre del integrante..." value={nuevoPart} onChange={(e) => setNuevoPart(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && agregarParticipante()} className="flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#A855F7] transition-all" />
-                    <button onClick={agregarParticipante} className={`p-4 rounded-xl ${theme.primary} text-white shadow-lg active:scale-95 transition-all`}>
-                      <UserPlus size={20} />
-                    </button>
-                  </div>
-                </div>
-              </Drawer.Content>
-            </Drawer.Portal>
-          </Drawer.Root>
-
-          {/* === DRAWER DE NUEVA META (POTE) === */}
-          <Drawer.Root open={isAddingPote} onOpenChange={setIsAddingPote}>
-            <Drawer.Portal>
-              <Drawer.Overlay className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" />
-              <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[75vh] mt-24 fixed bottom-0 left-0 right-0 z-50 border-t border-[#10b981]">
-                <Drawer.Title className="sr-only">Registrar Nueva Meta</Drawer.Title>
-                <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
-                  <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-                  <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Nueva Meta</h3>
-                  <form onSubmit={guardarPote} className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-4">
-                      <div>
-                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿Para qué estamos ahorrando?</label>
-                        <select value={poteForm.tipo} onChange={(e) => setPoteForm({...poteForm, tipo: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none cursor-pointer appearance-none focus:border-emerald-500">
-                          {POTE_OPCIONES.map(opt => <option key={opt} value={opt} className="bg-[#121212]">{opt}</option>)}
-                        </select>
-                      </div>
-                      {poteForm.tipo === "Personalizado ✍️" && (
-                        <div className="animate-in fade-in slide-in-from-top-2">
-                           <input type="text" placeholder="Ej: Viaje a Margarita" value={poteForm.nombreCustom} onChange={(e) => setPoteForm({...poteForm, nombreCustom: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-emerald-500" required />
-                        </div>
-                      )}
-                      <div className="min-h-[80px]">
-                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Monto Objetivo ($)</label>
-                        <input type="number" step="0.01" placeholder="0.00" value={poteForm.monto_objetivo} onChange={(e) => setPoteForm({...poteForm, monto_objetivo: e.target.value})} className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums tracking-tight outline-none focus:border-emerald-500" required />
-                      </div>
-                    </div>
-                    <button type="submit" className="w-full bg-emerald-500 text-black font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(16,185,129,0.3)] mt-6 active:scale-95 transition-transform">Guardar Meta</button>
-                  </form>
-                </div>
-              </Drawer.Content>
-            </Drawer.Portal>
-          </Drawer.Root>
-          
-                    {/* CÓDIGO DE INVITACIÓN MOVIDO AL FINAL (DISCRETO) */}
+          {/* ========================================================= */}
+          {/* CÓDIGOS DE INVITACIÓN (AQUÍ ESTÁ CERRADO CORRECTAMENTE) */}
+          {/* ========================================================= */}
           {espacioActivo?.tipo !== 'individual' && espacioActivo?.codigo_invitacion && (
-             <div className="bg-transparent border border-fuchsia-500/10 p-4 rounded-3xl mb-6 flex flex-row items-center justify-between gap-4 mt-8">
+             <div className={`bg-transparent border ${theme.border} p-4 rounded-3xl mb-6 flex flex-row items-center justify-between gap-4 mt-8`}>
                 <div className="flex-1">
-                  <p className="text-[9px] text-fuchsia-400 font-bold uppercase tracking-widest flex items-center gap-1.5 mb-0.5">
-                     <Key className="w-3 h-3"/> Código del Espacio
-                  </p>
+                  <p className={`text-[9px] ${theme.text} font-bold uppercase tracking-widest flex items-center gap-1.5 mb-0.5`}><Key className="w-3 h-3"/> Código del Espacio</p>
                   <p className="text-[10px] text-white/40">Comparte para añadir miembros.</p>
                 </div>
-                <button onClick={() => {navigator.clipboard.writeText(espacioActivo.codigo_invitacion); alert("Código copiado al portapapeles");}} className="bg-[#1a0f2e] border border-white/5 py-2 px-4 rounded-xl text-sm text-white font-black tracking-[0.2em] transition-colors flex items-center justify-center gap-2 font-sans tabular-nums cursor-pointer hover:bg-white/5 active:scale-95">
+                <button onClick={() => {navigator.clipboard.writeText(espacioActivo.codigo_invitacion); alert("Código copiado");}} className="bg-[#1a0f2e] border border-white/5 py-2 px-4 rounded-xl text-sm text-white font-black tracking-[0.2em] transition-colors flex items-center justify-center gap-2 font-sans tabular-nums cursor-pointer hover:bg-white/5 active:scale-95">
                   {espacioActivo.codigo_invitacion} <Copy className="w-3 h-3 text-white/30 ml-1"/>
                 </button>
              </div>
@@ -3207,9 +2873,7 @@ const getPatrimonioNeto = () => {
           {espacioActivo?.tipo === 'individual' && !isGuest && (
              <div className="bg-transparent border border-white/5 p-4 rounded-3xl mb-6 flex flex-row items-center justify-between gap-4 mt-8">
                 <div className="flex-1">
-                  <p className="text-[9px] text-white/50 font-bold uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
-                     <Users className="w-3 h-3"/> ¿Tienes un código?
-                  </p>
+                  <p className="text-[9px] text-white/50 font-bold uppercase tracking-widest mb-0.5 flex items-center gap-1.5"><Users className="w-3 h-3"/> ¿Tienes un código?</p>
                   <p className="text-[10px] text-white/30">Únete a un Pote o Vaca.</p>
                 </div>
                 <div className="flex gap-2">
@@ -3218,12 +2882,12 @@ const getPatrimonioNeto = () => {
                 </div>
              </div>
           )}
-          <div className="h-28 w-full"></div>
 
+          <div className="h-28 w-full"></div>
         </div>
       );
     }
-    
+
     return <div className="p-10 text-center text-white/50">Selecciona otra pestaña</div>;
   }
 
@@ -3248,8 +2912,17 @@ const getPatrimonioNeto = () => {
                    </form>
                  ) : (
                    <>
-                     {espacioActivo?.nombre || "Mi Billetera"} 
+                     {espacioActivo?.nombre || "Mi Billetera"}
                      <ChevronDown className="w-5 h-5 text-white/40" />
+                     {espacioActivo && !isGuest && (
+                       <button
+                         onClick={(e) => { e.stopPropagation(); setNewSpaceName(espacioActivo.nombre); setIsEditingSpaceName(true); }}
+                         className="text-white/20 hover:text-white/60 transition-colors"
+                         title="Editar nombre"
+                       >
+                         <Edit2 className="w-3.5 h-3.5" />
+                       </button>
+                     )}
                    </>
                  )}
              </div>
@@ -3283,8 +2956,28 @@ const getPatrimonioNeto = () => {
           </div>
         </div>
         
-        {/* LADO DERECHO: TASA OFICIAL CLICKABLE */}
-        <div className="text-right flex flex-col items-end">
+        {/* LADO DERECHO: TASA OFICIAL CLICKABLE + BOTÓN LOGOUT */}
+        <div className="text-right flex items-center gap-2">
+          {!isGuest && session && !perfil?.is_pro && (
+            <button
+              onClick={() => onTriggerPaywall?.()}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 hover:from-amber-500/30 hover:to-orange-500/30 px-3 py-2 rounded-xl transition-all active:scale-95"
+              title="Hazte PRO"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span className="hidden sm:inline text-[9px] font-bold text-amber-400 uppercase tracking-widest">Hazte PRO</span>
+            </button>
+          )}
+          {!isGuest && session && (
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 px-3 py-2 rounded-xl transition-all active:scale-95"
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-4 h-4 text-rose-400" />
+              <span className="hidden sm:inline text-[9px] font-bold text-rose-400 uppercase tracking-widest">Salir</span>
+            </button>
+          )}
           <button 
             onClick={() => setIsRatesDrawerOpen(true)} 
             className="flex items-center gap-2 bg-[#1a1a1a] border border-white/5 hover:border-emerald-500/40 px-3 py-2 rounded-xl transition-all active:scale-95"
@@ -3319,33 +3012,65 @@ const getPatrimonioNeto = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-3">
-                {/* BCV USD */}
-                <div className="bg-[#1C1C1E] border border-emerald-500/20 p-4 rounded-2xl flex flex-col justify-between">
-                  <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2 flex items-center justify-between">
-                    BCV Dólar
-                    <span className="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded">OFICIAL</span>
-                  </p>
-                  <p className="text-xl font-black text-emerald-400 font-sans tabular-nums tracking-tight">Bs. {rates.bcv.toLocaleString('es-VE', {minimumFractionDigits:2})}</p>
-                </div>
-
-                {/* USDT (Binance/Zinli) */}
-                <div className="bg-[#1C1C1E] border border-blue-500/20 p-4 rounded-2xl flex flex-col justify-between">
-                  <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2 flex items-center justify-between">
-                    PARALELO
-                    <span className="bg-blue-500/20 text-blue-400 text-[8px] px-1.5 py-0.5 rounded">DIGITAL</span>
-                  </p>
-                  <p className="text-xl font-black text-blue-400 font-sans tabular-nums tracking-tight">Bs. {rates.usdt.toLocaleString('es-VE', {minimumFractionDigits:2})}</p>
-                </div>
-
-                {/* EURO BCV */}
-                <div className="bg-[#1C1C1E] border border-purple-500/20 p-4 rounded-2xl flex flex-col justify-between">
-                  <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2 flex items-center justify-between">
-                    Euro BCV
-                    <span className="bg-purple-500/20 text-purple-400 text-[8px] px-1.5 py-0.5 rounded">EUROPA</span>
-                  </p>
-                  <p className="text-xl font-black text-purple-400 font-sans tabular-nums tracking-tight">Bs. {rates.eur_bcv.toLocaleString('es-VE', {minimumFractionDigits:2})}</p>
-                </div>
+                {activeRates.map((id) => {
+                  const def = TASAS_DISPONIBLES.find(t => t.id === id);
+                  if (!def) return null;
+                  const valor = getValorTasa(id, rates);
+                  return (
+                    <div key={id} className={`bg-[#1C1C1E] border ${def.classes.border} p-4 rounded-2xl flex flex-col justify-between relative group`}>
+                      <button
+                        onClick={() => setActiveRates(prev => prev.filter(r => r !== id))}
+                        className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center text-white/20 hover:text-rose-400 transition-colors"
+                        title="Quitar tasa"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                      <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2 flex items-center justify-between pr-4">
+                        {def.label}
+                        <span className={`${def.classes.badgeBg} ${def.classes.badgeText} text-[8px] px-1.5 py-0.5 rounded`}>{def.badge}</span>
+                      </p>
+                      {def.kind === 'foreign_per_usd' ? (
+                        <>
+                          <p className={`text-xl font-black ${def.classes.text} font-sans tabular-nums tracking-tight`}>
+                            {valor.toLocaleString(def.locale, {maximumFractionDigits:0})} <span className="text-xs">/ USD</span>
+                          </p>
+                          <p className="text-[9px] text-white/40 mt-1">
+                            1.000 ≈ Bs. {(valor > 0 ? (1000 * rates.bcv / valor) : 0).toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})}
+                          </p>
+                        </>
+                      ) : (
+                        <p className={`text-xl font-black ${def.classes.text} font-sans tabular-nums tracking-tight`}>Bs. {valor.toLocaleString('es-VE', {minimumFractionDigits:2})}</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+
+              {TASAS_DISPONIBLES.some(t => !activeRates.includes(t.id)) && (
+                <div className="mb-3">
+                  {!showAddTasa ? (
+                    <button
+                      onClick={() => setShowAddTasa(true)}
+                      className="w-full bg-[#1a1a1a] border border-dashed border-white/15 hover:border-emerald-500/40 p-3 rounded-2xl flex items-center justify-center gap-2 text-white/50 hover:text-emerald-400 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span className="text-[11px] font-bold uppercase tracking-widest">Añadir tasa</span>
+                    </button>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {TASAS_DISPONIBLES.filter(t => !activeRates.includes(t.id)).map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => { setActiveRates(prev => [...prev, t.id]); setShowAddTasa(false); }}
+                          className={`bg-[#1a1a1a] border ${t.classes.border} hover:bg-[#232323] p-3 rounded-xl text-[11px] font-bold text-white/70 hover:text-white transition-colors flex items-center gap-1.5`}
+                        >
+                          <Plus className="w-3 h-3" /> {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="text-center mt-6">
                 <p className="text-[10px] text-white/30 uppercase tracking-widest">
@@ -3400,38 +3125,255 @@ const getPatrimonioNeto = () => {
               <div className="pt-4 border-t border-white/5 space-y-3 mt-4">
                 <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-3 text-center">Crear o Unirse</p>
                 <div className="grid grid-cols-2 gap-2">
-                {/* BOTÓN CREAR POTE (Activo) */}
-                <button 
-                  onClick={() => { setIsSpacesMenuOpen(false); onSelectModule('pote', 'NEW'); }} 
-                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/10 font-bold text-xs transition-colors active:scale-95"
+                {/* BOTÓN CREAR POTE (PRO) */}
+                <button
+                  onClick={() => {
+                    setIsSpacesMenuOpen(false);
+                    if (!perfil?.is_pro) { setTimeout(() => onTriggerPaywall?.(), 300); return; }
+                    onSelectModule('pote', 'NEW');
+                  }}
+                  className="relative flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/10 font-bold text-xs transition-colors active:scale-95"
                 >
+                  {!perfil?.is_pro && (
+                    <span className="absolute top-2 right-2 bg-amber-500 text-black text-[8px] font-black px-1.5 py-0.5 rounded">PRO</span>
+                  )}
                   <div className="bg-fuchsia-500/20 p-2 rounded-full">
                     <Plus className="w-5 h-5"/>
-                  </div> 
+                  </div>
                   Crear Pote
                 </button>
 
-                {/* BOTÓN CREAR VACA (Bloqueado - Próximamente) */}
-                <button 
-                  disabled
-                  className="flex flex-col items-center justify-center gap-1.5 p-4 rounded-2xl border border-dashed border-white/10 text-white/30 bg-white/5 font-bold text-xs cursor-not-allowed"
-                >
-                  <div className="bg-white/5 p-2 rounded-full mb-0.5">
-                    <Lock className="w-4 h-4 opacity-50"/>
-                  </div> 
-                  La Vaca
-                  <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md tracking-widest uppercase">
-                    Próximamente
-                  </span>
-                </button>
+                {/* BOTÓN CREAR VACA (PRO) */}
+<button
+  onClick={() => {
+    setIsSpacesMenuOpen(false);
+    if (!perfil?.is_pro) { setTimeout(() => onTriggerPaywall?.(), 300); return; }
+    setNuevaVacaForm({ nombre: "", monto_objetivo: "" });
+    setIsCreatingVaca(true);
+  }}
+  className="relative flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-blue-500/30 text-blue-400 hover:bg-blue-500/10 font-bold text-xs transition-colors active:scale-95"
+>
+  {!perfil?.is_pro && (
+    <span className="absolute top-2 right-2 bg-amber-500 text-black text-[8px] font-black px-1.5 py-0.5 rounded">PRO</span>
+  )}
+  <div className="bg-blue-500/20 p-2 rounded-full">
+    <Plus className="w-5 h-5"/>
+  </div>
+  Crear Vaca
+</button>
               </div>
               </div>
             </div>
           </Drawer.Content>
         </Drawer.Portal>
       </Drawer.Root>
-      
+
+      {/* DRAWER: CREAR VACA (PLAN ENTRE AMIGOS CON META DESDE EL INICIO) */}
+      <Drawer.Root open={isCreatingVaca} onOpenChange={setIsCreatingVaca}>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
+          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[60vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-emerald-500">
+            <Drawer.Title className="sr-only">Crear Vaca</Drawer.Title>
+            <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+              <h3 className="text-xl font-black text-white mb-2 text-center">Nueva Vaca</h3>
+              <p className="text-xs text-white/40 text-center mb-6">Un plan entre amigos: pon el nombre y cuánto necesitan reunir. La billetera de la vaca se construye desde esa meta.</p>
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!nuevaVacaForm.nombre.trim() || !nuevaVacaForm.monto_objetivo) return;
+                  await onSelectModule('vaca', 'NEW', {
+                    nombre: nuevaVacaForm.nombre.trim(),
+                    monto_objetivo: parseFloat(nuevaVacaForm.monto_objetivo),
+                  });
+                  setIsCreatingVaca(false);
+                }}
+                className="flex flex-col gap-4"
+              >
+                <div>
+                  <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿Cuál es el plan?</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Playa con los panas"
+                    value={nuevaVacaForm.nombre}
+                    onChange={(e) => setNuevaVacaForm({ ...nuevaVacaForm, nombre: e.target.value })}
+                    className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">¿Cuánto necesitamos? ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Ej: 200"
+                    value={nuevaVacaForm.monto_objetivo}
+                    onChange={(e) => setNuevaVacaForm({ ...nuevaVacaForm, monto_objetivo: e.target.value })}
+                    className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-3xl font-black text-white font-sans tabular-nums outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-emerald-500 text-black font-black py-5 rounded-3xl uppercase tracking-widest text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] mt-4 active:scale-95 transition-transform hover:bg-emerald-600"
+                >
+                  Crear Vaca
+                </button>
+              </form>
+            </div>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
+
       {renderTabContent()}
+
+      {/* ========================================================= */}
+      {/* DRAWER: TÉRMINOS Y CONDICIONES DE INTELIGENCIA ARTIFICIAL */}
+      {/* Montado a nivel global para que se pueda abrir desde cualquier pestaña (ej. al escanear una factura desde Inicio) */}
+      {/* ========================================================= */}
+      <Drawer.Root open={showAITerms} onOpenChange={setShowAITerms}>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[300] backdrop-blur-sm" />
+          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] mt-24 fixed bottom-0 left-0 right-0 z-[350] max-h-[85vh]">
+            <Drawer.Title className="sr-only">Términos y Condiciones de IA</Drawer.Title>
+            <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-12">
+              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-8" />
+
+              <div className="flex justify-center mb-4">
+                {/* Ícono de Cerebro estilo Nola */}
+                <div className="text-5xl drop-shadow-lg">🧠</div>
+              </div>
+
+              <h3 className="text-2xl font-black text-white text-center mb-3 tracking-tight">Pote usa inteligencia artificial</h3>
+              <p className="text-sm text-white/50 text-center mb-8 px-4 leading-relaxed">
+                Para analizar tus recibos, fotos y voz, enviamos datos a modelos de IA seguros. A continuación te explicamos cómo.
+              </p>
+
+              <div className="space-y-4 mb-8">
+                <div className="bg-[#1C1C1E] p-5 rounded-[2rem]">
+                  <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
+                    <span className="text-rose-400">📄</span> Qué datos se envían
+                  </h4>
+                  <ul className="text-xs text-white/60 space-y-2 list-disc pl-5">
+                    <li>Texto que escribes para agregar transacciones.</li>
+                    <li>Fotos de recibos, estados de cuenta o capturas de pantalla.</li>
+                    <li>Grabaciones de voz para el asistente inteligente.</li>
+                  </ul>
+                </div>
+
+                <div className="bg-[#1C1C1E] p-5 rounded-[2rem]">
+                  <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
+                    <span className="text-rose-400">🔒</span> Cómo se procesan
+                  </h4>
+                  <ul className="text-xs text-white/60 space-y-2 list-disc pl-5">
+                    <li>Servicios externos de OpenAI procesan tus datos para extraer montos y comercios.</li>
+                    <li>Los datos se transmiten de forma encriptada y no se usan para entrenar modelos públicos.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Botón estilo Nola (Coral/Red) */}
+              <button
+                onClick={acceptAITerms}
+                className="w-full bg-rose-500 hover:bg-rose-400 text-white font-black py-4 rounded-full text-base active:scale-95 transition-transform shadow-[0_0_20px_rgba(244,63,94,0.3)] mb-4"
+              >
+                Acepto, continuar
+              </button>
+              <button onClick={() => setShowAITerms(false)} className="w-full text-white/40 font-bold text-sm hover:text-white transition-colors">
+                No, gracias
+              </button>
+            </div>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
+
+      {/* DRAWER: CREAR NUEVA META / VACA (montado globalmente, se abre desde Inicio) */}
+      <Drawer.Root open={isAddingPote} onOpenChange={setIsAddingPote}>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[350] backdrop-blur-sm" />
+          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[75vh] mt-24 fixed bottom-0 left-0 right-0 z-[350] border-t border-emerald-500">
+            <Drawer.Title className="sr-only">{espacioActivo?.tipo === 'vaca' ? 'Crear Vaca' : 'Crear Meta'}</Drawer.Title>
+            <div className="p-6 flex-1 overflow-y-auto pb-12">
+              <div className="mx-auto w-12 h-1.5 rounded-full bg-[#333] mb-6" />
+              <h3 className="text-xl font-black text-white mb-4 text-center">{espacioActivo?.tipo === 'vaca' ? 'Crear nueva Vaca' : 'Crear nueva Meta'}</h3>
+              <form onSubmit={guardarPote} className="space-y-5">
+                <div>
+                  <label className="text-[10px] uppercase text-white/40 tracking-widest mb-2 block">Tipo</label>
+                  <select value={poteForm.tipo} onChange={(e) => setPoteForm({ ...poteForm, tipo: e.target.value })} className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-emerald-500">
+                    {POTE_OPCIONES.map((opcion) => (
+                      <option key={opcion} value={opcion}>{opcion}</option>
+                    ))}
+                  </select>
+                </div>
+                {poteForm.tipo === 'Personalizado ✍️' && (
+                  <div>
+                    <label className="text-[10px] uppercase text-white/40 tracking-widest mb-2 block">Nombre personalizado</label>
+                    <input value={poteForm.nombreCustom} onChange={(e) => setPoteForm({ ...poteForm, nombreCustom: e.target.value })} className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-emerald-500" placeholder="Ej: Viaje a Margarita" />
+                  </div>
+                )}
+                <div>
+                  <label className="text-[10px] uppercase text-white/40 tracking-widest mb-2 block">Monto objetivo</label>
+                  <input type="number" min="0" step="0.01" value={poteForm.monto_objetivo} onChange={(e) => setPoteForm({ ...poteForm, monto_objetivo: e.target.value })} className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-emerald-500" placeholder="Ej: 100" />
+                </div>
+                <button type="submit" className="w-full bg-emerald-500 text-black font-black py-4 rounded-2xl uppercase tracking-widest active:scale-95 transition-all">Guardar {espacioActivo?.tipo === 'vaca' ? 'Vaca' : 'Meta'}</button>
+              </form>
+            </div>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
+
+      {/* DRAWER: CAMBIO P2P (montado globalmente, se abre desde el menú FAB en Inicio) */}
+      <Drawer.Root open={isP2POpen} onOpenChange={setIsP2POpen}>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[360] backdrop-blur-sm" />
+          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[75vh] mt-24 fixed bottom-0 left-0 right-0 z-[360] border-t border-amber-500">
+            <Drawer.Title className="sr-only">Cambio P2P</Drawer.Title>
+            <div className="p-6 flex-1 overflow-y-auto pb-12">
+              <div className="mx-auto w-12 h-1.5 rounded-full bg-[#333] mb-6" />
+              <h3 className="text-xl font-black text-white mb-4 text-center">Cambio P2P</h3>
+              <form onSubmit={realizarCambioP2P} className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase text-white/40 tracking-widest mb-2 block">Moneda desde</label>
+                    <select value={p2pForm.monedaDe} onChange={(e) => setP2pForm({ ...p2pForm, monedaDe: e.target.value })} className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-amber-500">
+                      <option value="usdt">USDT</option>
+                      <option value="bs">BS</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase text-white/40 tracking-widest mb-2 block">Moneda para</label>
+                    <select value={p2pForm.monedaPara} onChange={(e) => setP2pForm({ ...p2pForm, monedaPara: e.target.value })} className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-amber-500">
+                      <option value="bs">BS</option>
+                      <option value="usdt">USDT</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-white/40 tracking-widest mb-2 block">Monto</label>
+                  <input type="number" min="0" step="0.01" value={p2pForm.monto} onChange={(e) => setP2pForm({ ...p2pForm, monto: e.target.value })} className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-amber-500" placeholder="Ej: 100" />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-white/40 tracking-widest mb-2 block">Tasa</label>
+                  <input type="number" min="0" step="0.01" value={p2pForm.tasa} onChange={(e) => setP2pForm({ ...p2pForm, tasa: e.target.value })} className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-amber-500" placeholder="Ej: 718.50" />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-white/40 tracking-widest mb-2 block">Responsable del cambio</label>
+                  <select value={p2pForm.usuario} onChange={(e) => setP2pForm({ ...p2pForm, usuario: e.target.value })} className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-amber-500">
+                    <option value="">Selecciona una persona</option>
+                    <option value={perfil?.nombre || 'Tú'}>{perfil?.nombre || 'Tú'}</option>
+                    {participantes?.map((p:any) => (
+                      <option key={p.id} value={p.nombre}>{p.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <button type="submit" className="w-full bg-amber-500 text-black font-black py-4 rounded-2xl uppercase tracking-widest active:scale-95 transition-all">Realizar Cambio</button>
+              </form>
+            </div>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
 
       <nav className={`fixed bottom-0 left-0 right-0 bg-[#1a0f2e]/90 backdrop-blur-xl border-t ${theme.border} p-3 md:hidden z-40 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)]`}>
         <div className="flex justify-around items-center max-w-md mx-auto">
@@ -3445,9 +3387,7 @@ const getPatrimonioNeto = () => {
             </button>
           </div>
 
-          {espacioActivo?.tipo !== 'individual' && (
-            <NavButton icon={<ListTodo />} label="Tareas" active={activeTab === 'recordatorios'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('recordatorios'); } }} theme={theme} />
-          )}
+          <NavButton icon={<ShoppingCart />} label="Mercado" active={isMercadoOpen} onClick={() => { if(isGuest || !perfil?.is_pro) onTriggerPaywall?.(); else setIsMercadoOpen(true); }} theme={theme} pro={!isGuest && !perfil?.is_pro} />
 
           {espacioActivo?.tipo !== 'vaca' && (
             <NavButton icon={<Shield />} label="Reserva" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
@@ -3459,13 +3399,26 @@ const getPatrimonioNeto = () => {
         <NavButtonDesktop icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
         <NavButtonDesktop icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
         <NavButtonDesktop icon={<Layers />} label="Cambiar Espacio" active={false} onClick={() => setIsSpacesMenuOpen(true)} theme={{primary: 'bg-blue-600', text: 'text-blue-400', border: 'border-blue-500/30'}} />
-        {espacioActivo?.tipo !== 'individual' && (
-          <NavButtonDesktop icon={<ListTodo />} label="Tareas" active={activeTab === 'recordatorios'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('recordatorios'); } }} theme={theme} />
-        )}
+        <NavButtonDesktop icon={<ShoppingCart />} label="Mercado" active={isMercadoOpen} onClick={() => { if(isGuest || !perfil?.is_pro) onTriggerPaywall?.(); else setIsMercadoOpen(true); }} theme={theme} pro={!isGuest && !perfil?.is_pro} />
         {espacioActivo?.tipo !== 'vaca' && (
           <NavButtonDesktop icon={<Shield />} label="Por si acaso" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
         )}
       </nav>
+
+      {isMercadoOpen && espacioActivo && (
+        <MercadoSession
+          espacioActivo={espacioActivo}
+          session={session}
+          rates={rates}
+          theme={theme}
+          triggerToast={triggerToast}
+          onClose={() => setIsMercadoOpen(false)}
+          onSesionFinalizada={finalizarSesionMercado}
+          puedeEscanear={puedeEscanear}
+          registrarEscaneo={registrarEscaneo}
+          onTriggerPaywall={onTriggerPaywall}
+        />
+      )}
 
 {/* === BOTÓN FLOTANTE (FAB) + MENÚ RÁPIDO === */}
       {activeTab === 'inicio' && (
@@ -3487,7 +3440,12 @@ const getPatrimonioNeto = () => {
                   
                   <div className="flex flex-col gap-4">
                     {/* OPCIÓN 1: ESCANEAR GASTO (Destacado Full Width) */}
-                    <label className="flex items-center justify-between p-5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 cursor-pointer transition-all hover:bg-emerald-500/20 group">
+                    <button
+                      type="button"
+                      disabled={isScanning}
+                      onClick={() => { setIsFABMenuOpen(false); setTimeout(() => handleTryScan(), 150); }}
+                      className="flex items-center justify-between p-5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 cursor-pointer transition-all hover:bg-emerald-500/20 group disabled:opacity-50"
+                    >
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
                           <Camera className="w-6 h-6 text-emerald-400" />
@@ -3498,15 +3456,7 @@ const getPatrimonioNeto = () => {
                         </div>
                       </div>
                       <Sparkles className="w-5 h-5 text-emerald-500" />
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        capture="environment"
-                        onChange={(e) => { setIsFABMenuOpen(false); handleScanInvoice(e); }} 
-                        className="hidden" 
-                        disabled={isScanning} 
-                      />
-                    </label>
+                    </button>
 
                     {/* BOTONES DIRECTOS: INGRESO, GASTO Y EXTRAS */}
                     <div className="grid grid-cols-2 gap-4">
@@ -3542,12 +3492,18 @@ const getPatrimonioNeto = () => {
                       </button>
 
                       {/* CAMBIO P2P */}
-                      <button onClick={() => { setIsFABMenuOpen(false); setIsP2POpen(true); }} className="flex flex-col items-center justify-center gap-3 p-5 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] group">
-                        <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
-                          <ArrowLeftRight className="w-5 h-5 text-amber-400" />
-                        </div>
-                        <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Cambio P2P</span>
-                      </button>
+                     <button 
+  onClick={() => { 
+    setIsFABMenuOpen(false); 
+    setTimeout(() => setIsP2POpen(true), 300); // <-- El retraso arregla el bug
+  }} 
+  className="flex flex-col items-center justify-center gap-3 p-5 bg-[#2C2C2E] rounded-2xl border border-white/5 transition-all hover:bg-[#3A3A3C] group"
+>
+  <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+    <ArrowLeftRight className="w-5 h-5 text-amber-400" />
+  </div>
+  <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Cambio P2P</span>
+</button>
 
                       {/* DINÁMICA (AÑADIR MIEMBRO O ABONO META) */}
                       {espacioActivo?.tipo !== 'individual' ? (
@@ -3626,19 +3582,23 @@ const getPatrimonioNeto = () => {
     </div>
   );
 }
-function NavButton({ icon, label, active, onClick, theme }: any) {
+function NavButton({ icon, label, active, onClick, theme, pro }: any) {
   return (
-    <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all ${active ? `${theme.text} scale-110` : 'text-white/40 hover:text-white/80'}`}>
-      <div className={`p-2 rounded-xl ${active ? theme.lightBg : ''}`}>{icon}</div>
+    <button onClick={onClick} className={`relative flex flex-col items-center gap-1 transition-all ${active ? `${theme.text} scale-110` : 'text-white/40 hover:text-white/80'}`}>
+      <div className={`relative p-2 rounded-xl ${active ? theme.lightBg : ''}`}>
+        {icon}
+        {pro && <span className="absolute -top-1 -right-1 bg-amber-500 text-black text-[6px] font-black px-1 rounded-full">PRO</span>}
+      </div>
       <span className="text-[9px] font-bold uppercase tracking-wider">{label}</span>
     </button>
   );
 }
 
-function NavButtonDesktop({ icon, label, active, onClick, theme }: any) {
+function NavButtonDesktop({ icon, label, active, onClick, theme, pro }: any) {
   return (
-    <button onClick={onClick} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all ${active ? `${theme.primary} text-white shadow-lg` : `bg-[#1a0f2e] ${theme.text} border ${theme.border} hover:bg-white/5`}`}>
+    <button onClick={onClick} className={`relative flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all ${active ? `${theme.primary} text-white shadow-lg` : `bg-[#1a0f2e] ${theme.text} border ${theme.border} hover:bg-white/5`}`}>
       {icon} {label}
+      {pro && <span className="bg-amber-500 text-black text-[8px] font-black px-1.5 py-0.5 rounded ml-1">PRO</span>}
     </button>
   );
 }

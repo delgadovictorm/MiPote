@@ -81,20 +81,15 @@ export function EmergenciaTab({
   return (
     <div className="space-y-6">
       {/* Header con Balance */}
-      <div className={`relative overflow-hidden bg-gradient-to-br from-rose-600/20 to-rose-700/10 border-2 border-rose-500/30 p-6 md:p-8 rounded-3xl shadow-xl flex flex-col items-center text-center`}>
-        <Shield className="w-12 h-12 text-rose-400 mb-4" />
-        <p className="text-xs font-bold text-white/70 uppercase tracking-widest mb-2">
-          Fondo de Emergencia 🚨
-        </p>
-        <p className="text-4xl md:text-5xl font-black text-white font-sans tabular-nums tracking-tight mb-2">
+      <div className="p-6 md:p-8 rounded-3xl border border-white/5 flex flex-col items-center text-center">
+        <p className="text-xs font-bold uppercase tracking-widest mb-2 text-white/50">Fondo de Emergencia</p>
+        <p className="text-6xl md:text-7xl font-black text-white font-sans tabular-nums tracking-tight mb-2">
           $<AnimatedNum value={Math.max(fondoEmergencia, 0)} format="usd" />
         </p>
-        <p className="text-xs text-white/50">
-          {fondoEmergencia > 0 ? '✅ Tienes un colchón financiero' : '⚠️ Considera crear una reserva'}
+        <p className="text-sm text-white/40 mb-4">
+          {fondoEmergencia > 0 ? 'Tienes un colchón financiero' : 'Considera crear una reserva'}
         </p>
-
-        {/* Recomendación */}
-        <div className="mt-4 text-[10px] text-white/60 max-w-xs">
+        <div className="text-[10px] text-white/50 max-w-xs">
           <p className="italic">💡 Se recomienda ahorrar entre 3-6 meses de gastos fijos</p>
         </div>
       </div>
@@ -102,7 +97,7 @@ export function EmergenciaTab({
       {/* Botón Agregar Movimiento */}
       <button
         onClick={() => setIsAdding(true)}
-        className="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95"
+        className="w-full bg-white/10 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95"
       >
         <Plus className="w-5 h-5" /> Agregar Movimiento
       </button>
@@ -188,16 +183,16 @@ export function EmergenciaTab({
 
       {/* Resumen de Movimientos */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl">
-          <p className="text-[10px] text-emerald-400 uppercase font-bold tracking-widest mb-1">
+        <div className="border border-white/5 p-4 rounded-2xl bg-white/5">
+          <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold mb-1">
             Total Aportado
           </p>
           <p className="text-lg md:text-xl font-black text-emerald-400 font-sans">
             $<AnimatedNum value={totalIngresos} format="usd" />
           </p>
         </div>
-        <div className="bg-rose-500/10 border border-rose-500/30 p-4 rounded-xl">
-          <p className="text-[10px] text-rose-400 uppercase font-bold tracking-widest mb-1">
+        <div className="border border-white/5 p-4 rounded-2xl bg-white/5">
+          <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold mb-1">
             Total Utilizado
           </p>
           <p className="text-lg md:text-xl font-black text-rose-400 font-sans">
@@ -208,7 +203,7 @@ export function EmergenciaTab({
 
       {/* Historial de Movimientos */}
       <div className={`bg-[#1a0f2e] border ${theme.border} rounded-3xl overflow-hidden`}>
-        <div className="p-4 border-b border-white/5 bg-black/20">
+        <div className="p-4 border-b border-white/5">
           <h3 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
             <Shield className="w-4 h-4 text-rose-400" /> Historial de Movimientos
           </h3>
@@ -220,7 +215,7 @@ export function EmergenciaTab({
             </div>
           ) : (
             txEmergencia.map((tx) => (
-              <div key={tx.id} className="p-4 flex justify-between items-center hover:bg-white/5 group transition-colors">
+              <div key={tx.id} className="p-4 flex justify-between items-center gap-3 border border-white/5 rounded-3xl hover:bg-white/5 group transition-colors">
                 <div className="flex items-center gap-3 flex-1">
                   <div
                     className={`p-2 rounded-lg flex-shrink-0 ${

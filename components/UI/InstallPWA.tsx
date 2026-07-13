@@ -1,66 +1,112 @@
 "use client";
 import { useEffect, useState } from 'react';
-import { Download } from 'lucide-react'; // Opcional, si tienes instalado lucide-react
+import { Download, Share, SquarePlus, CheckCircle2, MoreVertical, X } from 'lucide-react';
+
+type Plataforma = 'ios' | 'android' | 'desktop';
 
 export function InstallPWA() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isIOS, setIsIOS] = useState(false);
+  const [plataforma, setPlataforma] = useState<Plataforma>('desktop');
   const [show, setShow] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    // 1. Detectar si es iOS (iPhone/iPad)
-    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    setIsIOS(isIOSDevice);
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+    const isAndroid = /Android/.test(ua);
+    setPlataforma(isIOS ? 'ios' : isAndroid ? 'android' : 'desktop');
 
-    // 2. Escuchar si el navegador nos deja instalar (Solo Android/Chrome/Edge)
-    window.addEventListener('beforeinstallprompt', (e) => {
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true;
+    if (isStandalone) return;
+
+    if (isIOS) setShow(true);
+
+    const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setShow(true); // Solo mostramos si el navegador permite la instalación
-    });
-
-    // 3. Mostrar en iOS siempre (ya que el usuario debe hacerlo manual)
-    if (isIOSDevice) {
-      // Opcional: mostrar solo si no está ya instalado
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-      if (!isStandalone) setShow(true);
-    }
+      setShow(true);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const install = () => {
+  const handleClick = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      setDeferredPrompt(null);
+      return;
     }
+    // iOS (y Android sin evento nativo disponible) no tienen prompt automático: mostramos los pasos manuales.
+    setShowModal(true);
   };
 
-  if (window.matchMedia('(display-mode: standalone)').matches) return null;
-  
-  // Si no está instalado, lo mostramos SIEMPRE en la landing (aunque no haya evento de install)
-  return (
-    <div className="bg-[#1C1C1E] border border-white/10 p-6 rounded-[2rem] flex items-center justify-between shadow-2xl max-w-sm mx-auto">
-        {/* ... el resto del diseño del banner ... */}
-    </div>
-  );
+  if (!show) return null;
+
+  const pasos = plataforma === 'ios'
+    ? [
+        { icon: <Share className="w-4 h-4" />, texto: <>1. Toca el ícono de <b className="text-emerald-400">Compartir</b> en la barra inferior de Safari.</> },
+        { icon: <SquarePlus className="w-4 h-4" />, texto: <>2. Desliza hacia abajo y selecciona <b className="text-emerald-400">&quot;Agregar a inicio&quot;</b>.</> },
+        { icon: <CheckCircle2 className="w-4 h-4" />, texto: <>3. Confirma tocando <b className="text-emerald-400">Agregar</b> en la esquina superior.</> },
+      ]
+    : [
+        { icon: <MoreVertical className="w-4 h-4" />, texto: <>1. Toca el menú <b className="text-emerald-400">⋮</b> arriba a la derecha de Chrome.</> },
+        { icon: <SquarePlus className="w-4 h-4" />, texto: <>2. Selecciona <b className="text-emerald-400">&quot;Instalar aplicación&quot;</b> (o &quot;Añadir a pantalla de inicio&quot;).</> },
+        { icon: <CheckCircle2 className="w-4 h-4" />, texto: <>3. Confirma tocando <b className="text-emerald-400">Instalar</b>.</> },
+      ];
 
   return (
-    <div className="fixed bottom-24 md:bottom-10 left-4 right-4 z-[999] bg-[#1C1C1E] border border-white/10 p-5 rounded-[2rem] flex items-center justify-between shadow-2xl animate-in slide-in-from-bottom-10">
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center">
-            <img src="/pote.png" className="w-8 h-8 object-contain" alt="Pote" />
+    <>
+      <button
+        onClick={handleClick}
+        className="flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-sm px-6 py-3.5 rounded-full transition-all active:scale-95"
+      >
+        <Download className="w-4 h-4" /> Instalar App
+      </button>
+
+      {showModal && (
+        <div
+          className="fixed inset-0 z-[999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-[#151518] border border-white/10 rounded-[2rem] p-6 md:p-8 shadow-2xl animate-in zoom-in-95 duration-200"
+          >
+            <div className="flex items-start justify-between mb-2">
+              <h3 className="text-xl font-black text-white">
+                Instalar en {plataforma === 'ios' ? 'iOS' : 'Android'}
+              </h3>
+              <button onClick={() => setShowModal(false)} className="text-white/40 hover:text-white bg-white/5 rounded-full p-1.5 shrink-0">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-white/50 text-sm mb-6">
+              Sigue estos rápidos pasos para instalar la aplicación en tu {plataforma === 'ios' ? 'iPhone o iPad' : 'celular'}:
+            </p>
+
+            <div className="space-y-4 mb-6">
+              {pasos.map((paso, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-full bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0">
+                    {paso.icon}
+                  </div>
+                  <p className="text-white/80 text-sm leading-snug pt-1.5">{paso.texto}</p>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowModal(false)}
+              className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-4 rounded-2xl transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-bold text-white">Instalar Pote</p>
-          <p className="text-[10px] text-white/50 leading-tight">
-            {isIOS ? "Toca 'Compartir' > 'Añadir a inicio'" : "Lleva tus finanzas al escritorio"}
-          </p>
-        </div>
-      </div>
-      
-      {!isIOS && deferredPrompt && (
-        <button onClick={install} className="bg-emerald-500 text-black font-black text-[10px] px-5 py-3 rounded-full active:scale-95 transition-transform">
-          INSTALAR
-        </button>
       )}
-    </div>
+    </>
   );
 }

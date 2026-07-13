@@ -1,9 +1,10 @@
 "use client"
 import { supabase } from "../../lib/supabase";
 import { useState, useMemo, useEffect } from "react";
-import { 
-  Users, Crown, Clock, CheckCircle2, Search, 
-  ArrowLeft, LogOut, ShieldCheck, TrendingUp, RefreshCw, MessageCircle
+import {
+  Users, Crown, Clock, CheckCircle2, Search,
+  ArrowLeft, LogOut, ShieldCheck, TrendingUp, RefreshCw, MessageCircle,
+  ChevronRight, XCircle, X, Copy
 } from "lucide-react";
 
 export default function MiPoteAdmin() {
@@ -66,6 +67,7 @@ export default function MiPoteAdmin() {
   const [busqueda, setBusqueda] = useState("");
   const [filtroSuscripciones, setFiltroSuscripciones] = useState("Pendientes");
   const [cargandoDatos, setCargandoData] = useState(false);
+  const [detalleUsuario, setDetalleUsuario] = useState<any>(null);
 
   const traerTodo = async () => {
     setCargandoData(true);
@@ -235,7 +237,7 @@ export default function MiPoteAdmin() {
             </div>
             <div className="bg-[#0f172a] border border-emerald-500/20 rounded-[24px] md:rounded-[30px] p-6 md:p-8 shadow-2xl sm:col-span-2 md:col-span-1">
               <p className="text-emerald-400 font-black text-[10px] uppercase mb-2">Ingresos Activos</p>
-              <p className="text-3xl md:text-4xl font-black text-emerald-400">${(kpis.pros * 4.99).toFixed(2)}</p>
+              <p className="text-3xl md:text-4xl font-black text-emerald-400">${(kpis.pros * 2).toFixed(2)}</p>
             </div>
           </div>
         )}
@@ -266,8 +268,8 @@ export default function MiPoteAdmin() {
                </div>
             </div>
 
-            {/* CONTENEDOR DE TABLA CON OVERFLOW */}
-            <div className="bg-[#1a0f2e] rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl overflow-x-auto">
+            {/* CONTENEDOR DE TABLA CON OVERFLOW (SOLO DESKTOP) */}
+            <div className="hidden md:block bg-[#1a0f2e] rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl overflow-x-auto">
                <table className="w-full text-left font-bold min-w-[700px]">
                   <thead className="bg-black/20 text-[9px] uppercase text-white/30 border-b border-white/5">
                      <tr>
@@ -354,6 +356,46 @@ export default function MiPoteAdmin() {
                   </div>
                )}
             </div>
+
+            {/* LISTA DE TARJETAS (SOLO MÓVIL) - íconos rápidos, tap para ver el detalle */}
+            <div className="md:hidden bg-[#1a0f2e] rounded-[24px] border border-white/5 shadow-2xl divide-y divide-white/5 overflow-hidden">
+               {suscripcionesFiltradas.map(u => {
+                  const dias = u.vence_el ? Math.ceil((new Date(u.vence_el).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                  const estaVencido = dias < 0;
+                  const tieneEmail = u.email && u.email.trim() !== "";
+                  const estatus = u.estado_pago === 'pendiente' ? 'pendiente' : u.is_pro && !estaVencido ? 'activo' : 'inactivo';
+
+                  return (
+                     <button
+                       key={u.id}
+                       onClick={() => setDetalleUsuario(u)}
+                       className="w-full flex items-center gap-3 p-4 text-left active:bg-white/5 transition-colors"
+                     >
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                          estatus === 'pendiente' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                          estatus === 'activo' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                          'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                        }`}>
+                           {estatus === 'pendiente' ? <Clock size={18}/> : estatus === 'activo' ? <Crown size={18}/> : <XCircle size={18}/>}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                           <p className="text-white text-sm font-bold truncate">
+                             {tieneEmail ? u.email : "⚠️ Sin Sincronizar"}
+                           </p>
+                           <p className="text-white/30 text-[10px] font-mono mt-0.5">
+                             #{u.ordenNumero}{u.vence_el ? ` · ${estaVencido ? 'Vencido' : `Quedan ${dias}d`}` : ''}
+                           </p>
+                        </div>
+                        <ChevronRight className="text-white/20 shrink-0" size={18}/>
+                     </button>
+                  );
+               })}
+               {suscripcionesFiltradas.length === 0 && (
+                  <div className="p-10 text-center text-white/20 italic uppercase font-black tracking-widest text-xs">
+                    No se encontraron resultados
+                  </div>
+               )}
+            </div>
           </div>
         )}
 
@@ -414,6 +456,93 @@ export default function MiPoteAdmin() {
           </div>
         )}
       </main>
+
+      {/* MODAL DE DETALLE (móvil y desktop) - aprobar / quitar acceso */}
+      {detalleUsuario && (() => {
+        const u = detalleUsuario;
+        const dias = u.vence_el ? Math.ceil((new Date(u.vence_el).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
+        const estaVencido = dias < 0;
+        const tieneEmail = u.email && u.email.trim() !== "";
+        const estatus = u.estado_pago === 'pendiente' ? 'pendiente' : u.is_pro && !estaVencido ? 'activo' : 'inactivo';
+
+        return (
+          <div
+            className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-end md:items-center justify-center animate-in fade-in"
+            onClick={() => setDetalleUsuario(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full md:max-w-md bg-[#1a0f2e] border border-white/10 rounded-t-[32px] md:rounded-[32px] p-6 md:p-8 shadow-2xl animate-in slide-in-from-bottom md:zoom-in-95"
+            >
+              <div className="mx-auto w-12 h-1.5 rounded-full bg-white/10 mb-6 md:hidden" />
+
+              <div className="flex items-start justify-between mb-6">
+                <span className={`px-3 py-1.5 rounded-lg text-[9px] uppercase italic font-black border ${
+                  estatus === 'pendiente' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse' :
+                  estatus === 'activo' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                  'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                }`}>
+                  {estatus === 'pendiente' ? 'Verificando' : estatus === 'activo' ? 'Activo' : 'Inactivo'}
+                </span>
+                <button onClick={() => setDetalleUsuario(null)} className="text-white/40 hover:text-white p-1"><X size={20}/></button>
+              </div>
+
+              <p className="text-white text-lg font-black italic break-words">{tieneEmail ? u.email : "⚠️ Sin Sincronizar"}</p>
+              <div className="flex items-center gap-2 mt-1 mb-6">
+                <p className="text-purple-400 font-mono text-sm">Orden #{u.ordenNumero}</p>
+                <span className="text-white/10">·</span>
+                <button
+                  onClick={() => navigator.clipboard.writeText(u.id)}
+                  className="text-white/30 hover:text-white font-mono text-[10px] flex items-center gap-1"
+                  title="Copiar UID"
+                >
+                  UID: {u.id.slice(0, 8)}… <Copy size={10}/>
+                </button>
+              </div>
+
+              <div className="bg-black/30 border border-white/5 rounded-2xl p-4 mb-6">
+                {u.vence_el ? (
+                  <>
+                    <p className="text-white/70 font-mono text-sm">
+                      <Clock className="inline mb-0.5 mr-1.5" size={14}/>Vence {new Date(u.vence_el).toLocaleDateString()}
+                    </p>
+                    <p className={`text-[10px] font-black uppercase mt-1 ${estaVencido ? 'text-rose-500' : 'text-purple-400'}`}>
+                      {estaVencido ? 'Vencido' : `Quedan ${dias} días`}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-white/30 text-xs uppercase">Sin fecha de vencimiento</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  onClick={() => contactarWhatsApp(u.email || 'Cliente', u.ordenNumero)}
+                  className="w-full flex items-center justify-center gap-2 bg-[#25D366]/15 hover:bg-[#25D366] text-[#25D366] hover:text-white py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+                >
+                  <MessageCircle size={16}/> Avisar por WhatsApp
+                </button>
+
+                <button
+                  onClick={() => { aprobarSuscripcion(u.id); setDetalleUsuario(null); }}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg transition-all"
+                >
+                  {u.is_pro ? 'Extender 30 días' : 'Aprobar acceso ✅'}
+                </button>
+
+                {u.is_pro && (
+                  <button
+                    onClick={() => { anularSuscripcion(u.id); setDetalleUsuario(null); }}
+                    className="w-full bg-rose-500/10 hover:bg-rose-600 text-rose-500 hover:text-white py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+                  >
+                    Quitar acceso PRO
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

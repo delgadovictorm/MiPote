@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { ArrowLeft, Calculator, Camera, Loader2, RefreshCw, DollarSign, Wallet } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ArrowLeft, Calculator, Camera, Loader2, Plus, X } from 'lucide-react';
+import { TASAS_DISPONIBLES, calcularResultadoTasa, getValorTasa, type MonedaOrigen } from './tasasConfig';
 
-export function CalculadoraTab({ rates, theme, triggerToast, onBack }: any) {
+export function CalculadoraTab({ rates, activeRates, setActiveRates, theme, triggerToast, onBack, puedeEscanear, registrarEscaneo, onTriggerPaywall }: any) {
   const [inputValue, setInputValue] = useState("");
-  const [monedaOrigen, setMonedaOrigen] = useState<'usd'|'bs'>('usd');
+  const [monedaOrigen, setMonedaOrigen] = useState<MonedaOrigen>('usd');
   const [isScanning, setIsScanning] = useState(false);
+  const [showAddTasa, setShowAddTasa] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Formateador exacto para Venezuela (Ej: 1.234,50)
@@ -16,14 +17,6 @@ export function CalculadoraTab({ rates, theme, triggerToast, onBack }: any) {
 
   // Convertimos el input de texto a número para los cálculos (manejando las comas si el usuario las escribe)
   const numValue = parseFloat(inputValue.replace(/\./g, '').replace(',', '.')) || 0;
-
-  // Cálculos Simultáneos
-  const bcvResult = monedaOrigen === 'usd' ? numValue * rates.bcv : rates.bcv > 0 ? numValue / rates.bcv : 0;
-  const paraleloResult = monedaOrigen === 'usd' ? numValue * rates.usdt : rates.usdt > 0 ? numValue / rates.usdt : 0;
-  // Para el tercero usamos Euro si existe, si no mostramos el equivalente inverso
-  const euroResult = monedaOrigen === 'usd' 
-    ? (rates.eur_bcv > 0 ? (numValue * rates.bcv) / rates.eur_bcv : 0) 
-    : (rates.eur_bcv > 0 ? numValue / rates.eur_bcv : 0);
 
   // Escáner de IA adaptado para precios rápidos
   const handleScanPrice = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -77,6 +70,7 @@ export function CalculadoraTab({ rates, theme, triggerToast, onBack }: any) {
           setInputValue(data.monto_total.toString());
           setMonedaOrigen(data.moneda?.toLowerCase() === 'bs' ? 'bs' : 'usd');
           triggerToast("ingreso", "¡Precio extraído con éxito!");
+          registrarEscaneo?.();
         } else {
           throw new Error("No se detectó un precio claro");
         }
@@ -104,8 +98,11 @@ export function CalculadoraTab({ rates, theme, triggerToast, onBack }: any) {
       </div>
 
       {/* Botón IA */}
-      <button 
-        onClick={() => fileInputRef.current?.click()} 
+      <button
+        onClick={() => {
+          if (puedeEscanear && !puedeEscanear()) { onTriggerPaywall?.(); return; }
+          fileInputRef.current?.click();
+        }}
         disabled={isScanning}
         className="mb-8 w-full bg-[#1C1C1E] border border-emerald-500/30 hover:bg-[#2C2C2E] p-4 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-95 group relative overflow-hidden"
       >
@@ -118,7 +115,7 @@ export function CalculadoraTab({ rates, theme, triggerToast, onBack }: any) {
         <span className="text-emerald-400 font-black text-sm uppercase tracking-widest">
           {isScanning ? 'Extrayendo precio...' : 'Escanear Precio con IA'}
         </span>
-        <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleScanPrice} className="hidden" />
+        <input type="file" accept="image/*" ref={fileInputRef} onChange={handleScanPrice} className="hidden" />
       </button>
 
       {/* Panel de Entrada Principal */}
@@ -128,23 +125,29 @@ export function CalculadoraTab({ rates, theme, triggerToast, onBack }: any) {
           
           {/* Toggle de Moneda */}
           <div className="flex bg-[#121212] p-1 rounded-xl border border-white/5">
-            <button 
-              onClick={() => setMonedaOrigen('usd')} 
-              className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${monedaOrigen === 'usd' ? 'bg-blue-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
+            <button
+              onClick={() => setMonedaOrigen('usd')}
+              className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${monedaOrigen === 'usd' ? 'bg-blue-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
             >
               USD $
             </button>
-            <button 
-              onClick={() => setMonedaOrigen('bs')} 
-              className={`px-4 py-1.5 text-[10px] font-black rounded-lg transition-all ${monedaOrigen === 'bs' ? 'bg-emerald-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
+            <button
+              onClick={() => setMonedaOrigen('bs')}
+              className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${monedaOrigen === 'bs' ? 'bg-emerald-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
             >
               BS
+            </button>
+            <button
+              onClick={() => setMonedaOrigen('eur')}
+              className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${monedaOrigen === 'eur' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:text-white/80'}`}
+            >
+              EUR €
             </button>
           </div>
         </div>
 
         <div className="relative flex items-center justify-center pb-4 border-b border-white/5">
-          <span className="text-3xl text-white/30 font-black mr-2 pb-1">{monedaOrigen === 'usd' ? '$' : 'Bs.'}</span>
+          <span className="text-3xl text-white/30 font-black mr-2 pb-1">{monedaOrigen === 'usd' ? '$' : monedaOrigen === 'eur' ? '€' : 'Bs.'}</span>
           <input 
             type="number" 
             placeholder="0"
@@ -157,57 +160,85 @@ export function CalculadoraTab({ rates, theme, triggerToast, onBack }: any) {
 
       {/* Cajas de Conversión Simultánea */}
       <div className="space-y-3">
-        <div className="bg-[#121212] border border-emerald-500/20 p-5 rounded-2xl flex justify-between items-center relative overflow-hidden">
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
-          <div>
-            <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
-              <RefreshCw className="w-3 h-3" /> Tasa Oficial (BCV)
-            </p>
-            <p className="text-2xl font-black text-white font-sans tabular-nums tracking-tight">
-              {monedaOrigen === 'usd' ? 'Bs. ' : '$ '}
-              {formatVE(bcvResult)}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[9px] text-white/30 uppercase font-bold">Referencia</p>
-            <p className="text-xs text-white/50 font-sans tabular-nums font-medium">{formatVE(rates.bcv)}</p>
-          </div>
-        </div>
+        {activeRates.map((id: string) => {
+          const def = TASAS_DISPONIBLES.find(t => t.id === id);
+          if (!def) return null;
+          const resultado = calcularResultadoTasa(def, monedaOrigen, numValue, rates);
+          const referencia = getValorTasa(def.id, rates);
+          const nativo: 'usd' | 'eur' = def.kind === 'bs_per_eur' ? 'eur' : 'usd';
+          const prefijo = def.kind === 'foreign_per_usd'
+            ? `${def.badge} `
+            : (monedaOrigen === nativo ? 'Bs. ' : (nativo === 'eur' ? '€ ' : '$ '));
 
-        <div className="bg-[#121212] border border-blue-500/20 p-5 rounded-2xl flex justify-between items-center relative overflow-hidden">
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
-          <div>
-            <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
-              <DollarSign className="w-3 h-3" /> Paralelo / USDT
-            </p>
-            <p className="text-2xl font-black text-white font-sans tabular-nums tracking-tight">
-              {monedaOrigen === 'usd' ? 'Bs. ' : '$ '}
-              {formatVE(paraleloResult)}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[9px] text-white/30 uppercase font-bold">Referencia</p>
-            <p className="text-xs text-white/50 font-sans tabular-nums font-medium">{formatVE(rates.usdt)}</p>
-          </div>
-        </div>
+          // Equivalente en Bs. para cuando el resultado principal ya no está en Bs
+          // (moneda extranjera siempre lo muestra; Euro/Paralelo solo si el resultado no es Bs ni el propio input en Bs)
+          const mostrarEquivalenteBs = def.kind === 'foreign_per_usd'
+            ? true
+            : (prefijo !== 'Bs. ' && monedaOrigen !== 'bs');
+          const equivalenteBs = def.kind === 'foreign_per_usd'
+            ? (referencia > 0 ? (resultado / referencia) * rates.bcv : 0)
+            : numValue * referencia; // el monto ingresado cotizado directo a la tasa propia de esta tarjeta
 
-        <div className="bg-[#121212] border border-purple-500/20 p-5 rounded-2xl flex justify-between items-center relative overflow-hidden">
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-500"></div>
-          <div>
-            <p className="text-[10px] text-purple-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
-              <Wallet className="w-3 h-3" /> Euro Oficial (€)
-            </p>
-            <p className="text-2xl font-black text-white font-sans tabular-nums tracking-tight">
-              {monedaOrigen === 'usd' ? '€ ' : '€ '}
-              {formatVE(euroResult)}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[9px] text-white/30 uppercase font-bold">Referencia</p>
-            <p className="text-xs text-white/50 font-sans tabular-nums font-medium">{formatVE(rates.eur_bcv)}</p>
-          </div>
-        </div>
+          return (
+            <div key={id} className={`bg-[#121212] border ${def.classes.border} p-5 rounded-2xl flex justify-between items-center relative overflow-hidden group`}>
+              <div className={`absolute left-0 top-0 bottom-0 w-1 ${def.classes.bar}`}></div>
+              <button
+                onClick={() => setActiveRates((prev: string[]) => prev.filter(r => r !== id))}
+                className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center text-white/20 hover:text-rose-400 transition-colors"
+                title="Quitar tasa"
+              >
+                <X className="w-3 h-3" />
+              </button>
+              <div>
+                <p className={`text-[10px] ${def.classes.text} font-bold uppercase tracking-widest mb-1`}>
+                  {def.label}
+                </p>
+                <p className="text-2xl font-black text-white font-sans tabular-nums tracking-tight">
+                  {prefijo}
+                  {def.kind === 'foreign_per_usd' ? resultado.toLocaleString(def.locale, { maximumFractionDigits: 0 }) : formatVE(resultado)}
+                </p>
+                {mostrarEquivalenteBs && (
+                  <p className="text-[10px] text-white/40 font-sans tabular-nums mt-0.5">
+                    ≈ Bs. {formatVE(equivalenteBs)}
+                  </p>
+                )}
+              </div>
+              <div className="text-right pr-4">
+                <p className="text-[9px] text-white/30 uppercase font-bold">Referencia</p>
+                <p className="text-xs text-white/50 font-sans tabular-nums font-medium">
+                  {def.kind === 'foreign_per_usd' ? `${referencia.toLocaleString(def.locale, { maximumFractionDigits: 0 })} / USD` : formatVE(referencia)}
+                </p>
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {TASAS_DISPONIBLES.some(t => !activeRates.includes(t.id)) && (
+        <div className="mt-3">
+          {!showAddTasa ? (
+            <button
+              onClick={() => setShowAddTasa(true)}
+              className="w-full bg-[#121212] border border-dashed border-white/15 hover:border-emerald-500/40 p-3 rounded-2xl flex items-center justify-center gap-2 text-white/50 hover:text-emerald-400 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-[11px] font-bold uppercase tracking-widest">Añadir tasa</span>
+            </button>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {TASAS_DISPONIBLES.filter(t => !activeRates.includes(t.id)).map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => { setActiveRates((prev: string[]) => [...prev, t.id]); setShowAddTasa(false); }}
+                  className={`bg-[#121212] border ${t.classes.border} hover:bg-[#1c1c1c] p-3 rounded-xl text-[11px] font-bold text-white/70 hover:text-white transition-colors flex items-center gap-1.5`}
+                >
+                  <Plus className="w-3 h-3" /> {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   );

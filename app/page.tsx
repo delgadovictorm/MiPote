@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { 
-  Wallet, Users, ArrowRight, CheckCircle2, 
-  Sparkles, Star, ChevronDown, 
-  Bell, Plus, Target, Calculator, ArrowDownCircle, Lock
+import {
+  Wallet, Users, ArrowRight, CheckCircle2,
+  Star, ChevronDown,
+  Bell, Plus, Target, Calculator, ArrowDownCircle
 } from "lucide-react";
 import { InstallPWA } from "@/components/UI/InstallPWA";
 
@@ -17,6 +17,7 @@ export default function LandingPage() {
   const [mensajeActual, setMensajeActual] = useState(0);
   const [verboActual, setVerboActual] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
   
   // Estados para la Calculadora en la Landing
   const [rates, setRates] = useState({ bcv: 0, usdt: 0 });
@@ -34,6 +35,12 @@ export default function LandingPage() {
 
   // 🚀 REDIRECCIÓN AUTOMÁTICA SI YA ESTÁ LOGUEADO
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -43,7 +50,7 @@ export default function LandingPage() {
       }
     };
     checkSession();
-  }, [router]);
+  }, [isMounted, router]);
 
   // Carrusel para Mensajes y Verbos
   useEffect(() => {
@@ -92,10 +99,10 @@ export default function LandingPage() {
     setCalcUsd(rates.usdt > 0 ? (num / rates.usdt).toFixed(2) : "0.00");
   };
 
-  if (isLoading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div></div>;
+  if (isLoading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center" suppressHydrationWarning><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500" suppressHydrationWarning></div></div>;
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white font-sans selection:bg-purple-500/30 overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#09090b] text-white font-sans selection:bg-purple-500/30 overflow-x-hidden relative" suppressHydrationWarning>
       
       {/* 🌌 FONDO DINÁMICO TIPO MALLA */}
       <div className="fixed inset-0 z-0 opacity-[0.03] pointer-events-none" 
@@ -123,11 +130,6 @@ export default function LandingPage() {
       {/* 🚀 HERO SECTION */}
       <section className="relative z-10 pt-48 pb-20 px-6">
         <div className="max-w-6xl mx-auto text-center flex flex-col items-center">
-          <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-5 py-2.5 rounded-full mb-8 backdrop-blur-md">
-            <Sparkles className="w-4 h-4 text-emerald-400" />
-            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-emerald-400">Durante nuestro periodo de desarrollo las funciones PRO serán gratis</span>
-          </div>
-          
           {/* TÍTULO CON VERBO DINÁMICO */}
           <h1 className="text-[2.5rem] md:text-7xl lg:text-[6.5rem] font-black italic uppercase tracking-tighter mb-8 leading-[1.1] text-white flex flex-col items-center">
             <span className="mb-2">El pana que te</span>
@@ -382,10 +384,11 @@ export default function LandingPage() {
                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Modo Base</span>
                 <p className="text-5xl font-black italic mt-4 mb-8 text-white">GRATIS</p>
                 <ul className="space-y-4 mb-10">
-                  <li className="flex items-center gap-3 text-sm text-white/60"><CheckCircle2 size={16} className="text-white/30"/> Control de Billetera Personal y en Pareja</li>
+                  <li className="flex items-center gap-3 text-sm text-white/60"><CheckCircle2 size={16} className="text-white/30"/> Mi Billetera personal</li>
                   <li className="flex items-center gap-3 text-sm text-white/60"><CheckCircle2 size={16} className="text-white/30"/> Sin límite de registros</li>
                   <li className="flex items-center gap-3 text-sm text-white/60"><CheckCircle2 size={16} className="text-white/30"/> Calculadora Multimoneda</li>
                   <li className="flex items-center gap-3 text-sm text-white/60"><CheckCircle2 size={16} className="text-white/30"/> Control Presupuestario Base Cero</li>
+                  <li className="flex items-center gap-3 text-sm text-white/60"><CheckCircle2 size={16} className="text-white/30"/> Escaneo de facturas con IA (15 al mes)</li>
                 </ul>
               </div>
               <Link href="/dashboard" className="text-center py-4 rounded-2xl border border-white/10 font-bold uppercase tracking-widest text-xs hover:bg-white/5 transition-all text-white">
@@ -393,27 +396,25 @@ export default function LandingPage() {
               </Link>
             </div>
 
-            {/* TIER PRO BLURREADO */}
-            <div className="bg-[#1a0f2e] p-10 rounded-[3rem] border border-white/10 relative shadow-xl flex flex-col justify-between transform md:-translate-y-4 overflow-hidden">
-              
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-md z-10 flex flex-col items-center justify-center p-6 text-center">
-                <Lock className="w-12 h-12 text-white/30 mb-4" />
-                <h3 className="text-2xl font-black text-white italic uppercase tracking-widest mb-2">Próximamente</h3>
-                <p className="text-white/50 text-sm">Pronto liberaremos "La Vaca" para manejar grupos grandes y más funciones exclusivas.</p>
-              </div>
-
-              <div className="opacity-30 blur-sm pointer-events-none">
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-400">Modo Premium</span>
+            {/* TIER PRO */}
+            <div className="bg-[#1a0f2e] p-10 rounded-[3rem] border border-amber-500/30 relative shadow-xl flex flex-col justify-between transform md:-translate-y-4">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-400">Modo Pro</span>
                 <div className="flex items-baseline gap-2 mt-4 mb-8">
-                  <p className="text-5xl font-black italic text-white">$2.99</p>
-                  <p className="text-white/40 text-xs">/mes</p>
+                  <p className="text-5xl font-black italic text-white">$2</p>
+                  <p className="text-white/40 text-xs">/mes, a tasa BCV</p>
                 </div>
                 <ul className="space-y-4 mb-10">
-                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-purple-400" size={16} /> Todo lo del plan Gratis</li>
-                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-purple-400" size={16} /> Espacio "La Vaca" (Ilimitado)</li>
-                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-purple-400" size={16} /> Sincronización Avanzada</li>
+                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-amber-400" size={16} /> Todo lo del plan Gratis</li>
+                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-amber-400" size={16} /> Potes compartidos (pareja o familia)</li>
+                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-amber-400" size={16} /> Las Vacas (planes entre amigos)</li>
+                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-amber-400" size={16} /> Hacer Mercado (lista de compras en vivo)</li>
+                  <li className="flex items-center gap-3 text-sm text-white"><CheckCircle2 className="text-amber-400" size={16} /> Escaneos con IA ilimitados</li>
                 </ul>
               </div>
+              <Link href="/dashboard" className="text-center py-4 rounded-2xl bg-amber-500 hover:bg-amber-400 font-black uppercase tracking-widest text-xs text-black transition-all">
+                Hazte PRO
+              </Link>
             </div>
 
           </div>
