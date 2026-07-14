@@ -6,9 +6,11 @@ export async function POST(req: Request) {
     const photo = formData.get("photo");
     const caption = formData.get("caption");
 
-    // TUS CREDENCIALES REALES 🚀
-    const botToken = "8772991542:AAEVDBkqDWoWId0pTn20rD4mfZzMSIHubJ4";
-    const chatId = "-5172601587";
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_CHAT_ID;
+    if (!botToken || !chatId) {
+      return NextResponse.json({ error: "Falta configurar TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID" }, { status: 500 });
+    }
 
     let res;
     if (photo && photo instanceof Blob) {
