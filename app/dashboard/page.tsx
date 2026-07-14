@@ -290,8 +290,9 @@ const abrirCelebracionManual = () => {
   }, []);
 
   const cargarDatosUsuario = async (userId: string) => {
-    setEspacios([]);
-    setPerfil(null);
+    // OJO: no hacemos setPerfil(null) aquí. Esta función se vuelve a llamar cada vez que
+    // Supabase revalida la sesión (ej. al reabrir la app), y poner perfil en null por un
+    // instante hacía que la UI creyera brevemente que el usuario ya no era PRO.
 
     let { data: perfilBd } = await supabase.from('perfiles').select('*').eq('id', userId).single();
     if (!perfilBd) {
@@ -2516,7 +2517,7 @@ const getPatrimonioNeto = () => {
                     <div className="flex justify-between text-xs md:text-sm text-white">
                       <span className="font-bold flex items-center gap-2">
                         {p.catLabel}
-                        <button onClick={() => eliminarPresupuesto(p.id)} className="text-rose-500/60 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:text-rose-500/50 hover:text-rose-500 transition-colors"><Trash2 className="w-3 h-3 md:w-3.5 md:h-3.5" /></button>
+                        <button onClick={() => eliminarPresupuesto(p.id)} className="p-1 -m-1 text-white/40 hover:text-rose-500 transition-colors"><Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" /></button>
                       </span>
                       <span className="font-sans tabular-nums tracking-tight">
                         <span className={p.isOver ? 'text-rose-400 font-black' : ''}>$<AnimatedNum value={p.gastoActual} /></span> 
