@@ -963,12 +963,21 @@ const abrirCelebracionManual = () => {
                   ) : (
                     <>
                       <p className="text-[10px] text-blue-400 uppercase font-bold font-sans">Monto a Pagar en Bs (Tasa BCV):</p>
-                      <p className="text-2xl font-black text-white font-sans">Bs. {(2 * tasaCheckout).toFixed(2)}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-2xl font-black text-white font-sans">Bs. {(2 * tasaCheckout).toFixed(2)}</p>
+                        <Copy className="w-4 h-4 text-white/40 cursor-pointer hover:text-white shrink-0" onClick={() => navigator.clipboard.writeText((2 * tasaCheckout).toFixed(2))} />
+                      </div>
                       <p className="mt-2 text-xs font-sans text-white/50">Datos del Pago Móvil:</p>
-                      <div className="bg-white/5 p-3 rounded space-y-1 text-xs">
-                        <p>📱 Teléfono: <strong>0412-301-6936</strong></p>
+                      <div className="bg-white/5 p-3 rounded space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span>📱 Teléfono: <strong>0412-301-6936</strong></span>
+                          <Copy className="w-3.5 h-3.5 text-white/40 cursor-pointer hover:text-white shrink-0" onClick={() => navigator.clipboard.writeText("04123016936")} />
+                        </div>
                         <p>🏦 Banco: <strong>Bancamiga (0172)</strong></p>
-                        <p>🪪 C.I: <strong>27.531.901</strong></p>
+                        <div className="flex items-center justify-between gap-2">
+                          <span>🪪 C.I: <strong>27.531.901</strong></span>
+                          <Copy className="w-3.5 h-3.5 text-white/40 cursor-pointer hover:text-white shrink-0" onClick={() => navigator.clipboard.writeText("27531901")} />
+                        </div>
                       </div>
                     </>
                   )}
