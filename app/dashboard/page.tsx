@@ -1875,6 +1875,7 @@ const handleManualSubmit = async (e: React.FormEvent) => {
   };
 
 
+
   const guardarNombreEspacio = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSpaceName.trim() || isGuest) return;
