@@ -12,10 +12,12 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Pote Admin",
-    startupImage: "/pote.png",
+    // iOS no maneja bien transparencia en el ícono de la app instalada, por eso usamos
+    // pote-512.png (fondo sólido) en vez de pote.png (que tiene canal alfa).
+    startupImage: "/pote-512.png",
   },
   icons: {
-    apple: "/pote.png",
+    apple: "/pote-192.png",
   },
 };
 
