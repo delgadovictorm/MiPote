@@ -1864,7 +1864,7 @@ const handleManualSubmit = async (e: React.FormEvent) => {
   const toggleGastoFijo = (id: string) => {
     const updated = gastosFijos.map(gf => gf.id === id ? { ...gf, pagado: !gf.pagado } : gf);
     setGastosFijos(updated);
-    localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
+    localStorage.setItem(`gastos_fijos_${espacioActssivo.id}`, JSON.stringify(updated));
   };
 
   const eliminarGastoFijo = (id: string) => {
@@ -1874,6 +1874,8 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
   };
 
+
+  
   const toggleCashea = async (cuota: any) => {
     const nuevoEstado = !cuota.pagado;
     await supabase.from("cashea").update({ pagado: nuevoEstado }).eq("id", cuota.id);
