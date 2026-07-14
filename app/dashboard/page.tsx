@@ -1874,6 +1874,7 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     window.location.reload();
   };
 
+
   const guardarNombreEspacio = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSpaceName.trim() || isGuest) return;
