@@ -22,6 +22,7 @@ import { motion, AnimatePresence } from "framer-motion"
 
 import { useReactMediaRecorder } from "react-media-recorder-2";
 import { TransactionDrawer } from "@/components/TransactionDrawer";
+import { TutorialOnboarding } from "@/components/Onboarding/TutorialOnboarding";
 
 // ============================================================================
 // CONFIGURACIÓN VISUAL DE GAMIFICACIÓN (ESTILO DUOLINGO/OPAL)
@@ -213,7 +214,17 @@ export default function MiPoteApp() {
   const [espacioActivo, setEspacioActivo] = useState(null as any);
   const [isGuest, setIsGuest] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
-  
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  useEffect(() => {
+    if (currentView === 'dashboard') {
+      try {
+        if (!localStorage.getItem('mipote_tutorial_visto')) setShowTutorial(true);
+      } catch {}
+    }
+  }, [currentView]);
+
+
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinCode, setJoinCode] = useState("");
 
@@ -1042,10 +1053,12 @@ const abrirCelebracionManual = () => {
        </div>
       )}
 
+      {showTutorial && <TutorialOnboarding onClose={() => setShowTutorial(false)} />}
+
       {/* 🟢 AQUÍ PONES EL MODAL DE CELEBRACIÓN */}
-      <StreakCelebrationModal 
-        isOpen={showStreakCelebration} 
-        onClose={() => setShowStreakCelebration(false)} 
+      <StreakCelebrationModal
+        isOpen={showStreakCelebration}
+        onClose={() => setShowStreakCelebration(false)}
         dias={celebrationData?.dias}
         recompensa={celebrationData?.recompensa}
       />
@@ -2845,6 +2858,7 @@ const getPatrimonioNeto = () => {
             <div className="relative flex items-center gap-2 mb-4">
               <p className="text-[10px] uppercase tracking-[0.4em] text-white/40">Patrimonio Neto</p>
               <button
+                data-tutorial="ojito"
                 onClick={toggleBalanceHidden}
                 className="text-white/30 hover:text-white transition-colors"
                 title={isBalanceHidden ? "Mostrar saldo" : "Ocultar saldo"}
@@ -2853,6 +2867,7 @@ const getPatrimonioNeto = () => {
               </button>
             </div>
             <button
+              data-tutorial="patrimonio"
               onClick={() => setIsBalanceModalOpen(true)}
               className="relative flex flex-col items-center active:scale-95 transition-transform cursor-pointer"
             >
@@ -2982,7 +2997,7 @@ const getPatrimonioNeto = () => {
           {/* ========================================================= */}
           {/* SIMULADOR RÁPIDO EMBEBIDO (CONVERSIÓN INSTANTÁNEA $ <-> BS/€) */}
           {/* ========================================================= */}
-          <div className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-5 mx-2">
+          <div data-tutorial="simulador" className="bg-[#1C1C1E] border border-white/5 rounded-3xl p-5 mx-2">
             <div className="flex items-center justify-between mb-4 gap-2">
               <div className="flex items-center gap-2">
                 <button
@@ -3214,6 +3229,7 @@ const getPatrimonioNeto = () => {
                      <ChevronDown className="w-5 h-5 text-white/40" />
                      {espacioActivo && !isGuest && (
                        <button
+                         data-tutorial="editar-nombre"
                          onClick={(e) => { e.stopPropagation(); setNewSpaceName(espacioActivo.nombre); setIsEditingSpaceName(true); }}
                          className="text-white/20 hover:text-white/60 transition-colors"
                          title="Editar nombre"
@@ -3229,7 +3245,8 @@ const getPatrimonioNeto = () => {
                 
               {/* MEDALLA DE RACHA SÚPER LIMPIA (Sin cajas, sin fondos, sin resplandor) */}
                  {perfil && (
-                    <button 
+                    <button
+                      data-tutorial="racha"
                       onClick={(e) => {
                         e.stopPropagation();
                         // Usamos onShowCelebration directamente, que ya viene como prop
@@ -3276,8 +3293,9 @@ const getPatrimonioNeto = () => {
               <span className="hidden sm:inline text-[9px] font-bold text-rose-400 uppercase tracking-widest">Salir</span>
             </button>
           )}
-          <button 
-            onClick={() => setIsRatesDrawerOpen(true)} 
+          <button
+            data-tutorial="tasa-oficial"
+            onClick={() => setIsRatesDrawerOpen(true)}
             className="flex items-center gap-2 bg-[#1a1a1a] border border-white/5 hover:border-emerald-500/40 px-3 py-2 rounded-xl transition-all active:scale-95"
           >
             <div className="text-right">
@@ -3676,30 +3694,30 @@ const getPatrimonioNeto = () => {
       <nav className={`fixed bottom-0 left-0 right-0 bg-[#1a0f2e]/90 backdrop-blur-xl border-t ${theme.border} p-3 md:hidden z-40 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)]`}>
         <div className="flex justify-around items-center max-w-md mx-auto">
           <NavButton icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
-          <NavButton icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
-          
+          <NavButton dataTutorial="nav-presupuesto" icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
+
           <div className="relative -top-5">
             {/* Botón Central sin sombra brillante */}
-            <button onClick={() => setIsSpacesMenuOpen(true)} className="bg-[#2563EB] text-white p-4 rounded-full active:scale-95 transition-transform border-4 border-[#0d0714]">
+            <button data-tutorial="nav-espacios" onClick={() => setIsSpacesMenuOpen(true)} className="bg-[#2563EB] text-white p-4 rounded-full active:scale-95 transition-transform border-4 border-[#0d0714]">
                <Layers className="w-6 h-6" />
             </button>
           </div>
 
-          <NavButton icon={<ShoppingCart />} label="Mercado" active={isMercadoOpen} onClick={() => { if(isGuest || !perfil?.is_pro) onTriggerPaywall?.(); else setIsMercadoOpen(true); }} theme={theme} pro={!isGuest && !perfil?.is_pro} />
+          <NavButton dataTutorial="nav-mercado" icon={<ShoppingCart />} label="Mercado" active={isMercadoOpen} onClick={() => { if(isGuest || !perfil?.is_pro) onTriggerPaywall?.(); else setIsMercadoOpen(true); }} theme={theme} pro={!isGuest && !perfil?.is_pro} />
 
           {espacioActivo?.tipo !== 'vaca' && (
-            <NavButton icon={<Shield />} label="Reserva" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
+            <NavButton dataTutorial="nav-reserva" icon={<Shield />} label="Reserva" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
           )}
         </div>
       </nav>
 
       <nav className="hidden md:flex justify-center mt-8 space-x-4">
         <NavButtonDesktop icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
-        <NavButtonDesktop icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
-        <NavButtonDesktop icon={<Layers />} label="Cambiar Espacio" active={false} onClick={() => setIsSpacesMenuOpen(true)} theme={{primary: 'bg-blue-600', text: 'text-blue-400', border: 'border-blue-500/30'}} />
-        <NavButtonDesktop icon={<ShoppingCart />} label="Mercado" active={isMercadoOpen} onClick={() => { if(isGuest || !perfil?.is_pro) onTriggerPaywall?.(); else setIsMercadoOpen(true); }} theme={theme} pro={!isGuest && !perfil?.is_pro} />
+        <NavButtonDesktop dataTutorial="nav-presupuesto" icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
+        <NavButtonDesktop dataTutorial="nav-espacios" icon={<Layers />} label="Cambiar Espacio" active={false} onClick={() => setIsSpacesMenuOpen(true)} theme={{primary: 'bg-blue-600', text: 'text-blue-400', border: 'border-blue-500/30'}} />
+        <NavButtonDesktop dataTutorial="nav-mercado" icon={<ShoppingCart />} label="Mercado" active={isMercadoOpen} onClick={() => { if(isGuest || !perfil?.is_pro) onTriggerPaywall?.(); else setIsMercadoOpen(true); }} theme={theme} pro={!isGuest && !perfil?.is_pro} />
         {espacioActivo?.tipo !== 'vaca' && (
-          <NavButtonDesktop icon={<Shield />} label="Por si acaso" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
+          <NavButtonDesktop dataTutorial="nav-reserva" icon={<Shield />} label="Por si acaso" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
         )}
       </nav>
 
@@ -3829,7 +3847,8 @@ const getPatrimonioNeto = () => {
           {/* ========================================================= */}
           {/* BOTÓN FLOTANTE MATE BLUE */}
           {/* ========================================================= */}
-          <button 
+          <button
+            data-tutorial="fab"
             onClick={() => setIsFABMenuOpen(true)}
             className={`fixed bottom-24 md:bottom-10 right-6 z-50 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 
               ${isScanning ? 'scale-90 opacity-80 cursor-not-allowed' : 'hover:scale-110 active:scale-95'} 
@@ -3880,9 +3899,9 @@ const getPatrimonioNeto = () => {
     </div>
   );
 }
-function NavButton({ icon, label, active, onClick, theme, pro }: any) {
+function NavButton({ icon, label, active, onClick, theme, pro, dataTutorial }: any) {
   return (
-    <button onClick={onClick} className={`relative flex flex-col items-center gap-1 transition-all ${active ? `${theme.text} scale-110` : 'text-white/40 hover:text-white/80'}`}>
+    <button data-tutorial={dataTutorial} onClick={onClick} className={`relative flex flex-col items-center gap-1 transition-all ${active ? `${theme.text} scale-110` : 'text-white/40 hover:text-white/80'}`}>
       <div className={`relative p-2 rounded-xl ${active ? theme.lightBg : ''}`}>
         {icon}
         {pro && <span className="absolute -top-1 -right-1 bg-amber-500 text-black text-[6px] font-black px-1 rounded-full">PRO</span>}
@@ -3892,9 +3911,9 @@ function NavButton({ icon, label, active, onClick, theme, pro }: any) {
   );
 }
 
-function NavButtonDesktop({ icon, label, active, onClick, theme, pro }: any) {
+function NavButtonDesktop({ icon, label, active, onClick, theme, pro, dataTutorial }: any) {
   return (
-    <button onClick={onClick} className={`relative flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all ${active ? `${theme.primary} text-white shadow-lg` : `bg-[#1a0f2e] ${theme.text} border ${theme.border} hover:bg-white/5`}`}>
+    <button data-tutorial={dataTutorial} onClick={onClick} className={`relative flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all ${active ? `${theme.primary} text-white shadow-lg` : `bg-[#1a0f2e] ${theme.text} border ${theme.border} hover:bg-white/5`}`}>
       {icon} {label}
       {pro && <span className="bg-amber-500 text-black text-[8px] font-black px-1.5 py-0.5 rounded ml-1">PRO</span>}
     </button>
