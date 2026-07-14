@@ -473,15 +473,44 @@ const abrirCelebracionManual = () => {
     }
   };
 
+  // Comprime la captura antes de subirla (las fotos de cámara pesan varios MB y hacían el reporte lento).
+  const comprimirImagen = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX_WIDTH = 1000;
+          const scale = Math.min(1, MAX_WIDTH / img.width);
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("No se pudo comprimir la imagen")), 'image/jpeg', 0.7);
+        };
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const procesarPagoPRO = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session || !session.user) return alert("Debes iniciar sesión para pagar.");
     if (!archivo) return alert("Por favor sube la captura de pantalla del pago.");
-    
+
     setEnviandoPago(true);
     const formData = new FormData();
-    formData.append("photo", archivo);
-    
+    try {
+      const comprimida = await comprimirImagen(archivo);
+      formData.append("photo", comprimida, "comprobante.jpg");
+    } catch {
+      formData.append("photo", archivo);
+    }
+
     const ordenNumero = (200000 + (parseInt(session.user.id.substring(0, 4), 16) % 90000)).toString();
     const mensaje = `💰 *NUEVO REPORTE DE PAGO MI POTE*\n\n📧 *Usuario:* ${session.user.email}\n🔢 *Orden:* #${ordenNumero}\n💳 *Método:* ${metodoPago.toUpperCase()}\n🧾 *Ref:* ${referencia}\n💲 *Monto:* $2\n\n_Acción: Revisa el panel Admin para aprobar._`;
     formData.append("caption", mensaje);
@@ -1120,9 +1149,9 @@ const RECOMPENSAS_METAS = [
       setTransactions(updatedTx);
       localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
     } else {
+      setTransactions(prev => prev.filter(t => t.id !== id));
       const { error } = await supabase.from("transacciones_saas").delete().eq("id", id);
       if (error) alert("Error: " + error.message);
-      else fetchData();
     }
   };
 
@@ -1308,6 +1337,9 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
 
   const [casheaForm, setCasheaForm] = useState({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" });
   const [budgetForm, setBudgetForm] = useState({ categoria: "", monto_limite: "" });
+  const [isScanningCashea, setIsScanningCashea] = useState(false);
+  const [cuotasEscaneadas, setCuotasEscaneadas] = useState([] as any[]);
+  const casheaScanInputRef = React.useRef(null as HTMLInputElement | null);
   const [fijoForm, setFijoForm] = useState({ descripcion: "", monto: "", dia_pago: "1" });
 
   const [showToast, setShowToast] = useState(false);
@@ -1921,11 +1953,94 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     return true; 
   };
 
-  const agregarCashea = async (e: React.FormEvent) => { 
-    e.preventDefault(); if(!verificarLimiteInvitado()) return; 
+  const agregarCashea = async (e: React.FormEvent) => {
+    e.preventDefault(); if(!verificarLimiteInvitado()) return;
     if (!casheaForm.articulo || !casheaForm.monto_cuota || !casheaForm.fecha_pago) return;
     await supabase.from("cashea").insert([{ articulo: casheaForm.articulo, monto_cuota: parseFloat(casheaForm.monto_cuota), fecha_pago: casheaForm.fecha_pago, usuario: casheaForm.usuario || "Tú", espacio_id: espacioActivo.id }]);
     setIsAddingCashea(false); setCasheaForm({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" }); fetchData();
+  };
+
+  // Escanea una captura de la app de Cashea con la lista de cuotas pendientes y las prepara para revisión.
+  const handleScanCashea = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!puedeEscanear()) { setTimeout(() => onTriggerPaywall?.(), 300); if (event.target) event.target.value = ''; return; }
+
+    setIsScanningCashea(true);
+    try {
+      const base64Image = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 1000;
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.onerror = reject;
+          img.src = e.target?.result as string;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const imageUrl = base64Image.split(',')[1];
+      const response = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl, mode: "cashea" }),
+      });
+      if (!response.ok) throw new Error("Error procesando imagen");
+
+      const dataResult = await response.json();
+      const jsonString = (dataResult.result || "").replace(/```json/g, "").replace(/```/g, "").trim();
+      const data = JSON.parse(jsonString);
+      const items = Array.isArray(data.items) ? data.items : [];
+      if (items.length === 0) throw new Error("No se detectaron cuotas en la imagen");
+
+      registrarEscaneo();
+      setCuotasEscaneadas(items.map((it: any, idx: number) => ({
+        seleccionado: true,
+        clave: `${idx}-${Date.now()}`,
+        articulo: it.articulo || "Cuota Cashea",
+        monto_cuota: it.monto_cuota || 0,
+        fecha_pago: it.fecha_pago || new Date().toISOString().slice(0, 10),
+        cuota_actual: it.cuota_actual,
+        cuota_total: it.cuota_total,
+      })));
+    } catch (error) {
+      console.error(error);
+      alert("No pude leer las cuotas de la imagen. Intenta con otra captura o agrégalas manual.");
+    } finally {
+      setIsScanningCashea(false);
+      if (event.target) event.target.value = '';
+    }
+  };
+
+  const confirmarCuotasEscaneadas = async () => {
+    const seleccionadas = cuotasEscaneadas.filter(c => c.seleccionado);
+    if (seleccionadas.length === 0) { setCuotasEscaneadas([]); return; }
+
+    const nombreUsuario = (perfil?.nombre || session?.user?.email?.split('@')[0]) || "Tú";
+    const registros = seleccionadas.map(c => ({
+      articulo: c.articulo,
+      monto_cuota: parseFloat(c.monto_cuota),
+      fecha_pago: c.fecha_pago,
+      usuario: nombreUsuario,
+      espacio_id: espacioActivo.id,
+    }));
+
+    const { data, error } = await supabase.from("cashea").insert(registros).select();
+    if (error) { alert("🚨 Error registrando cuotas: " + error.message); return; }
+    if (data) setCuotasCashea(prev => [...prev, ...data]);
+    triggerToast("egreso", `${seleccionadas.length} cuota${seleccionadas.length === 1 ? '' : 's'} de Cashea registrada${seleccionadas.length === 1 ? '' : 's'} 🛍️`);
+    setCuotasEscaneadas([]);
   };
 
   const guardarPresupuesto = async (e: React.FormEvent) => { 
@@ -1939,7 +2054,8 @@ const handleManualSubmit = async (e: React.FormEvent) => {
 
   const eliminarPresupuesto = async (id: string) => {
     if(!confirm("¿Eliminar este tope presupuestario?")) return;
-    await supabase.from("presupuestos").delete().eq("id", id); fetchData();
+    setPresupuestos(prev => prev.filter(p => p.id !== id));
+    await supabase.from("presupuestos").delete().eq("id", id);
   };
 
   const guardarGastoFijo = (e: React.FormEvent) => {
@@ -2051,7 +2167,8 @@ const handleManualSubmit = async (e: React.FormEvent) => {
   };
 
   const eliminarPote = async (id: string) => {
-    await supabase.from("metas").delete().eq("id", id); fetchData();
+    setPotes(prev => prev.filter(p => p.id !== id));
+    await supabase.from("metas").delete().eq("id", id);
   };
 
   // Al cerrar una sesión de "Hacer Mercado" se crea UNA sola transacción de egreso con el
@@ -2398,8 +2515,8 @@ const getPatrimonioNeto = () => {
                   <div key={p.id} className="space-y-1.5 relative group">
                     <div className="flex justify-between text-xs md:text-sm text-white">
                       <span className="font-bold flex items-center gap-2">
-                        {p.catLabel} 
-                        <button onClick={() => eliminarPresupuesto(p.id)} className="text-rose-500/0 group-hover:text-rose-500/50 hover:text-rose-500 transition-colors"><Trash2 className="w-3 h-3 md:w-3.5 md:h-3.5" /></button>
+                        {p.catLabel}
+                        <button onClick={() => eliminarPresupuesto(p.id)} className="text-rose-500/60 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:text-rose-500/50 hover:text-rose-500 transition-colors"><Trash2 className="w-3 h-3 md:w-3.5 md:h-3.5" /></button>
                       </span>
                       <span className="font-sans tabular-nums tracking-tight">
                         <span className={p.isOver ? 'text-rose-400 font-black' : ''}>$<AnimatedNum value={p.gastoActual} /></span> 
@@ -2523,7 +2640,17 @@ const getPatrimonioNeto = () => {
           <div className="bg-[#1C1C1E] p-5 rounded-3xl flex flex-col min-h-[300px]">
             <div className="flex justify-between items-center mb-3 md:mb-4">
               <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2"><Calendar className={`w-3.5 h-3.5 md:w-4 md:h-4 ${theme.text}`}/> Cashea</h3>
-              <button onClick={() => setIsAddingCashea(true)} className={`flex items-center gap-1 ${theme.lightBg} ${theme.text} px-3 py-1.5 rounded-lg text-[10px] font-black transition-colors`}><Plus className="w-3 h-3"/> Nuevo Pago</button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { if (!puedeEscanear()) { onTriggerPaywall?.(); return; } casheaScanInputRef.current?.click(); }}
+                  disabled={isScanningCashea}
+                  className="flex items-center gap-1 bg-white/5 text-white/70 hover:bg-white/10 px-3 py-1.5 rounded-lg text-[10px] font-black transition-colors disabled:opacity-50"
+                >
+                  {isScanningCashea ? <Loader2 className="w-3 h-3 animate-spin"/> : <Camera className="w-3 h-3"/>} Escanear Cuotas
+                </button>
+                <input type="file" accept="image/*" ref={casheaScanInputRef} onChange={handleScanCashea} className="hidden" />
+                <button onClick={() => setIsAddingCashea(true)} className={`flex items-center gap-1 ${theme.lightBg} ${theme.text} px-3 py-1.5 rounded-lg text-[10px] font-black transition-colors`}><Plus className="w-3 h-3"/> Nuevo Pago</button>
+              </div>
             </div>
 
             <Drawer.Root open={isAddingCashea} onOpenChange={setIsAddingCashea}>
@@ -2564,6 +2691,50 @@ const getPatrimonioNeto = () => {
               </Drawer.Portal>
             </Drawer.Root>
 
+            {/* DRAWER DE REVISIÓN: CUOTAS DETECTADAS POR IA EN LA CAPTURA DE CASHEA */}
+            <Drawer.Root open={cuotasEscaneadas.length > 0} onOpenChange={(open) => !open && setCuotasEscaneadas([])}>
+              <Drawer.Portal>
+                <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
+                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[80vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-purple-500">
+                  <Drawer.Title className="sr-only">Confirmar Cuotas Detectadas</Drawer.Title>
+                  <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+                    <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+                    <h3 className="text-xl font-black text-white mb-2 text-center">Cuotas Detectadas</h3>
+                    <p className="text-center text-white/50 text-xs mb-6">Revisa y desmarca las que no quieras registrar.</p>
+
+                    <div className="space-y-2 mb-6">
+                      {cuotasEscaneadas.map((c, idx) => (
+                        <button
+                          key={c.clave}
+                          type="button"
+                          onClick={() => setCuotasEscaneadas(prev => prev.map((it, i) => i === idx ? { ...it, seleccionado: !it.seleccionado } : it))}
+                          className={`w-full flex items-center justify-between gap-3 p-3 rounded-2xl border text-left transition-colors ${c.seleccionado ? 'bg-purple-500/10 border-purple-500/40' : 'bg-black/40 border-white/5 opacity-50'}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {c.seleccionado ? <CheckSquare className="text-purple-400 w-5 h-5 shrink-0"/> : <Square className="text-white/40 w-5 h-5 shrink-0"/>}
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-white truncate">{c.articulo}</p>
+                              <p className="text-[10px] text-white/40">
+                                {c.cuota_actual && c.cuota_total ? `Cuota ${c.cuota_actual} de ${c.cuota_total} · ` : ''}Vence: {c.fecha_pago}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-sm font-black text-white tabular-nums shrink-0">${Number(c.monto_cuota).toFixed(2)}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={confirmarCuotasEscaneadas}
+                      className="w-full bg-purple-600 text-white font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(168,85,247,0.3)] active:scale-95 transition-transform"
+                    >
+                      Registrar {cuotasEscaneadas.filter(c => c.seleccionado).length} cuota{cuotasEscaneadas.filter(c => c.seleccionado).length === 1 ? '' : 's'}
+                    </button>
+                  </div>
+                </Drawer.Content>
+              </Drawer.Portal>
+            </Drawer.Root>
+
             <div className="space-y-2">
               {cuotasCashea.length === 0 ? (
                 <p className="text-[10px] md:text-xs text-white/50 italic px-2">No hay cuotas pendientes.</p>
@@ -2580,7 +2751,7 @@ const getPatrimonioNeto = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`font-sans tabular-nums tracking-tight font-black ${cuota.pagado ? 'text-emerald-400/50' : 'text-rose-400'}`}>${cuota.monto_cuota}</span>
-                    <button onClick={async (e) => { e.stopPropagation(); if(confirm("¿Eliminar esta cuota de Cashea?")) { await supabase.from('cashea').delete().eq('id', cuota.id); fetchData(); } }} className="p-2 md:p-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-white/30 hover:text-rose-500 transition-colors">
+                    <button onClick={async (e) => { e.stopPropagation(); if(confirm("¿Eliminar esta cuota de Cashea?")) { setCuotasCashea(prev => prev.filter(c => c.id !== cuota.id)); await supabase.from('cashea').delete().eq('id', cuota.id); } }} className="p-2 md:p-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-white/30 hover:text-rose-500 transition-colors">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>

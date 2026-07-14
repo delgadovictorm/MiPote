@@ -37,6 +37,13 @@ export default function MiPoteAdmin() {
     comprobarSesion();
   }, []);
 
+  // Auto-actualiza los datos mientras el admin esté logueado, para ver pagos nuevos sin recargar.
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const interval = setInterval(traerTodo, 20000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ADMIN_EMAILS.includes(email.toLowerCase())) {

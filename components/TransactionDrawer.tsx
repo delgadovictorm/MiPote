@@ -56,7 +56,6 @@ export function TransactionDrawer({
     ],
     egreso: [
       { id: "comida", label: "Comida", icon: <ShoppingCart size={18} /> },
-      { id: "cashea", label: "Cashea", icon: <DollarSign size={18} /> },
       { id: "internet", label: "Internet", icon: <Wifi size={18} /> },
       { id: "abono_pote", label: "Abonar a Pote 🍯", icon: <Plus size={18} /> },
       { id: "mascotas", label: "Mascotas", icon: <Dog size={18} /> },
