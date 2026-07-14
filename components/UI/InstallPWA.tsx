@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState } from 'react';
-import { Download, Share, SquarePlus, CheckCircle2, MoreVertical, X } from 'lucide-react';
+import { Share, SquarePlus, CheckCircle2, MoreVertical, X } from 'lucide-react';
 
 type Plataforma = 'ios' | 'android' | 'desktop';
+
+const DISMISS_KEY = 'mipote_install_banner_dismissed';
 
 export function InstallPWA() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -19,28 +21,32 @@ export function InstallPWA() {
     const isStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as any).standalone === true;
-    if (isStandalone) return;
+    const yaDescartado = localStorage.getItem(DISMISS_KEY) === 'true';
 
-    if (isIOS) setShow(true);
+    if (!isStandalone && !yaDescartado) setShow(true);
 
     const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setShow(true);
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const handleClick = async () => {
+  const handleInstalar = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       await deferredPrompt.userChoice;
       setDeferredPrompt(null);
       return;
     }
-    // iOS (y Android sin evento nativo disponible) no tienen prompt automático: mostramos los pasos manuales.
+    // iOS (y Android/desktop sin evento nativo disponible) no tienen prompt automático: mostramos los pasos manuales.
     setShowModal(true);
+  };
+
+  const handleDescartar = () => {
+    setShow(false);
+    localStorage.setItem(DISMISS_KEY, 'true');
   };
 
   if (!show) return null;
@@ -59,12 +65,25 @@ export function InstallPWA() {
 
   return (
     <>
-      <button
-        onClick={handleClick}
-        className="flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-sm px-6 py-3.5 rounded-full transition-all active:scale-95"
-      >
-        <Download className="w-4 h-4" /> Instalar App
-      </button>
+      {/* BANNER FLOTANTE MUY VISUAL */}
+      <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:w-[380px] z-[900] bg-[#151518] border border-white/10 rounded-2xl shadow-2xl p-4 flex items-center gap-3 animate-in slide-in-from-bottom-6 fade-in duration-500">
+        <div className="w-11 h-11 rounded-xl bg-purple-500/15 flex items-center justify-center shrink-0 overflow-hidden">
+          <img src="/pote.png" className="w-7 h-7 object-contain" alt="Mi Pote" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-white font-black text-sm leading-tight">Instala Mi Pote</p>
+          <p className="text-white/50 text-[11px] leading-snug mt-0.5">Acceso directo y rápido, sin ocupar espacio.</p>
+        </div>
+        <button
+          onClick={handleInstalar}
+          className="bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs px-4 py-2.5 rounded-xl shrink-0 transition-colors active:scale-95"
+        >
+          Instalar
+        </button>
+        <button onClick={handleDescartar} className="text-white/30 hover:text-white shrink-0 p-1" title="Cerrar">
+          <X size={16} />
+        </button>
+      </div>
 
       {showModal && (
         <div

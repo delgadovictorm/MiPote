@@ -198,12 +198,16 @@ export default function MiPoteApp() {
   const [showStreakCelebration, setShowStreakCelebration] = useState(false);
   const [celebrationData, setCelebrationData] = useState(null as any);
   
-  const [authStage, setAuthStage] = useState('welcome' as 'welcome'|'login'|'reg1'|'reg2'|'loading');
+  const [authStage, setAuthStage] = useState('welcome' as 'welcome'|'login'|'reg1'|'reg2'|'loading'|'forgot'|'reset');
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [telefono, setTelefono] = useState(""); 
+  const [telefono, setTelefono] = useState("");
   const [regNombre, setRegNombre] = useState("");
   const [authError, setAuthError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   const [espacios, setEspacios] = useState([] as any[]);
   const [espacioActivo, setEspacioActivo] = useState(null as any);
@@ -259,7 +263,13 @@ const abrirCelebracionManual = () => {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setLoadingAuth(false);
+        setCurrentView('auth');
+        setAuthStage('reset');
+        return;
+      }
       setSession(session);
       if (session) {
         cargarDatosUsuario(session.user.id).then(() => setCurrentView('dashboard'));
@@ -385,6 +395,32 @@ const abrirCelebracionManual = () => {
     setLoadingAuth(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setAuthError(error.message); setLoadingAuth(false); }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    if (!email.trim()) { setAuthError("Ingresa tu correo electrónico."); return; }
+    setLoadingAuth(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/dashboard`,
+    });
+    setLoadingAuth(false);
+    if (error) setAuthError(error.message);
+    else setResetSent(true);
+  };
+
+  const handleSetNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    if (newPassword.length < 6) { setAuthError("La contraseña debe tener al menos 6 caracteres."); return; }
+    setResettingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setResettingPassword(false);
+    if (error) { setAuthError(error.message); return; }
+    setNewPassword("");
+    alert("✅ Contraseña actualizada con éxito.");
+    setCurrentView('dashboard');
   };
 
   const handleRegisterUser = async (e: React.FormEvent) => {
@@ -600,8 +636,14 @@ const abrirCelebracionManual = () => {
                   <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Contraseña</label>
                   <div className="relative">
                     <Lock className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                    <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-12 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                    <button type="button" onClick={() => setShowPassword(p => !p)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
+                      {showPassword ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}
+                    </button>
                   </div>
+                  <button type="button" onClick={() => { setAuthError(""); setResetSent(false); setAuthStage('forgot'); }} className="text-purple-400 text-xs font-bold mt-3 hover:text-purple-300 transition-colors">
+                    ¿Olvidaste tu contraseña?
+                  </button>
                 </div>
                 <div className="pt-8">
                   <button type="submit" className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2">
@@ -612,6 +654,76 @@ const abrirCelebracionManual = () => {
            </div>
         </div>
        );
+    }
+
+    if (authStage === 'forgot') {
+      return (
+        <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+           <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+              <button onClick={() => setAuthStage('login')} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-white/50 hover:text-white mb-8 transition-colors"><ArrowLeft className="w-5 h-5"/></button>
+
+              {resetSent ? (
+                <div className="py-8 text-center">
+                  <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4"><Check className="w-10 h-10 text-emerald-400" /></div>
+                  <h3 className="text-2xl font-black text-white mb-2">Revisa tu correo</h3>
+                  <p className="text-white/50 text-sm mb-6">Te enviamos un enlace a <span className="text-white font-bold">{email}</span> para restablecer tu contraseña.</p>
+                  <button onClick={() => setAuthStage('login')} className="w-full bg-white/10 text-white font-bold py-3 rounded-xl hover:bg-white/20 transition-all">Volver a iniciar sesión</button>
+                </div>
+              ) : (
+                <>
+                  <h2 className="text-3xl font-black text-white mb-2">¿Olvidaste tu contraseña?</h2>
+                  <p className="text-white/50 text-sm mb-10">Ingresa tu correo y te enviamos un enlace para restablecerla.</p>
+
+                  <form onSubmit={handleForgotPassword} className="space-y-5 flex-1">
+                    {authError && <p className="text-rose-400 text-xs text-center bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">{authError}</p>}
+                    <div>
+                      <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Correo Electrónico</label>
+                      <div className="relative">
+                        <Mail className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                      </div>
+                    </div>
+                    <div className="pt-8">
+                      <button type="submit" disabled={loadingAuth} className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50">
+                        {loadingAuth ? "Enviando..." : "Enviar enlace"} <ChevronRight className="w-4 h-4"/>
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+           </div>
+        </div>
+      );
+    }
+
+    if (authStage === 'reset') {
+      return (
+        <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+           <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+              <h2 className="text-3xl font-black text-white mb-2">Nueva contraseña</h2>
+              <p className="text-white/50 text-sm mb-10">Escribe tu nueva contraseña para tu cuenta.</p>
+
+              <form onSubmit={handleSetNewPassword} className="space-y-5 flex-1">
+                {authError && <p className="text-rose-400 text-xs text-center bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">{authError}</p>}
+                <div>
+                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Nueva Contraseña</label>
+                  <div className="relative">
+                    <Lock className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input type={showPassword ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-12 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                    <button type="button" onClick={() => setShowPassword(p => !p)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
+                      {showPassword ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}
+                    </button>
+                  </div>
+                </div>
+                <div className="pt-8">
+                  <button type="submit" disabled={resettingPassword} className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50">
+                    {resettingPassword ? "Guardando..." : "Guardar contraseña"} <ChevronRight className="w-4 h-4"/>
+                  </button>
+                </div>
+              </form>
+           </div>
+        </div>
+      );
     }
 
     if (authStage === 'reg1') {
@@ -642,7 +754,10 @@ const abrirCelebracionManual = () => {
                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Contraseña</label>
                  <div className="relative">
                    <Lock className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                   <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-12 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                   <button type="button" onClick={() => setShowPassword(p => !p)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
+                     {showPassword ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}
+                   </button>
                  </div>
                </div>
                <div className="pt-8">
@@ -1864,7 +1979,7 @@ const handleManualSubmit = async (e: React.FormEvent) => {
   const toggleGastoFijo = (id: string) => {
     const updated = gastosFijos.map(gf => gf.id === id ? { ...gf, pagado: !gf.pagado } : gf);
     setGastosFijos(updated);
-    localStorage.setItem(`gastos_fijos_${espacioActssivo.id}`, JSON.stringify(updated));
+    localStorage.setItem(`gastos_fijos_${espacioActivo.id}`, JSON.stringify(updated));
   };
 
   const eliminarGastoFijo = (id: string) => {
