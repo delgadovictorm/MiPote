@@ -15,7 +15,7 @@ import { RecordatoriosTab } from "@/components/Dashboard/RecordatoriosTab";
 import { EmergenciaTab } from "@/components/Dashboard/EmergenciaTab";
 import { CalculadoraTab } from "@/components/Dashboard/CalculadoraTab";
 import { MercadoSession } from "@/components/Dashboard/MercadoSession";
-import { TASAS_DISPONIBLES, TASAS_DEFECTO, TASAS_STORAGE_KEY, getValorTasa, type TasaId } from "@/components/Dashboard/tasasConfig";
+import { TASAS_DISPONIBLES, TASAS_DEFECTO, TASAS_STORAGE_KEY, getValorTasa, calcularResultadoTasa, type TasaId } from "@/components/Dashboard/tasasConfig";
 import OpenAI from "openai";
 import { Camera } from "lucide-react"; // Asegúrate de tener este icono
 import { motion, AnimatePresence } from "framer-motion"
@@ -1218,6 +1218,7 @@ const RECOMPENSAS_METAS = [
   const [rates, setRates] = useState({ bcv: 0, usdt: 0, eur_bcv: 0, eur_paralelo: 0, cop_usd: 0, mxn_usd: 0 });
   const [activeRates, setActiveRates] = useState<TasaId[]>(TASAS_DEFECTO);
   const [showAddTasa, setShowAddTasa] = useState(false);
+  const [showAddMonedaLiquidez, setShowAddMonedaLiquidez] = useState(false);
 
   useEffect(() => {
     try {
@@ -1348,6 +1349,9 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
     { valor: "otro", label: "Otro (Personalizado) ✍️" }
   ];
   const [categoriasList, setCategoriasList] = useState(DEFAULT_CATEGORIES as any[]);
+  // NUEVO: CATEGORÍAS PERSONALIZADAS POR ESPACIO (ocultar defaults / agregar propias)
+  const [categoriasOcultas, setCategoriasOcultas] = useState(new Set<string>());
+  const [categoriasCustom, setCategoriasCustom] = useState([] as any[]);
 
   const [casheaForm, setCasheaForm] = useState({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" });
   const [budgetForm, setBudgetForm] = useState({ categoria: "", monto_limite: "" });
@@ -1613,21 +1617,26 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
         const { data: casheaData } = await supabase.from("cashea").select("*").eq("espacio_id", espacioActivo.id).order("fecha_pago", { ascending: true });
         if (casheaData) setCuotasCashea(casheaData);
         
-       const { data: catData } = await supabase.from("categorias").select("*");
-        
+       const { data: catData } = await supabase.from("categorias").select("*").eq("espacio_id", espacioActivo.id);
+
+        const ocultasSet = new Set((catData || []).filter((c: any) => c.oculta).map((c: any) => c.valor)) as Set<string>;
+        const customCatsDb = (catData || []).filter((c: any) => !c.oculta);
+        setCategoriasOcultas(ocultasSet);
+        setCategoriasCustom(customCatsDb);
+
         // El sistema escanea tu historial y extrae las categorías nuevas que inventaste
-        const customCats = Array.from(new Set(txData?.map(tx => tx.categoria).filter(cat => 
-            cat && 
-            !cat.startsWith('pote_') && 
-            cat !== 'emergencia' && 
-            cat !== 'transferencia_salida' && 
+        const customCats = Array.from(new Set(txData?.map(tx => tx.categoria).filter(cat =>
+            cat &&
+            !cat.startsWith('pote_') &&
+            cat !== 'emergencia' &&
+            cat !== 'transferencia_salida' &&
             cat !== 'transferencia_entrada' &&
             !DEFAULT_CATEGORIES.some(c => c.valor === cat)
         ) || []));
-        
+
         const dynamicCategorias = customCats.map(cat => ({ valor: cat, label: cat }));
 
-        const combined = [...DEFAULT_CATEGORIES, ...(catData || []), ...dynamicCategorias];
+        const combined = [...DEFAULT_CATEGORIES.filter(c => !ocultasSet.has(c.valor)), ...customCatsDb, ...dynamicCategorias];
         const uniqueCats = Array.from(new Map(combined.map(item => [item.valor, item])).values());
         setCategoriasList(uniqueCats);
 
@@ -1642,6 +1651,44 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
       }
     } catch (err) { console.error("Error fetch:", err); } finally { setLoading(false); }
   }, [espacioActivo, isGuest]);
+
+  // NUEVO: GESTIÓN DE CATEGORÍAS PERSONALIZADAS (agregar propias / ocultar las de por defecto)
+  const slugCategoria = (label: string) => label
+    .trim().toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+
+  const agregarCategoriaPersonalizada = async (label: string, tipoCat: string) => {
+    if (!espacioActivo || isGuest) return;
+    const valor = slugCategoria(label);
+    if (!valor) return;
+    const { error } = await supabase.from("categorias").insert([{ valor, label: label.trim(), tipo: tipoCat, espacio_id: espacioActivo.id, oculta: false }]);
+    if (error) { alert("No se pudo agregar la categoría: " + error.message); return; }
+    fetchData();
+  };
+
+  const ocultarCategoriaDefault = async (valor: string, tipoCat: string) => {
+    if (!espacioActivo || isGuest) return;
+    const { error } = await supabase.from("categorias").upsert([{ valor, tipo: tipoCat, espacio_id: espacioActivo.id, oculta: true }], { onConflict: 'espacio_id,valor' });
+    if (error) { alert("No se pudo ocultar la categoría: " + error.message); return; }
+    fetchData();
+  };
+
+  const eliminarCategoriaCustom = async (id: string) => {
+    if (!espacioActivo || isGuest) return;
+    const { error } = await supabase.from("categorias").delete().eq("id", id);
+    if (error) { alert("No se pudo eliminar la categoría: " + error.message); return; }
+    fetchData();
+  };
+
+  const categoriasApi = {
+    ocultas: categoriasOcultas,
+    custom: categoriasCustom,
+    agregar: agregarCategoriaPersonalizada,
+    ocultar: ocultarCategoriaDefault,
+    eliminar: eliminarCategoriaCustom,
+    disponible: !isGuest,
+  };
 
   useEffect(() => { fetchRates(); fetchData(); }, [fetchData]);
 
@@ -2954,6 +3001,65 @@ const getPatrimonioNeto = () => {
                         </p>
                       </div>
 
+                      {/* Filas extra: monedas de referencia elegidas por el usuario (solo vista, no son saldos reales) */}
+                      {TASAS_DISPONIBLES.filter(t => t.id !== 'bcv' && t.id !== 'usdt' && activeRates.includes(t.id)).map(t => {
+                        const valorConvertido = calcularResultadoTasa(t, 'usd', patrimonioTotal.paralelo, rates);
+                        return (
+                          <div key={t.id} className={`bg-[#1C1C1E] p-4 md:p-5 rounded-[1.25rem] flex justify-between items-center border ${t.classes.border} transition-colors`}>
+                            <div className="flex items-center gap-4">
+                              <div className={`w-10 h-10 rounded-full ${t.classes.badgeBg} flex items-center justify-center border ${t.classes.border}`}>
+                                <Globe className={`${t.classes.text} w-5 h-5`} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-white">{t.label}</p>
+                                <p className="text-[9px] text-white/40 uppercase tracking-widest mt-0.5">Referencia · patrimonio total</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <p className={`text-lg font-black ${t.classes.text} font-sans tabular-nums tracking-tight`}>
+                                {valorConvertido.toLocaleString(t.locale, { maximumFractionDigits: 0 })}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setActiveRates(prev => prev.filter(id => id !== t.id))}
+                                className="text-white/20 hover:text-rose-400 transition-colors"
+                                title="Quitar moneda"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {TASAS_DISPONIBLES.some(t => !activeRates.includes(t.id)) && (
+                        <div className="pt-1">
+                          {!showAddMonedaLiquidez ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowAddMonedaLiquidez(true)}
+                              className="w-full bg-[#1C1C1E] border border-dashed border-white/15 hover:border-emerald-500/40 p-3 rounded-2xl flex items-center justify-center gap-2 text-white/50 hover:text-emerald-400 transition-colors"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span className="text-[11px] font-bold uppercase tracking-widest">Agregar moneda de referencia</span>
+                            </button>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              {TASAS_DISPONIBLES.filter(t => !activeRates.includes(t.id)).map(t => (
+                                <button
+                                  type="button"
+                                  key={t.id}
+                                  onClick={() => { setActiveRates(prev => [...prev, t.id]); setShowAddMonedaLiquidez(false); }}
+                                  className={`bg-[#1C1C1E] border ${t.classes.border} hover:bg-[#242424] p-3 rounded-xl text-[11px] font-bold text-white/70 hover:text-white transition-colors flex items-center gap-1.5`}
+                                >
+                                  <Plus className="w-3 h-3" /> {t.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                     </div>
                   ) : (
                     // VISTA PARA POTES Y VACAS COMPARTIDAS
@@ -3863,7 +3969,7 @@ const getPatrimonioNeto = () => {
           {/* ========================================================= */}
     <TransactionDrawer
             tipo={tipo} setTipo={setTipo} categoria={categoria} setCategoria={setCategoria}
-            customCategoria={customCategoria} setCustomCategoria={setCustomCategoria} categoriasList={categoriasList}
+            customCategoria={customCategoria} setCustomCategoria={setCustomCategoria} categoriasApi={categoriasApi}
             monto={monto} setMonto={setMonto} moneda={moneda} setMoneda={setMoneda}
             descripcion={descripcion} setDescripcion={setDescripcion} rates={rates} theme={theme} onSubmit={handleManualSubmit}
             espacios={espacios} espacioActivo={espacioActivo} potes={potes}

@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { TrendingUp, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3, ChevronLeft, Plus, ArrowRight } from "lucide-react";
+import { TrendingUp, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3, ChevronLeft, Plus, ArrowRight, Tag, Settings2, X } from "lucide-react";
 
-export function TransactionDrawer({ 
+export function TransactionDrawer({
   children,
   tipo, setTipo,
   categoria, setCategoria,
+  customCategoria, setCustomCategoria,
+  categoriasApi,
   monto, setMonto,
   moneda, setMoneda,
   descripcion, setDescripcion,
@@ -21,9 +23,11 @@ export function TransactionDrawer({
   potes,
   destinoTransferencia, setDestinoTransferencia
 }: any) {
-  
+
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [nuevaCategoriaInput, setNuevaCategoriaInput] = useState("");
 
   useEffect(() => {
     setMounted(true);
@@ -40,11 +44,13 @@ export function TransactionDrawer({
         setMonto("");
         setDescripcion("");
         setCategoria("");
+        setCustomCategoria("");
+        setShowCategoryManager(false);
       }, 300);
       return () => clearTimeout(timer);
     }
     return () => { document.body.style.overflow = ''; };
-  }, [isOpen, setMonto, setDescripcion, setCategoria]);
+  }, [isOpen, setMonto, setDescripcion, setCategoria, setCustomCategoria]);
 
   const categories = {
     ingreso: [
@@ -64,6 +70,17 @@ export function TransactionDrawer({
       { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
     ]
   };
+
+  const proteccion = ["otro", "abono_pote"];
+
+  const categoriasMostradas = useMemo(() => {
+    const ocultas: Set<string> = categoriasApi?.ocultas || new Set();
+    const defaults = categories[tipo as keyof typeof categories].filter(c => proteccion.includes(c.id) || !ocultas.has(c.id));
+    const customs = (categoriasApi?.custom || [])
+      .filter((c: any) => c.tipo === tipo)
+      .map((c: any) => ({ id: c.valor, label: c.label, icon: <Tag size={18} />, custom: true, dbId: c.id }));
+    return [...defaults, ...customs];
+  }, [tipo, categoriasApi]);
 
   const handleLocalSubmit = (e: any) => {
     e.preventDefault();
@@ -125,24 +142,90 @@ export function TransactionDrawer({
             </div>
 
             {/* CATEGORÍAS */}
-            <div className="grid grid-cols-3 gap-2 mb-6">
-              {categories[tipo as keyof typeof categories].map((cat) => (
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[9px] uppercase font-black text-white/30 tracking-widest">Categorías</span>
+              {categoriasApi?.disponible !== false && (
                 <button
-                  key={cat.id}
                   type="button"
-                  onClick={() => {
-                    setCategoria(cat.id);
-                    setDescripcion(cat.id === 'otro' || cat.id === 'abono_pote' ? '' : cat.label);
-                  }}
-                  className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
-                    categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
-                  }`}
+                  onClick={() => setShowCategoryManager(v => !v)}
+                  className="text-[9px] uppercase font-black text-purple-400 flex items-center gap-1 cursor-pointer"
                 >
-                  {cat.icon}
-                  <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
+                  <Settings2 size={12} /> {showCategoryManager ? 'Listo' : 'Personalizar'}
                 </button>
-              ))}
+              )}
             </div>
+
+            {showCategoryManager ? (
+              <div className="bg-[#1a1a1a] rounded-2xl border border-white/5 p-3 mb-6 space-y-1">
+                {categoriasMostradas.map((cat) => (
+                  <div key={cat.id} className="flex items-center justify-between px-2 py-2 border-b border-white/5 last:border-b-0">
+                    <span className="text-xs font-bold text-white/80">{cat.label}</span>
+                    {!proteccion.includes(cat.id) && (
+                      <button
+                        type="button"
+                        onClick={() => (cat as any).custom ? categoriasApi.eliminar((cat as any).dbId) : categoriasApi.ocultar(cat.id, tipo)}
+                        className="text-white/30 hover:text-rose-400 cursor-pointer p-1"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-2">
+                  <input
+                    type="text"
+                    value={nuevaCategoriaInput}
+                    onChange={(e) => setNuevaCategoriaInput(e.target.value)}
+                    placeholder="Nueva categoría..."
+                    className="flex-1 bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-purple-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (nuevaCategoriaInput.trim()) {
+                        categoriasApi.agregar(nuevaCategoriaInput.trim(), tipo);
+                        setNuevaCategoriaInput("");
+                      }
+                    }}
+                    className="bg-purple-600 hover:bg-purple-500 text-white px-3 rounded-xl cursor-pointer"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 mb-6">
+                {categoriasMostradas.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setCategoria(cat.id);
+                      setDescripcion(cat.id === 'otro' || cat.id === 'abono_pote' ? '' : cat.label);
+                    }}
+                    className={`p-3 rounded-2xl border transition-colors flex flex-col items-center gap-2 cursor-pointer ${
+                      categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
+                    }`}
+                  >
+                    {cat.icon}
+                    <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* NOMBRE DE CATEGORÍA PERSONALIZADA (SOLO "OTRO") */}
+            {categoria === 'otro' && !showCategoryManager && (
+              <div className="mb-6">
+                <input
+                  type="text"
+                  placeholder="Nombre de tu categoría (Ej: Regalos)"
+                  value={customCategoria}
+                  onChange={(e) => setCustomCategoria(e.target.value)}
+                  className="w-full bg-[#1a1a1a] border border-white/5 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+            )}
 
             {/* SELECTOR DE POTE DESTINO - SOLO SI ELIGE ABONAR */}
             {categoria === 'abono_pote' && (
