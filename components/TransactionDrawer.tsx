@@ -3,6 +3,25 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { TrendingUp, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3, ChevronLeft, Plus, ArrowRight, Tag, Settings2, X } from "lucide-react";
+import { TASAS_DISPONIBLES, getValorTasa } from "@/components/Dashboard/tasasConfig";
+
+// Formatea un monto "crudo" (punto decimal, ej. "25000.5") al estilo venezolano mientras se escribe (ej. "25.000,5")
+const formatMontoDisplay = (raw: string) => {
+  if (!raw) return "";
+  const [intPart, decPart] = raw.split(".");
+  const intFormatted = new Intl.NumberFormat('es-VE').format(Number(intPart || "0"));
+  return decPart !== undefined ? `${intFormatted},${decPart}` : intFormatted;
+};
+
+// Convierte lo que el usuario ve/escribe (con puntos de miles y coma decimal) de vuelta al formato crudo con punto decimal
+const parseMontoInput = (display: string) => {
+  const cleaned = display.replace(/[^\d,]/g, '');
+  const [intPartRaw, ...decParts] = cleaned.split(',');
+  const intPart = intPartRaw.replace(/^0+(?=\d)/, '');
+  if (decParts.length === 0) return intPart;
+  const decPart = decParts.join('').slice(0, 2);
+  return `${intPart || '0'}.${decPart}`;
+};
 
 export function TransactionDrawer({
   children,
@@ -12,6 +31,7 @@ export function TransactionDrawer({
   categoriasApi,
   monto, setMonto,
   moneda, setMoneda,
+  activeRates, setActiveRates,
   descripcion, setDescripcion,
   rates,
   theme,
@@ -45,12 +65,13 @@ export function TransactionDrawer({
         setDescripcion("");
         setCategoria("");
         setCustomCategoria("");
+        setMoneda("bs");
         setShowCategoryManager(false);
       }, 300);
       return () => clearTimeout(timer);
     }
     return () => { document.body.style.overflow = ''; };
-  }, [isOpen, setMonto, setDescripcion, setCategoria, setCustomCategoria]);
+  }, [isOpen, setMonto, setDescripcion, setCategoria, setCustomCategoria, setMoneda]);
 
   const categories = {
     ingreso: [
@@ -81,6 +102,10 @@ export function TransactionDrawer({
       .map((c: any) => ({ id: c.valor, label: c.label, icon: <Tag size={18} />, custom: true, dbId: c.id }));
     return [...defaults, ...customs];
   }, [tipo, categoriasApi]);
+
+  const monedasForaneas = TASAS_DISPONIBLES.filter(t => t.kind === 'foreign_per_usd');
+  const monedasForaneasActivas = monedasForaneas.filter(t => (activeRates || []).includes(t.id));
+  const monedasForaneasInactivas = monedasForaneas.filter(t => !(activeRates || []).includes(t.id));
 
   const handleLocalSubmit = (e: any) => {
     e.preventDefault();
@@ -265,18 +290,32 @@ export function TransactionDrawer({
             <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 space-y-4 mb-6">
               <div>
                 <label className="text-[9px] uppercase font-black text-white/30 block mb-1 tracking-widest pointer-events-none">Monto</label>
-                <input 
-                  type="number" step="0.01" placeholder="0.00"
-                  value={monto} 
-                  onChange={(e) => setMonto(e.target.value)}
+                <input
+                  type="text" inputMode="decimal" placeholder="0,00"
+                  value={formatMontoDisplay(monto)}
+                  onChange={(e) => setMonto(parseMontoInput(e.target.value))}
                   className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums tracking-tight font-sans"
                 />
               </div>
-              
-              <div className="flex gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
-                <button type="button" onClick={() => setMoneda('usdt')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>USDT</button>
-                <button type="button" onClick={() => setMoneda('bs')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>BS</button>
-                <button type="button" onClick={() => setMoneda('cash')} className={`cursor-pointer flex-1 py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>CASH</button>
+
+              <div className="flex flex-wrap gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+                <button type="button" onClick={() => setMoneda('usdt')} className={`cursor-pointer flex-1 min-w-[64px] py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'usdt' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>USDT</button>
+                <button type="button" onClick={() => setMoneda('bs')} className={`cursor-pointer flex-1 min-w-[64px] py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'bs' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>BS</button>
+                <button type="button" onClick={() => setMoneda('cash')} className={`cursor-pointer flex-1 min-w-[64px] py-2 text-xs font-black rounded-lg transition-colors ${moneda === 'cash' ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>CASH</button>
+                {monedasForaneasActivas.map(t => (
+                  <button key={t.id} type="button" onClick={() => setMoneda(t.id)} className={`cursor-pointer flex-1 min-w-[64px] py-2 text-xs font-black rounded-lg transition-colors ${moneda === t.id ? 'bg-purple-600 text-white shadow-md' : 'text-white/40 hover:bg-white/10'}`}>{t.badge}</button>
+                ))}
+                {monedasForaneasInactivas.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => { setActiveRates?.((prev: string[]) => [...prev, t.id]); setMoneda(t.id); }}
+                    className="cursor-pointer flex-1 min-w-[64px] py-2 text-[10px] font-black rounded-lg border border-dashed border-white/15 text-white/30 hover:text-emerald-400 hover:border-emerald-500/40 transition-colors flex items-center justify-center gap-1"
+                    title="Agregar esta moneda"
+                  >
+                    <Plus size={10} /> {t.badge}
+                  </button>
+                ))}
               </div>
 
               {monto && rates.bcv > 0 && moneda !== 'cash' && (
@@ -293,19 +332,25 @@ export function TransactionDrawer({
                         <p className="text-white font-bold font-sans tracking-tight">${(parseFloat(monto) / rates.usdt).toFixed(2)}</p>
                       </div>
                     </>
-                  ) : (
-                    <>
-                      <div className="flex-1">
-                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
-                        <p className="text-white font-bold font-sans tracking-tight">Bs. {(parseFloat(monto) * rates.bcv).toFixed(2)}</p>
-                      </div>
-                      <div className="h-6 w-px bg-white/10"></div>
-                      <div className="flex-1">
-                        <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
-                        <p className="text-white font-bold font-sans tracking-tight">Bs. {(parseFloat(monto) * rates.usdt).toFixed(2)}</p>
-                      </div>
-                    </>
-                  )}
+                  ) : (() => {
+                    const monedaForanea = monedasForaneas.find(t => t.id === moneda);
+                    const usdEquiv = monedaForanea
+                      ? (getValorTasa(monedaForanea.id, rates) > 0 ? parseFloat(monto) / getValorTasa(monedaForanea.id, rates) : 0)
+                      : parseFloat(monto);
+                    return (
+                      <>
+                        <div className="flex-1">
+                          <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
+                          <p className="text-white font-bold font-sans tracking-tight">Bs. {(usdEquiv * rates.bcv).toFixed(2)}</p>
+                        </div>
+                        <div className="h-6 w-px bg-white/10"></div>
+                        <div className="flex-1">
+                          <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
+                          <p className="text-white font-bold font-sans tracking-tight">Bs. {(usdEquiv * rates.usdt).toFixed(2)}</p>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </div>

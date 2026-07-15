@@ -1370,7 +1370,7 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
   const [miniSimMonto, setMiniSimMonto] = useState("");
 
   const [monto, setMonto] = useState("");
-  const [moneda, setMoneda] = useState("usd");
+  const [moneda, setMoneda] = useState("bs");
   const [tipo, setTipo] = useState("egreso");
  const [categoria, setCategoria] = useState("comida");
   const [customCategoria, setCustomCategoria] = useState("");
@@ -1719,7 +1719,15 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
     } else if (monedaInput === 'usdt' || monedaInput === 'usd') {
       monto_usd_paralelo = montoInput; monto_usd_bcv = montoInput; monto_bs = montoInput * rates.usdt;
     } else if (monedaInput === 'cash') {
-      monto_usd_paralelo = montoInput; monto_usd_bcv = montoInput; monto_bs = montoInput * rates.bcv; 
+      monto_usd_paralelo = montoInput; monto_usd_bcv = montoInput; monto_bs = montoInput * rates.bcv;
+    } else {
+      // Monedas extranjeras "editables" (ej. Peso Colombiano, Peso Mexicano) definidas en tasasConfig.ts
+      const tasaForanea = TASAS_DISPONIBLES.find(t => t.id === monedaInput && t.kind === 'foreign_per_usd');
+      if (tasaForanea) {
+        const tasaValor = getValorTasa(tasaForanea.id, rates);
+        const usdEquiv = tasaValor > 0 ? montoInput / tasaValor : 0;
+        monto_usd_paralelo = usdEquiv; monto_usd_bcv = usdEquiv; monto_bs = usdEquiv * rates.usdt;
+      }
     }
     return { monto_bs, monto_usd_bcv, monto_usd_paralelo };
   };
@@ -2340,6 +2348,7 @@ const handleManualSubmit = async (e: React.FormEvent) => {
 
   const getSaldosAislados = (userName?: string, incluirMetas: boolean = false) => {
     let bs = 0, usdt = 0, cash = 0;
+    const extra: Record<string, number> = {};
     transactions.forEach(tx => {
       // Si NO incluimos metas y la transacción es de una meta, la ignoramos
       if (!incluirMetas && (tx.categoria.startsWith("pote_") || tx.categoria === 'emergencia')) return; 
@@ -2362,10 +2371,11 @@ const handleManualSubmit = async (e: React.FormEvent) => {
 
         if (monedaEstricta === 'bs') bs += valorReal;
         else if (monedaEstricta === 'cash') cash += valorReal;
-        else usdt += valorReal;
+        else if (monedaEstricta === 'usdt' || monedaEstricta === 'usd') usdt += valorReal;
+        else extra[monedaEstricta] = (extra[monedaEstricta] || 0) + valorReal;
       }
     });
-    return { bs, usdt, cash };
+    return { bs, usdt, cash, extra };
   };
 
 const getPatrimonioNeto = () => {
@@ -2390,9 +2400,14 @@ const getPatrimonioNeto = () => {
         // Si ya son bolívares, los sumamos directo
         totalEnBolivaresVirtuales += (montoOriginal * signo);
       } else {
-        // SI SON DÓLARES (USDT/CASH), los llevamos a Bs. usando la tasa PARALELO 
-        // para saber cuánta "plata real" representan en la calle.
-        totalEnBolivaresVirtuales += (montoOriginal * signo * rates.usdt);
+        // Monedas extranjeras "editables" (ej. Peso Colombiano/Mexicano): primero a USD con su propia tasa
+        const tasaForanea = TASAS_DISPONIBLES.find(t => t.id === moneda && t.kind === 'foreign_per_usd');
+        const montoEnUsd = tasaForanea
+          ? (getValorTasa(tasaForanea.id, rates) > 0 ? montoOriginal / getValorTasa(tasaForanea.id, rates) : 0)
+          : montoOriginal; // USDT/CASH ya están en USD 1:1
+
+        // Y de ahí a Bs. usando la tasa PARALELO para saber cuánta "plata real" representan en la calle.
+        totalEnBolivaresVirtuales += (montoEnUsd * signo * rates.usdt);
       }
     });
 
@@ -3001,8 +3016,46 @@ const getPatrimonioNeto = () => {
                         </p>
                       </div>
 
+                      {/* Filas de saldo real en monedas extranjeras editables (ej. Peso Colombiano, Peso Mexicano) */}
+                      {TASAS_DISPONIBLES.filter(t => t.kind === 'foreign_per_usd' && activeRates.includes(t.id)).map(t => {
+                        const saldoForaneo = saldoPrincipal.extra?.[t.id] || 0;
+                        const tasaValor = getValorTasa(t.id, rates);
+                        const usdEquiv = tasaValor > 0 ? saldoForaneo / tasaValor : 0;
+                        return (
+                          <div key={t.id} className={`bg-[#1C1C1E] p-4 md:p-5 rounded-[1.25rem] flex justify-between items-center border ${t.classes.border} transition-colors`}>
+                            <div className="flex items-center gap-4">
+                              <div className={`w-10 h-10 rounded-full ${t.classes.badgeBg} flex items-center justify-center border ${t.classes.border}`}>
+                                <Globe className={`${t.classes.text} w-5 h-5`} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-white">{t.label}</p>
+                                <p className="text-[9px] text-white/40 uppercase tracking-widest mt-0.5">EFECTIVO / SALDO</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <p className="text-xl font-black text-white font-sans tabular-nums tracking-tight">
+                                  {saldoForaneo.toLocaleString(t.locale, { maximumFractionDigits: 0 })}
+                                </p>
+                                <p className={`text-[10px] ${t.classes.text} font-bold mt-0.5`}>
+                                  Eqv: $<AnimatedNum value={usdEquiv} format="usd" />
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setActiveRates(prev => prev.filter(id => id !== t.id))}
+                                className="text-white/20 hover:text-rose-400 transition-colors"
+                                title="Quitar moneda"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+
                       {/* Filas extra: monedas de referencia elegidas por el usuario (solo vista, no son saldos reales) */}
-                      {TASAS_DISPONIBLES.filter(t => t.id !== 'bcv' && t.id !== 'usdt' && activeRates.includes(t.id)).map(t => {
+                      {TASAS_DISPONIBLES.filter(t => t.id !== 'bcv' && t.id !== 'usdt' && t.kind !== 'foreign_per_usd' && activeRates.includes(t.id)).map(t => {
                         const valorConvertido = calcularResultadoTasa(t, 'usd', patrimonioTotal.paralelo, rates);
                         return (
                           <div key={t.id} className={`bg-[#1C1C1E] p-4 md:p-5 rounded-[1.25rem] flex justify-between items-center border ${t.classes.border} transition-colors`}>
@@ -3971,6 +4024,7 @@ const getPatrimonioNeto = () => {
             tipo={tipo} setTipo={setTipo} categoria={categoria} setCategoria={setCategoria}
             customCategoria={customCategoria} setCustomCategoria={setCustomCategoria} categoriasApi={categoriasApi}
             monto={monto} setMonto={setMonto} moneda={moneda} setMoneda={setMoneda}
+            activeRates={activeRates} setActiveRates={setActiveRates}
             descripcion={descripcion} setDescripcion={setDescripcion} rates={rates} theme={theme} onSubmit={handleManualSubmit}
             espacios={espacios} espacioActivo={espacioActivo} potes={potes}
             participantes={participantes} usuario={usuario} setUsuario={setUsuario}
