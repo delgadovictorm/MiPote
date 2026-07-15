@@ -13,15 +13,18 @@ const formatMontoDisplay = (raw: string) => {
   return decPart !== undefined ? `${intFormatted},${decPart}` : intFormatted;
 };
 
-// Convierte lo que el usuario ve/escribe (con puntos de miles y coma decimal) de vuelta al formato crudo con punto decimal
-const parseMontoInput = (display: string) => {
-  const cleaned = display.replace(/[^\d,]/g, '');
-  const [intPartRaw, ...decParts] = cleaned.split(',');
+// Fallback para pegar texto (Ctrl+V): acepta tanto "." como "," como separador decimal
+const parseMontoPegado = (texto: string) => {
+  const cleaned = texto.replace(/[^\d.,]/g, '').replace(',', '.');
+  const [intPartRaw, ...decParts] = cleaned.split('.');
   const intPart = intPartRaw.replace(/^0+(?=\d)/, '');
   if (decParts.length === 0) return intPart;
   const decPart = decParts.join('').slice(0, 2);
   return `${intPart || '0'}.${decPart}`;
 };
+
+// Formatea un número (BCV/Paralelo, etc.) al estilo venezolano: puntos de miles + coma decimal
+const formatBs = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function TransactionDrawer({
   children,
@@ -106,6 +109,42 @@ export function TransactionDrawer({
   const monedasForaneas = TASAS_DISPONIBLES.filter(t => t.kind === 'foreign_per_usd');
   const monedasForaneasActivas = monedasForaneas.filter(t => (activeRates || []).includes(t.id));
   const monedasForaneasInactivas = monedasForaneas.filter(t => !(activeRates || []).includes(t.id));
+
+  // Maneja el monto tecla por tecla (en vez de reinterpretar el texto formateado) para no depender
+  // de si el teclado numérico del teléfono manda "." o "," como separador decimal — ambos funcionan igual.
+  const handleMontoKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const key = e.key;
+
+    if (key >= '0' && key <= '9') {
+      e.preventDefault();
+      if (monto.includes('.')) {
+        const decLen = monto.split('.')[1].length;
+        if (decLen >= 2) return;
+        setMonto(monto + key);
+      } else {
+        setMonto(monto === '0' ? key : monto + key);
+      }
+      return;
+    }
+
+    if (key === '.' || key === ',') {
+      e.preventDefault();
+      if (monto.includes('.')) return;
+      setMonto((monto || '0') + '.');
+      return;
+    }
+
+    if (key === 'Backspace') {
+      e.preventDefault();
+      setMonto(monto.slice(0, -1));
+      return;
+    }
+
+    const teclasPermitidas = ['Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Delete', 'Home', 'End'];
+    if (!teclasPermitidas.includes(key) && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+    }
+  };
 
   const handleLocalSubmit = (e: any) => {
     e.preventDefault();
@@ -293,7 +332,9 @@ export function TransactionDrawer({
                 <input
                   type="text" inputMode="decimal" placeholder="0,00"
                   value={formatMontoDisplay(monto)}
-                  onChange={(e) => setMonto(parseMontoInput(e.target.value))}
+                  onKeyDown={handleMontoKeyDown}
+                  onChange={(e) => setMonto(parseMontoPegado(e.target.value))}
+                  onPaste={(e) => { e.preventDefault(); setMonto(parseMontoPegado(e.clipboardData.getData('text'))); }}
                   className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums tracking-tight font-sans"
                 />
               </div>
@@ -324,12 +365,12 @@ export function TransactionDrawer({
                     <>
                       <div className="flex-1">
                         <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
-                        <p className="text-white font-bold font-sans tracking-tight">${(parseFloat(monto) / rates.bcv).toFixed(2)}</p>
+                        <p className="text-white font-bold font-sans tracking-tight">${formatBs(parseFloat(monto) / rates.bcv)}</p>
                       </div>
                       <div className="h-6 w-px bg-white/10"></div>
                       <div className="flex-1">
                         <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
-                        <p className="text-white font-bold font-sans tracking-tight">${(parseFloat(monto) / rates.usdt).toFixed(2)}</p>
+                        <p className="text-white font-bold font-sans tracking-tight">${formatBs(parseFloat(monto) / rates.usdt)}</p>
                       </div>
                     </>
                   ) : (() => {
@@ -341,12 +382,12 @@ export function TransactionDrawer({
                       <>
                         <div className="flex-1">
                           <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">BCV</p>
-                          <p className="text-white font-bold font-sans tracking-tight">Bs. {(usdEquiv * rates.bcv).toFixed(2)}</p>
+                          <p className="text-white font-bold font-sans tracking-tight">Bs. {formatBs(usdEquiv * rates.bcv)}</p>
                         </div>
                         <div className="h-6 w-px bg-white/10"></div>
                         <div className="flex-1">
                           <p className="text-[9px] uppercase text-purple-400 font-bold mb-0.5">Paralelo</p>
-                          <p className="text-white font-bold font-sans tracking-tight">Bs. {(usdEquiv * rates.usdt).toFixed(2)}</p>
+                          <p className="text-white font-bold font-sans tracking-tight">Bs. {formatBs(usdEquiv * rates.usdt)}</p>
                         </div>
                       </>
                     );
