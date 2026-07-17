@@ -32,8 +32,8 @@ const PASOS = [
     icon: Eye,
     color: "text-purple-400",
     bg: "bg-purple-500/10",
-    titulo: "Tu Patrimonio Neto",
-    texto: "Toca el monto para ver el desglose por cuenta (dólares, bolívares, efectivo).",
+    titulo: "Tu Churupito",
+    texto: "Es lo que tienes disponible para gastar ahora mismo. Toca el monto para ver el desglose por cuenta (dólares, bolívares, efectivo).",
   },
   {
     selector: '[data-tutorial="ojito"]',

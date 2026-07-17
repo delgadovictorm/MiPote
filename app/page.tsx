@@ -44,12 +44,23 @@ export default function LandingPage() {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        router.push('/dashboard');
+        // replace (no push): así "/" no queda como destino de "atrás" para una sesión logueada
+        router.replace('/dashboard');
       } else {
         setIsLoading(false);
       }
     };
     checkSession();
+
+    // Si el usuario logueado cae aquí por un swipe-back (gesto nativo de "atrás"),
+    // el navegador puede restaurar esta página desde el bfcache sin volver a montarla.
+    // Revisamos la sesión de nuevo y lo mandamos derechito al dashboard: el landing
+    // solo debe verse después de cerrar sesión.
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) checkSession();
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
   }, [isMounted, router]);
 
   // Carrusel para Mensajes y Verbos

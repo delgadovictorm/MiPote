@@ -47,6 +47,28 @@ export function MercadoSession({
   const [isScanningItem, setIsScanningItem] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Deslizar el dedo hacia abajo (cuando el contenido ya está arriba del todo) cierra el módulo,
+  // igual que tocar el botón de volver — sin pelearse con el scroll normal de la lista.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  const intentarCerrar = () => {
+    if (fase === "activa" && items.length > 0 && !confirm("¿Salir sin cerrar el mercado? La sesión sigue activa y puedes volver luego.")) return;
+    onClose();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (scrollRef.current && scrollRef.current.scrollTop > 0) { touchStartY.current = null; return; }
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartY.current === null) return;
+    const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartY.current = null;
+    if (deltaY > 80) intentarCerrar();
+  };
+
   useEffect(() => {
     let activo = true;
     (async () => {
@@ -245,16 +267,17 @@ export function MercadoSession({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[99999] bg-[#0d0714] w-full h-[100dvh] flex flex-col animate-in slide-in-from-bottom-8 fade-in duration-200">
+    <div
+      className="fixed inset-0 z-[99999] bg-[#0d0714] w-full h-[100dvh] flex flex-col animate-in slide-in-from-bottom-8 fade-in duration-200"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* HEADER */}
       <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#121212] shrink-0 shadow-md z-20">
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => {
-              if (fase === "activa" && items.length > 0 && !confirm("¿Salir sin cerrar el mercado? La sesión sigue activa y puedes volver luego.")) return;
-              onClose();
-            }}
+            onClick={intentarCerrar}
             className="p-2 bg-white/5 rounded-full text-white/70 hover:text-white hover:bg-rose-500 transition-colors"
           >
             <ChevronLeft size={24} />
@@ -265,7 +288,7 @@ export function MercadoSession({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32 bg-[#0d0714] overscroll-contain">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 pb-32 bg-[#0d0714] overscroll-contain">
         {fase === "cargando" && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className={`w-8 h-8 animate-spin ${theme.text}`} />

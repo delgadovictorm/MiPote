@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { ArrowLeft, Calculator, Camera, Loader2, Plus, X } from 'lucide-react';
 import { TASAS_DISPONIBLES, calcularResultadoTasa, getValorTasa, type MonedaOrigen } from './tasasConfig';
 
-export function CalculadoraTab({ rates, activeRates, setActiveRates, theme, triggerToast, onBack, puedeEscanear, registrarEscaneo, onTriggerPaywall }: any) {
+export function CalculadoraTab({ rates, activeRates, setActiveRates, theme, triggerToast, onBack, puedeEscanear, registrarEscaneo, onTriggerPaywall, onRegistrarGasto }: any) {
   const [inputValue, setInputValue] = useState("");
   const [monedaOrigen, setMonedaOrigen] = useState<MonedaOrigen>('usd');
   const [isScanning, setIsScanning] = useState(false);
@@ -157,6 +157,15 @@ export function CalculadoraTab({ rates, activeRates, setActiveRates, theme, trig
           />
         </div>
       </div>
+
+      {numValue > 0 && onRegistrarGasto && (
+        <button
+          onClick={() => onRegistrarGasto(numValue, monedaOrigen)}
+          className={`w-full mb-4 ${theme.primary} text-white font-black text-xs uppercase tracking-widest py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform`}
+        >
+          <Plus className="w-4 h-4" /> Registrar este gasto
+        </button>
+      )}
 
       {/* Cajas de Conversión Simultánea */}
       <div className="space-y-3">
