@@ -80,7 +80,7 @@ export default function MiPoteAdmin() {
     setCargandoData(true);
     const { data, error } = await supabase
       .from('perfiles')
-      .select('id, email, estado_pago, is_pro, vence_el, created_at')
+      .select('id, email, telefono, estado_pago, is_pro, es_prueba, vence_el, created_at')
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -100,14 +100,27 @@ export default function MiPoteAdmin() {
 
   const aprobarSuscripcion = async (id: string) => {
     if (!confirm("¿Confirmas que el pago es válido? Se activarán 30 días PRO.")) return;
-    const v = new Date(); 
+    const v = new Date();
     v.setDate(v.getDate() + 30);
-    
+
     const { error } = await supabase
       .from('perfiles')
-      .update({ is_pro: true, estado_pago: 'pro', vence_el: v.toISOString() })
+      .update({ is_pro: true, estado_pago: 'pro', es_prueba: false, vence_el: v.toISOString() })
       .eq('id', id);
-      
+
+    if (!error) traerTodo();
+  };
+
+  const activarPrueba = async (id: string) => {
+    if (!confirm("¿Activar 30 días PRO de cortesía (prueba)? No se contará como ingreso.")) return;
+    const v = new Date();
+    v.setDate(v.getDate() + 30);
+
+    const { error } = await supabase
+      .from('perfiles')
+      .update({ is_pro: true, estado_pago: 'pro', es_prueba: true, vence_el: v.toISOString() })
+      .eq('id', id);
+
     if (!error) traerTodo();
   };
 
@@ -115,21 +128,50 @@ export default function MiPoteAdmin() {
     if (!confirm("¿Anular acceso PRO y pasar a inactivo?")) return;
     const { error } = await supabase
       .from('perfiles')
-      .update({ is_pro: false, estado_pago: 'gratis', vence_el: null })
+      .update({ is_pro: false, estado_pago: 'gratis', es_prueba: false, vence_el: null })
       .eq('id', id);
-      
+
     if (!error) traerTodo();
   };
 
-  const contactarWhatsApp = (emailUser: string, orden: string) => {
-    const mensaje = encodeURIComponent(`¡Hola! Te escribo de *MiPote.ve* 🍯\nReferente a tu cuenta (${emailUser}) - Orden #${orden}.\n\n`);
-    window.open(`https://wa.me/?text=${mensaje}`, '_blank');
+  // Convierte un teléfono venezolano local (04121234567) al formato internacional que espera wa.me (584121234567)
+  const formatearTelefonoWa = (telefono?: string) => {
+    if (!telefono) return null;
+    const digitos = telefono.replace(/\D/g, '');
+    if (!digitos) return null;
+    if (digitos.startsWith('58')) return digitos;
+    if (digitos.startsWith('0')) return `58${digitos.slice(1)}`;
+    return `58${digitos}`;
+  };
+
+  const contactarWhatsApp = (u: any) => {
+    const dias = u.vence_el ? Math.ceil((new Date(u.vence_el).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
+    const estaVencido = dias < 0;
+
+    let mensaje = `¡Hola! Te escribo de *MiPote.ve* 🍯\nReferente a tu cuenta (${u.email || 'Cliente'}) - Orden #${u.ordenNumero}.\n\n`;
+    if (u.estado_pago === 'pendiente') {
+      mensaje += "Estamos verificando tu pago, en breve activamos tu acceso PRO. ¡Gracias por tu paciencia! 🙏";
+    } else if (u.is_pro && !estaVencido && u.es_prueba) {
+      mensaje += `¡Ya activamos tu *prueba gratuita PRO*! Tienes acceso hasta el ${new Date(u.vence_el).toLocaleDateString()}. Cualquier duda, aquí estamos. 🚀`;
+    } else if (u.is_pro && !estaVencido) {
+      mensaje += `¡Tu suscripción *PRO ya está activa*! ✅ Vence el ${new Date(u.vence_el).toLocaleDateString()}. ¡Gracias por confiar en nosotros! 🎉`;
+    } else {
+      mensaje += "Notamos que tu acceso PRO no está activo. Si ya realizaste el pago cuéntanos para verificarlo. 😊";
+    }
+
+    const numero = formatearTelefonoWa(u.telefono);
+    const url = numero
+      ? `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`
+      : `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+    window.open(url, '_blank');
   };
 
   const kpis = useMemo(() => {
     return {
       total: usuarios.length,
       pros: usuarios.filter(u => u.is_pro).length,
+      pruebas: usuarios.filter(u => u.is_pro && u.es_prueba).length,
+      pagantes: usuarios.filter(u => u.is_pro && !u.es_prueba).length,
       pendientes: usuarios.filter(u => u.estado_pago === 'pendiente').length,
     };
   }, [usuarios]);
@@ -141,7 +183,8 @@ export default function MiPoteAdmin() {
       const matchFiltro = 
         filtroSuscripciones === "Todas" ? true :
         filtroSuscripciones === "Pendientes" ? u.estado_pago === 'pendiente' :
-        filtroSuscripciones === "Activas" ? u.is_pro === true :
+        filtroSuscripciones === "Activas" ? u.is_pro === true && u.es_prueba !== true :
+        filtroSuscripciones === "Prueba" ? u.is_pro === true && u.es_prueba === true :
         filtroSuscripciones === "Inactivas" ? u.is_pro === false && u.estado_pago !== 'pendiente' : true;
       
       return matchBusqueda && matchFiltro;
@@ -244,7 +287,10 @@ export default function MiPoteAdmin() {
             </div>
             <div className="bg-[#0f172a] border border-emerald-500/20 rounded-[24px] md:rounded-[30px] p-6 md:p-8 shadow-2xl sm:col-span-2 md:col-span-1">
               <p className="text-emerald-400 font-black text-[10px] uppercase mb-2">Ingresos Activos</p>
-              <p className="text-3xl md:text-4xl font-black text-emerald-400">${(kpis.pros * 2).toFixed(2)}</p>
+              <p className="text-3xl md:text-4xl font-black text-emerald-400">${(kpis.pagantes * 2).toFixed(2)}</p>
+              {kpis.pruebas > 0 && (
+                <p className="text-white/30 text-[9px] font-bold uppercase mt-2">+{kpis.pruebas} en prueba gratis (no cuentan)</p>
+              )}
             </div>
           </div>
         )}
@@ -263,7 +309,7 @@ export default function MiPoteAdmin() {
                   />
                </div>
                <div className="flex gap-2 bg-[#1a0f2e] border border-white/5 p-2 rounded-xl md:rounded-2xl overflow-x-auto scrollbar-hide">
-                  {['Pendientes', 'Activas', 'Inactivas', 'Todas'].map(f => (
+                  {['Pendientes', 'Activas', 'Prueba', 'Inactivas', 'Todas'].map(f => (
                      <button 
                        key={f} 
                        onClick={() => setFiltroSuscripciones(f)} 
@@ -305,17 +351,18 @@ export default function MiPoteAdmin() {
                              <td className="p-4 md:p-5">
                                 <span className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-[8px] md:text-[9px] uppercase italic font-black border ${
                                   u.estado_pago === 'pendiente' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse' :
+                                  u.is_pro && !estaVencido && u.es_prueba ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
                                   u.is_pro && !estaVencido ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
                                   'bg-rose-500/10 text-rose-500 border-rose-500/20'
                                 }`}>
-                                   {u.estado_pago === 'pendiente' ? 'Verificando' : u.is_pro && !estaVencido ? 'Activo' : 'Inactivo'}
+                                   {u.estado_pago === 'pendiente' ? 'Verificando' : u.is_pro && !estaVencido && u.es_prueba ? 'Prueba' : u.is_pro && !estaVencido ? 'Activo' : 'Inactivo'}
                                 </span>
                              </td>
                              <td className="p-4 md:p-5">
                                 {u.vence_el ? (
                                   <div className="flex flex-col">
                                     <span className="text-white/70 font-mono text-[10px] md:text-xs">
-                                      <Clock className="inline mb-0.5 mr-1" size={10}/>{new Date(u.vence_el).toLocaleDateString()} 
+                                      <Clock className="inline mb-0.5 mr-1" size={10}/>{new Date(u.vence_el).toLocaleDateString()}
                                     </span>
                                     <span className={`text-[8px] md:text-[9px] font-black uppercase mt-1 ${estaVencido ? 'text-rose-500' : 'text-purple-400'}`}>
                                       {estaVencido ? 'Vencido' : `Quedan ${dias} días`}
@@ -327,24 +374,32 @@ export default function MiPoteAdmin() {
                              </td>
                              <td className="p-4 md:p-5">
                                 <div className="flex justify-center gap-2">
-                                   <button 
-                                     onClick={() => contactarWhatsApp(u.email || 'Cliente', u.ordenNumero)}
+                                   <button
+                                     onClick={() => contactarWhatsApp(u)}
                                      title="Avisar por WhatsApp"
                                      className="bg-[#25D366]/20 hover:bg-[#25D366] text-[#25D366] hover:text-white p-2 rounded-lg md:rounded-xl transition-all"
                                    >
                                      <MessageCircle size={14} />
                                    </button>
-                                   
-                                   <button 
-                                     onClick={() => aprobarSuscripcion(u.id)} 
+
+                                   <button
+                                     onClick={() => aprobarSuscripcion(u.id)}
                                      className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl text-[8px] md:text-[9px] font-black uppercase shadow-lg transition-all whitespace-nowrap"
                                    >
-                                      {u.is_pro ? 'Extender' : 'Aprobar ✅'}
+                                      {u.is_pro && !u.es_prueba ? 'Extender' : 'Aprobar ✅'}
                                    </button>
-                                   
+
+                                   <button
+                                     onClick={() => activarPrueba(u.id)}
+                                     title="Dar acceso PRO de prueba (no cuenta como ingreso)"
+                                     className="bg-sky-500/10 hover:bg-sky-500 text-sky-400 hover:text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl text-[8px] md:text-[9px] font-black uppercase transition-all whitespace-nowrap"
+                                   >
+                                      Prueba 🧪
+                                   </button>
+
                                    {u.is_pro && (
-                                     <button 
-                                       onClick={() => anularSuscripcion(u.id)} 
+                                     <button
+                                       onClick={() => anularSuscripcion(u.id)}
                                        className="bg-rose-500/10 hover:bg-rose-600 text-rose-500 hover:text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl text-[8px] md:text-[9px] font-black uppercase transition-all whitespace-nowrap"
                                      >
                                         Quitar
@@ -370,7 +425,7 @@ export default function MiPoteAdmin() {
                   const dias = u.vence_el ? Math.ceil((new Date(u.vence_el).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
                   const estaVencido = dias < 0;
                   const tieneEmail = u.email && u.email.trim() !== "";
-                  const estatus = u.estado_pago === 'pendiente' ? 'pendiente' : u.is_pro && !estaVencido ? 'activo' : 'inactivo';
+                  const estatus = u.estado_pago === 'pendiente' ? 'pendiente' : u.is_pro && !estaVencido && u.es_prueba ? 'prueba' : u.is_pro && !estaVencido ? 'activo' : 'inactivo';
 
                   return (
                      <button
@@ -380,10 +435,11 @@ export default function MiPoteAdmin() {
                      >
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
                           estatus === 'pendiente' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                          estatus === 'prueba' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
                           estatus === 'activo' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
                           'bg-rose-500/10 text-rose-500 border-rose-500/20'
                         }`}>
-                           {estatus === 'pendiente' ? <Clock size={18}/> : estatus === 'activo' ? <Crown size={18}/> : <XCircle size={18}/>}
+                           {estatus === 'pendiente' ? <Clock size={18}/> : estatus === 'prueba' || estatus === 'activo' ? <Crown size={18}/> : <XCircle size={18}/>}
                         </div>
                         <div className="min-w-0 flex-1">
                            <p className="text-white text-sm font-bold truncate">
@@ -439,8 +495,8 @@ export default function MiPoteAdmin() {
                                 <p className="text-white/20 text-[8px] md:text-[9px] font-mono mt-1 break-all max-w-[200px]">ID: {u.id}</p>
                              </td>
                              <td className="p-4 md:p-5">
-                                <span className={`px-2 py-1 md:px-3 md:py-1 rounded-md md:rounded-lg text-[8px] md:text-[9px] uppercase font-black ${u.is_pro ? 'bg-purple-600 text-white' : 'bg-white/5 text-white/30'}`}>
-                                  {u.is_pro ? '💎 PRO' : 'GUEST'}
+                                <span className={`px-2 py-1 md:px-3 md:py-1 rounded-md md:rounded-lg text-[8px] md:text-[9px] uppercase font-black ${u.is_pro && u.es_prueba ? 'bg-sky-500 text-white' : u.is_pro ? 'bg-purple-600 text-white' : 'bg-white/5 text-white/30'}`}>
+                                  {u.is_pro && u.es_prueba ? '🧪 PRUEBA' : u.is_pro ? '💎 PRO' : 'GUEST'}
                                 </span>
                              </td>
                              <td className="p-4 md:p-5 text-[10px] md:text-xs font-mono text-white/50">
@@ -470,7 +526,7 @@ export default function MiPoteAdmin() {
         const dias = u.vence_el ? Math.ceil((new Date(u.vence_el).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
         const estaVencido = dias < 0;
         const tieneEmail = u.email && u.email.trim() !== "";
-        const estatus = u.estado_pago === 'pendiente' ? 'pendiente' : u.is_pro && !estaVencido ? 'activo' : 'inactivo';
+        const estatus = u.estado_pago === 'pendiente' ? 'pendiente' : u.is_pro && !estaVencido && u.es_prueba ? 'prueba' : u.is_pro && !estaVencido ? 'activo' : 'inactivo';
 
         return (
           <div
@@ -486,10 +542,11 @@ export default function MiPoteAdmin() {
               <div className="flex items-start justify-between mb-6">
                 <span className={`px-3 py-1.5 rounded-lg text-[9px] uppercase italic font-black border ${
                   estatus === 'pendiente' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse' :
+                  estatus === 'prueba' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
                   estatus === 'activo' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
                   'bg-rose-500/10 text-rose-500 border-rose-500/20'
                 }`}>
-                  {estatus === 'pendiente' ? 'Verificando' : estatus === 'activo' ? 'Activo' : 'Inactivo'}
+                  {estatus === 'pendiente' ? 'Verificando' : estatus === 'prueba' ? 'Prueba' : estatus === 'activo' ? 'Activo' : 'Inactivo'}
                 </span>
                 <button onClick={() => setDetalleUsuario(null)} className="text-white/40 hover:text-white p-1"><X size={20}/></button>
               </div>
@@ -524,7 +581,7 @@ export default function MiPoteAdmin() {
 
               <div className="space-y-2">
                 <button
-                  onClick={() => contactarWhatsApp(u.email || 'Cliente', u.ordenNumero)}
+                  onClick={() => contactarWhatsApp(u)}
                   className="w-full flex items-center justify-center gap-2 bg-[#25D366]/15 hover:bg-[#25D366] text-[#25D366] hover:text-white py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
                 >
                   <MessageCircle size={16}/> Avisar por WhatsApp
@@ -534,7 +591,14 @@ export default function MiPoteAdmin() {
                   onClick={() => { aprobarSuscripcion(u.id); setDetalleUsuario(null); }}
                   className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg transition-all"
                 >
-                  {u.is_pro ? 'Extender 30 días' : 'Aprobar acceso ✅'}
+                  {u.is_pro && !u.es_prueba ? 'Extender 30 días' : 'Aprobar acceso ✅'}
+                </button>
+
+                <button
+                  onClick={() => { activarPrueba(u.id); setDetalleUsuario(null); }}
+                  className="w-full bg-sky-500/10 hover:bg-sky-500 text-sky-400 hover:text-white py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+                >
+                  Dar prueba gratis 🧪
                 </button>
 
                 {u.is_pro && (

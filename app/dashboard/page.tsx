@@ -3902,18 +3902,14 @@ const getPatrimonioNeto = () => {
               <div className="pt-4 border-t border-white/5 space-y-3 mt-4">
                 <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-3 text-center">Crear o Unirse</p>
                 <div className="grid grid-cols-2 gap-2">
-                {/* BOTÓN CREAR POTE (PRO) */}
+                {/* BOTÓN CREAR POTE (GRATIS) */}
                 <button
                   onClick={() => {
                     setIsSpacesMenuOpen(false);
-                    if (!perfil?.is_pro) { setTimeout(() => onTriggerPaywall?.(), 300); return; }
                     onSelectModule('pote', 'NEW');
                   }}
                   className="relative flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/10 font-bold text-xs transition-colors active:scale-95"
                 >
-                  {!perfil?.is_pro && (
-                    <span className="absolute top-2 right-2 bg-amber-500 text-black text-[8px] font-black px-1.5 py-0.5 rounded">PRO</span>
-                  )}
                   <div className="bg-fuchsia-500/20 p-2 rounded-full">
                     <Plus className="w-5 h-5"/>
                   </div>
