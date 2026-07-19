@@ -175,18 +175,19 @@ export function CalculadoraTab({ rates, activeRates, setActiveRates, theme, trig
           const resultado = calcularResultadoTasa(def, monedaOrigen, numValue, rates);
           const referencia = getValorTasa(def.id, rates);
           const nativo: 'usd' | 'eur' = def.kind === 'bs_per_eur' ? 'eur' : 'usd';
+          // Para BCV/Paralelo/Euro: el origen "bs" da como resultado la divisa nativa de la tarjeta;
+          // cualquier otro origen (usd o eur) se cotiza directo a Bs con la tasa propia de la tarjeta
+          // (sin puentear USD<->EUR entre sí, por eso ya no depende de si "nativo" coincide con el origen).
           const prefijo = def.kind === 'foreign_per_usd'
             ? `${def.badge} `
-            : (monedaOrigen === nativo ? 'Bs. ' : (nativo === 'eur' ? '€ ' : '$ '));
+            : (monedaOrigen === 'bs' ? (nativo === 'eur' ? '€ ' : '$ ') : 'Bs. ');
 
-          // Equivalente en Bs. para cuando el resultado principal ya no está en Bs
-          // (moneda extranjera siempre lo muestra; Euro/Paralelo solo si el resultado no es Bs ni el propio input en Bs)
-          const mostrarEquivalenteBs = def.kind === 'foreign_per_usd'
-            ? true
-            : (prefijo !== 'Bs. ' && monedaOrigen !== 'bs');
+          // Equivalente en Bs. solo hace falta para las monedas extranjeras (COP/MXN), que siempre
+          // muestran su valor propio arriba y el ancla en Bs abajo como referencia.
+          const mostrarEquivalenteBs = def.kind === 'foreign_per_usd';
           const equivalenteBs = def.kind === 'foreign_per_usd'
             ? (referencia > 0 ? (resultado / referencia) * rates.bcv : 0)
-            : numValue * referencia; // el monto ingresado cotizado directo a la tasa propia de esta tarjeta
+            : 0;
 
           return (
             <div key={id} className={`bg-[#121212] border ${def.classes.border} p-5 rounded-2xl flex justify-between items-center relative overflow-hidden group`}>

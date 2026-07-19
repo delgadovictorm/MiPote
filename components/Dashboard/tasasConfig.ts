@@ -89,7 +89,6 @@ export type MonedaOrigen = 'usd' | 'bs' | 'eur';
 // Calcula el resultado de convertir `numValue` (en la moneda `monedaOrigen`) usando la tasa `def`.
 export function calcularResultadoTasa(def: TasaDef, monedaOrigen: MonedaOrigen, numValue: number, rates: any): number {
   const rateValor = getValorTasa(def.id, rates);
-  const nativo: 'usd' | 'eur' = def.kind === 'bs_per_eur' ? 'eur' : 'usd';
 
   if (def.kind === 'foreign_per_usd') {
     if (monedaOrigen === 'usd') return numValue * rateValor;
@@ -99,13 +98,12 @@ export function calcularResultadoTasa(def: TasaDef, monedaOrigen: MonedaOrigen, 
   }
 
   // bs_per_usd o bs_per_eur
-  if (monedaOrigen === nativo) {
-    return numValue * rateValor; // resultado en Bs
-  }
   if (monedaOrigen === 'bs') {
     return rateValor > 0 ? numValue / rateValor : 0; // resultado en la divisa nativa de esta tasa (usd o eur)
   }
-  // origen es la otra divisa: puenteamos a Bs primero (siempre con la tasa BCV correspondiente)
-  const montoBsAncla = monedaOrigen === 'eur' ? numValue * rates.eur_bcv : numValue * rates.bcv;
-  return rateValor > 0 ? montoBsAncla / rateValor : 0;
+  // El origen es una divisa extranjera (usd o eur, coincida o no con la nativa de esta tarjeta):
+  // tomamos el monto tal cual y lo cotizamos directo con la tasa propia de la tarjeta, sin puentear
+  // USD<->EUR entre sí (eso hacía que "20" en la tarjeta Euro mostrara cuántos euros son 20 dólares,
+  // en vez de cotizar 20 directo a la tasa del euro).
+  return numValue * rateValor;
 }

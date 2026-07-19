@@ -1493,17 +1493,21 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
   };
 
   const miniSimNum = parseFloat(miniSimMonto) || 0;
+  // En modo EUR, el toggle "usd" representa la divisa extranjera de esa pestaña (€, no $): el monto se
+  // cotiza directo con la tasa propia (sin puentear € -> $ -> Bs, que confundía "cuántos € son 20$" con "20€ a Bs").
   const miniSimResultado = miniSimTasa === 'eur'
     ? (miniSimMoneda === 'usd'
-        ? (rates.eur_bcv > 0 ? (miniSimNum * rates.bcv) / rates.eur_bcv : 0)
+        ? miniSimNum * rates.eur_bcv
         : (rates.eur_bcv > 0 ? miniSimNum / rates.eur_bcv : 0))
     : (() => {
         const tasaValor = miniSimTasa === 'bcv' ? rates.bcv : rates.usdt;
         return miniSimMoneda === 'usd' ? miniSimNum * tasaValor : (tasaValor > 0 ? miniSimNum / tasaValor : 0);
       })();
-  // La moneda del resultado depende de la dirección: si el origen es $ el resultado es Bs (o € en modo EUR), y viceversa
-  const miniSimMonedaResultado: 'bs' | 'usd' | 'eur' = miniSimTasa === 'eur' ? 'eur' : (miniSimMoneda === 'usd' ? 'bs' : 'usd');
+  // La moneda del resultado depende solo de la dirección: origen en divisa extranjera -> resultado en Bs, y viceversa
+  const miniSimMonedaResultado: 'bs' | 'usd' | 'eur' = miniSimMoneda === 'usd' ? 'bs' : (miniSimTasa === 'eur' ? 'eur' : 'usd');
   const miniSimSimbolo = miniSimMonedaResultado === 'eur' ? '€' : (miniSimMonedaResultado === 'usd' ? '$' : 'Bs');
+  // Símbolo del lado de entrada: si el origen es Bs siempre "Bs"; si no, "€" en la pestaña Euro y "$" en las demás
+  const miniSimSimboloOrigen = miniSimMoneda === 'bs' ? 'Bs' : (miniSimTasa === 'eur' ? '€' : '$');
 
   const handleSwapMiniSim = () => {
     setMiniSimMonto(miniSimResultado > 0 ? miniSimResultado.toFixed(0) : "");
@@ -3595,9 +3599,9 @@ const getPatrimonioNeto = () => {
 
             <div className="flex items-center gap-3">
               <div className="flex-1 bg-black/30 border border-white/10 rounded-full px-4 py-3 transition-colors">
-                <span className="text-[9px] text-white/40 font-bold uppercase block mb-0.5">Monto en {miniSimMoneda === 'usd' ? '$' : 'Bs'}</span>
+                <span className="text-[9px] text-white/40 font-bold uppercase block mb-0.5">Monto en {miniSimSimboloOrigen}</span>
                 <div className="flex items-center gap-1">
-                  <span className="text-lg font-black text-white/40">{miniSimMoneda === 'usd' ? '$' : 'Bs'}</span>
+                  <span className="text-lg font-black text-white/40">{miniSimSimboloOrigen}</span>
                   <input type="number" placeholder="0" value={miniSimMonto} onChange={(e) => setMiniSimMonto(e.target.value)} className="w-full bg-transparent text-lg font-black text-white outline-none tabular-nums" />
                 </div>
               </div>
@@ -3610,7 +3614,7 @@ const getPatrimonioNeto = () => {
               </button>
               <div className={`flex-1 ${theme.lightBg} border ${theme.border} rounded-full px-4 py-3`}>
                 <span className={`text-[9px] ${theme.text} opacity-70 font-bold uppercase block mb-0.5`}>
-                  {miniSimTasa === 'eur' ? 'Equivale en €' : (miniSimMoneda === 'usd' ? 'Pagas en Bs' : 'Recibes en $')}
+                  {miniSimMoneda === 'usd' ? 'Pagas en Bs' : `Recibes en ${miniSimTasa === 'eur' ? '€' : '$'}`}
                 </span>
                 <div className="flex items-center gap-1">
                   <span className={`text-lg font-black ${theme.text} opacity-50`}>{miniSimSimbolo}</span>
