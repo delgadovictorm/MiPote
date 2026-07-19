@@ -17,6 +17,7 @@ import { CalculadoraTab } from "@/components/Dashboard/CalculadoraTab";
 import { MercadoSession } from "@/components/Dashboard/MercadoSession";
 import { TASAS_DISPONIBLES, TASAS_DEFECTO, TASAS_STORAGE_KEY, getValorTasa, calcularResultadoTasa, type TasaId } from "@/components/Dashboard/tasasConfig";
 import { ESTADOS_VENEZUELA } from "@/lib/venezuelaData";
+import { separarEmoji } from "@/lib/emojiSuggest";
 import OpenAI from "openai";
 import { Camera } from "lucide-react"; // Asegúrate de tener este icono
 import { motion, AnimatePresence } from "framer-motion"
@@ -2274,6 +2275,7 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     if (!puedeEscanear()) { setTimeout(() => onTriggerPaywall?.(), 300); if (event.target) event.target.value = ''; return; }
 
     setIsScanningEstadoCuenta(true);
+    triggerToast("ingreso", "Analizando tu estado de cuenta... 🏦");
     try {
       const base64Image = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -4175,7 +4177,7 @@ const getPatrimonioNeto = () => {
             <Drawer.Title className="sr-only">Confirmar Movimientos Detectados</Drawer.Title>
             <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
               <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-              <h3 className="text-xl font-black text-white mb-1 text-center">Movimientos Detectados</h3>
+              <h3 className="text-xl font-black text-white mb-1 text-center">🏦 Movimientos Detectados</h3>
               <p className="text-center text-white/50 text-xs mb-5">Revisa, ajusta y desmarca los que no quieras registrar.</p>
 
               <div className="flex items-center justify-center gap-3 mb-6 text-[11px] font-bold">
@@ -4191,6 +4193,8 @@ const getPatrimonioNeto = () => {
                 {transaccionesEscaneadas.map((t, idx) => {
                   const fechaCorta = t.fecha ? t.fecha.split('-').reverse().slice(0, 2).join('/') : null;
                   const esIngreso = t.tipo === 'ingreso';
+                  const catInfo = categoriasList.find(c => c.valor === t.categoria);
+                  const { emoji: catEmoji } = separarEmoji(catInfo?.label || t.categoria || "");
                   return (
                     <div
                       key={t.clave}
@@ -4237,13 +4241,17 @@ const getPatrimonioNeto = () => {
                           placeholder="0.00"
                           className="flex-1 min-w-0 bg-black/30 rounded-xl px-3 py-2.5 text-base font-black text-white outline-none tabular-nums placeholder:text-white/20 placeholder:font-bold"
                         />
-                        <div className="relative shrink-0">
+                        <div className="relative shrink-0 flex items-center gap-1 bg-black/30 rounded-xl pl-2 pr-6 py-2.5 max-w-[110px]">
+                          <span className="text-base leading-none shrink-0">{catEmoji || "🏷️"}</span>
                           <select
                             value={t.categoria}
                             onChange={(e) => actualizarTransaccionEscaneada(idx, { categoria: e.target.value })}
-                            className="appearance-none bg-black/30 rounded-xl pl-3 pr-6 py-2.5 text-[10px] font-bold text-white/70 outline-none max-w-[104px] truncate cursor-pointer"
+                            className="appearance-none bg-transparent text-[10px] font-bold text-white/70 outline-none truncate cursor-pointer min-w-0"
                           >
-                            {categoriasList.map(c => <option key={c.id || c.valor} value={c.valor} className="bg-[#1a0f2e]">{c.label}</option>)}
+                            {categoriasList.map(c => {
+                              const { nombre } = separarEmoji(c.label);
+                              return <option key={c.id || c.valor} value={c.valor} className="bg-[#1a0f2e]">{nombre}</option>;
+                            })}
                           </select>
                           <ChevronDown className="w-3 h-3 text-white/30 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                         </div>
@@ -4690,12 +4698,12 @@ const getPatrimonioNeto = () => {
           <button
             data-tutorial="fab"
             onClick={() => setIsFABMenuOpen(true)}
-            className={`fixed bottom-24 md:bottom-10 right-6 z-50 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 
-              ${isScanning ? 'scale-90 opacity-80 cursor-not-allowed' : 'hover:scale-110 active:scale-95'} 
+            className={`fixed bottom-24 md:bottom-10 right-6 z-50 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300
+              ${(isScanning || isScanningEstadoCuenta) ? 'scale-90 opacity-80 cursor-not-allowed' : 'hover:scale-110 active:scale-95'}
               bg-[#2563EB] text-white`}
             style={{ boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.4)' }}
           >
-            {isScanning ? <Loader2 className="w-8 h-8 animate-spin" /> : <Plus className="w-8 h-8" strokeWidth={3} />}
+            {(isScanning || isScanningEstadoCuenta) ? <Loader2 className="w-8 h-8 animate-spin" /> : <Plus className="w-8 h-8" strokeWidth={3} />}
           </button>
 
           {/* ========================================================= */}
