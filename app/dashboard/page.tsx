@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { 
   ArrowDownCircle, ArrowUpCircle, Wallet, Plus, Users, RefreshCw, Trash2, CheckSquare, Square, Calendar, Edit2, Check, X, Bell, Send, PieChart as PieChartIcon, Target, Home, CreditCard, Calculator, Lock, Mail, LogIn, UserPlus, Sparkles, ArrowLeft, Shield, Key, Copy, UploadCloud, Phone, Menu, LogOut, Globe, ChevronRight, Loader2,
-  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3, ChevronLeft, ArrowRight, ChevronDown, ArrowLeftRight, Layers, Eye, EyeOff, Heart, PartyPopper, ListTodo, MapPin
+  DollarSign, TrendingUp, TrendingDown, Rocket, ShoppingCart, Wifi, Dog, Gift, Edit3, ChevronLeft, ArrowRight, ChevronDown, ArrowLeftRight, Layers, Eye, EyeOff, Heart, PartyPopper, ListTodo, MapPin, Landmark
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Drawer } from "vaul";
@@ -286,6 +286,7 @@ const abrirCelebracionManual = () => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
+        setIsGuest(false);
         cargarDatosUsuario(session.user.id).then(() => setCurrentView('dashboard'));
       } else {
         setLoadingAuth(false);
@@ -302,6 +303,9 @@ const abrirCelebracionManual = () => {
       }
       setSession(session);
       if (session) {
+        // Si veníamos del Modo Invitado, hay que apagarlo: si no, la vista sigue
+        // leyendo transacciones/potes de localStorage en vez de los datos reales del usuario.
+        setIsGuest(false);
         cargarDatosUsuario(session.user.id).then(() => setCurrentView('dashboard'));
       } else {
         setLoadingAuth(false);
@@ -1379,9 +1383,13 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
     if (!perfil?.is_pro) localStorage.setItem(getScanKey(), String(getEscaneosUsados() + 1));
   };
 
+  // Recuerda qué escaneo se quería abrir, para retomarlo justo después de aceptar los términos de IA
+  const [scanPendienteTerminos, setScanPendienteTerminos] = useState<'factura' | 'estado_cuenta'>('factura');
+
   // Función interceptora: En vez de abrir la cámara directo, verifica las políticas
   const handleTryScan = () => {
     if (!hasAcceptedAI) {
+      setScanPendienteTerminos('factura');
       setShowAITerms(true);
       return;
     }
@@ -1399,8 +1407,9 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
     localStorage.setItem('mipote_ai_accepted', 'true');
     setHasAcceptedAI(true);
     setShowAITerms(false);
-    // Abrimos la cámara automáticamente después de aceptar
-    setTimeout(() => fileInputRef.current?.click(), 300);
+    // Abrimos la cámara automáticamente después de aceptar, retomando el escaneo que la disparó
+    const inputRef = scanPendienteTerminos === 'estado_cuenta' ? estadoCuentaInputRef : fileInputRef;
+    setTimeout(() => inputRef.current?.click(), 300);
   };
 
   // --- ESTADOS PARA CAMBIO P2P ---
@@ -1447,6 +1456,9 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
   const [isScanningCashea, setIsScanningCashea] = useState(false);
   const [cuotasEscaneadas, setCuotasEscaneadas] = useState([] as any[]);
   const casheaScanInputRef = React.useRef(null as HTMLInputElement | null);
+  const [isScanningEstadoCuenta, setIsScanningEstadoCuenta] = useState(false);
+  const [transaccionesEscaneadas, setTransaccionesEscaneadas] = useState([] as any[]);
+  const estadoCuentaInputRef = React.useRef(null as HTMLInputElement | null);
   const [fijoForm, setFijoForm] = useState({ descripcion: "", monto: "", dia_pago: "1" });
 
   const [showToast, setShowToast] = useState(false);
@@ -1473,9 +1485,11 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
   // NUEVO: DESTINO DE LA TRANSFERENCIA
   const [destinoTransferencia, setDestinoTransferencia] = useState("");
 
-  const formatMiniNum = (num: number) => {
+  const formatMiniNum = (num: number, monedaResultado: 'bs' | 'usd' | 'eur' = 'bs') => {
     if (!num || isNaN(num)) return "0";
-    return num.toLocaleString('es-VE', { maximumFractionDigits: 0 });
+    // Bs se muestra como entero (montos grandes); $ y € necesitan decimales o los montos chicos se ven como "0"
+    const decimales = monedaResultado === 'bs' ? 0 : 2;
+    return num.toLocaleString('es-VE', { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
   };
 
   const miniSimNum = parseFloat(miniSimMonto) || 0;
@@ -1487,7 +1501,9 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
         const tasaValor = miniSimTasa === 'bcv' ? rates.bcv : rates.usdt;
         return miniSimMoneda === 'usd' ? miniSimNum * tasaValor : (tasaValor > 0 ? miniSimNum / tasaValor : 0);
       })();
-  const miniSimSimbolo = miniSimTasa === 'eur' ? '€' : 'Bs';
+  // La moneda del resultado depende de la dirección: si el origen es $ el resultado es Bs (o € en modo EUR), y viceversa
+  const miniSimMonedaResultado: 'bs' | 'usd' | 'eur' = miniSimTasa === 'eur' ? 'eur' : (miniSimMoneda === 'usd' ? 'bs' : 'usd');
+  const miniSimSimbolo = miniSimMonedaResultado === 'eur' ? '€' : (miniSimMonedaResultado === 'usd' ? '$' : 'Bs');
 
   const handleSwapMiniSim = () => {
     setMiniSimMonto(miniSimResultado > 0 ? miniSimResultado.toFixed(0) : "");
@@ -2211,6 +2227,147 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     if (data) setCuotasCashea(prev => [...prev, ...data]);
     triggerToast("egreso", `${seleccionadas.length} cuota${seleccionadas.length === 1 ? '' : 's'} de Cashea registrada${seleccionadas.length === 1 ? '' : 's'} 🛍️`);
     setCuotasEscaneadas([]);
+  };
+
+  // Convierte montos como "1.250,50" (formato venezolano) o strings con símbolos a un número JS válido.
+  // Sin esto, si la IA responde el monto como string con coma decimal, el <input type="number"> lo recibe
+  // como valor inválido y el navegador lo muestra en blanco (aunque el dato "existe" en el estado).
+  const normalizarMontoIA = (valor: any): number => {
+    if (typeof valor === 'number') return isNaN(valor) ? 0 : valor;
+    if (!valor) return 0;
+    let str = String(valor).trim().replace(/[^\d,.-]/g, '');
+    const ultimaComa = str.lastIndexOf(',');
+    const ultimoPunto = str.lastIndexOf('.');
+    if (ultimaComa > ultimoPunto) {
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      str = str.replace(/,/g, '');
+    }
+    const num = parseFloat(str);
+    return isNaN(num) ? 0 : num;
+  };
+
+  // Función interceptora: valida términos de IA y límite de escaneos antes de abrir la cámara para el estado de cuenta
+  const handleTryScanEstadoCuenta = () => {
+    if (!hasAcceptedAI) {
+      setScanPendienteTerminos('estado_cuenta');
+      setShowAITerms(true);
+      return;
+    }
+    if (!puedeEscanear()) {
+      setIsFABMenuOpen(false);
+      setTimeout(() => onTriggerPaywall?.(), 300);
+      return;
+    }
+    estadoCuentaInputRef.current?.click();
+  };
+
+  // Escanea una captura del estado de cuenta bancario y detecta todos los movimientos (ingresos y egresos) para revisión.
+  const handleScanEstadoCuenta = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!puedeEscanear()) { setTimeout(() => onTriggerPaywall?.(), 300); if (event.target) event.target.value = ''; return; }
+
+    setIsScanningEstadoCuenta(true);
+    try {
+      const base64Image = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 1000;
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.onerror = reject;
+          img.src = e.target?.result as string;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const imageUrl = base64Image.split(',')[1];
+      const response = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl, mode: "estado_cuenta" }),
+      });
+      if (!response.ok) throw new Error("Error procesando imagen");
+
+      const dataResult = await response.json();
+      const jsonString = (dataResult.result || "").replace(/```json/g, "").replace(/```/g, "").trim();
+      const data = JSON.parse(jsonString);
+      const items = Array.isArray(data.items) ? data.items : [];
+      if (items.length === 0) throw new Error("No se detectaron movimientos en la imagen");
+
+      registrarEscaneo();
+      setTransaccionesEscaneadas(items.map((it: any, idx: number) => ({
+        seleccionado: true,
+        clave: `${idx}-${Date.now()}`,
+        tipo: it.tipo === 'ingreso' ? 'ingreso' : 'egreso',
+        descripcion: it.descripcion || "Movimiento bancario",
+        monto: normalizarMontoIA(it.monto),
+        moneda: it.moneda === 'bs' ? 'bs' : 'usdt',
+        categoria: categoriasList.some(c => c.valor === it.categoria_sugerida) ? it.categoria_sugerida : "otro",
+        fecha: it.fecha || null,
+      })));
+    } catch (error) {
+      console.error(error);
+      alert("No pude leer los movimientos de la imagen. Intenta con otra captura o regístralos manual.");
+    } finally {
+      setIsScanningEstadoCuenta(false);
+      if (event.target) event.target.value = '';
+    }
+  };
+
+  const actualizarTransaccionEscaneada = (idx: number, patch: Partial<any>) => {
+    setTransaccionesEscaneadas(prev => prev.map((it, i) => i === idx ? { ...it, ...patch } : it));
+  };
+
+  const confirmarTransaccionesEscaneadas = async () => {
+    const seleccionadas = transaccionesEscaneadas.filter(t => t.seleccionado);
+    if (seleccionadas.length === 0) { setTransaccionesEscaneadas([]); return; }
+
+    const nombreUsuario = (perfil?.nombre || session?.user?.email?.split('@')[0]) || "Tú";
+
+    const registros = seleccionadas.map(t => {
+      const valorMonto = parseFloat(t.monto) || 0;
+      const { monto_bs, monto_usd_bcv, monto_usd_paralelo } = calcularMontos(valorMonto, t.moneda);
+      const labelCategoria = categoriasList.find(c => c.valor === t.categoria)?.label || t.categoria;
+      const descFinal = t.tipo === 'ingreso' ? (t.descripcion || labelCategoria) : `${labelCategoria} - ${t.descripcion}`;
+      return {
+        descripcion: descFinal,
+        monto_original: valorMonto,
+        moneda_original: t.moneda,
+        monto_bs, monto_usd_bcv, monto_usd_paralelo,
+        categoria: t.categoria,
+        usuario: nombreUsuario,
+        tipo: t.tipo,
+        created_at: t.fecha ? new Date(`${t.fecha}T12:00:00`).toISOString() : new Date().toISOString(),
+      };
+    });
+
+    if (isGuest) {
+      const nuevasTx = registros.map((r, i) => ({ ...r, id: (Date.now() + i).toString() }));
+      const updatedTx = [...nuevasTx, ...transactions];
+      setTransactions(updatedTx);
+      localStorage.setItem('mipote_guest_tx', JSON.stringify(updatedTx));
+    } else {
+      const { error } = await supabase.from("transacciones_saas").insert(
+        registros.map(r => ({ ...r, espacio_id: espacioActivo.id, usuario_id: session.user.id }))
+      );
+      if (error) { alert("🚨 Error registrando movimientos: " + error.message); return; }
+      fetchData();
+    }
+
+    triggerToast("ingreso", `${seleccionadas.length} movimiento${seleccionadas.length === 1 ? '' : 's'} registrado${seleccionadas.length === 1 ? '' : 's'} 🏦`);
+    setTransaccionesEscaneadas([]);
   };
 
   const guardarPresupuesto = async (e: React.FormEvent) => { 
@@ -3457,7 +3614,7 @@ const getPatrimonioNeto = () => {
                 </span>
                 <div className="flex items-center gap-1">
                   <span className={`text-lg font-black ${theme.text} opacity-50`}>{miniSimSimbolo}</span>
-                  <span className={`text-lg font-black ${theme.text} tabular-nums`}>{formatMiniNum(miniSimResultado)}</span>
+                  <span className={`text-lg font-black ${theme.text} tabular-nums`}>{formatMiniNum(miniSimResultado, miniSimMonedaResultado)}</span>
                 </div>
               </div>
             </div>
@@ -3527,6 +3684,7 @@ const getPatrimonioNeto = () => {
           </div>
 
           <input type="file" accept="image/*" ref={fileInputRef} onChange={handleScanInvoice} className="hidden" />
+          <input type="file" accept="image/*" ref={estadoCuentaInputRef} onChange={handleScanEstadoCuenta} className="hidden" />
 
           {/* ========================================================= */}
           {/* INTEGRANTES DEL ESPACIO (VACA O POTE COMPARTIDO) */}
@@ -3744,11 +3902,11 @@ const getPatrimonioNeto = () => {
               <span className="hidden sm:inline text-[9px] font-bold text-amber-400 uppercase tracking-widest">Hazte PRO</span>
             </button>
           )}
-          {!isGuest && session && (
+          {(isGuest || session) && (
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 px-3 py-2 rounded-xl transition-all active:scale-95"
-              title="Cerrar sesión"
+              title={isGuest ? "Salir del modo invitado" : "Cerrar sesión"}
             >
               <LogOut className="w-4 h-4 text-rose-400" />
               <span className="hidden sm:inline text-[9px] font-bold text-rose-400 uppercase tracking-widest">Salir</span>
@@ -4001,6 +4159,106 @@ const getPatrimonioNeto = () => {
       </Drawer.Root>
 
       {renderTabContent()}
+
+      {/* ========================================================= */}
+      {/* DRAWER DE REVISIÓN: MOVIMIENTOS DETECTADOS EN EL ESTADO DE CUENTA BANCARIO */}
+      {/* Montado a nivel global porque el escaneo se dispara desde el menú del FAB (pestaña Inicio) */}
+      {/* ========================================================= */}
+      <Drawer.Root open={transaccionesEscaneadas.length > 0} onOpenChange={(open) => !open && setTransaccionesEscaneadas([])}>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[300] backdrop-blur-sm" />
+          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[85vh] mt-24 fixed bottom-0 left-0 right-0 z-[350] border-t border-emerald-500">
+            <Drawer.Title className="sr-only">Confirmar Movimientos Detectados</Drawer.Title>
+            <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+              <h3 className="text-xl font-black text-white mb-1 text-center">Movimientos Detectados</h3>
+              <p className="text-center text-white/50 text-xs mb-5">Revisa, ajusta y desmarca los que no quieras registrar.</p>
+
+              <div className="flex items-center justify-center gap-3 mb-6 text-[11px] font-bold">
+                <span className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full">
+                  <ArrowUpCircle className="w-3.5 h-3.5"/> {transaccionesEscaneadas.filter(t => t.seleccionado && t.tipo === 'ingreso').length} ingresos
+                </span>
+                <span className="flex items-center gap-1.5 text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-full">
+                  <ArrowDownCircle className="w-3.5 h-3.5"/> {transaccionesEscaneadas.filter(t => t.seleccionado && t.tipo === 'egreso').length} egresos
+                </span>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                {transaccionesEscaneadas.map((t, idx) => {
+                  const fechaCorta = t.fecha ? t.fecha.split('-').reverse().slice(0, 2).join('/') : null;
+                  const esIngreso = t.tipo === 'ingreso';
+                  return (
+                    <div
+                      key={t.clave}
+                      className={`rounded-2xl border transition-all ${t.seleccionado ? (esIngreso ? 'bg-emerald-500/[0.06] border-emerald-500/30' : 'bg-rose-500/[0.06] border-rose-500/30') : 'bg-white/[0.02] border-white/5 opacity-40'}`}
+                    >
+                      <div className="flex items-center gap-2.5 px-4 pt-4">
+                        <button type="button" onClick={() => actualizarTransaccionEscaneada(idx, { seleccionado: !t.seleccionado })} className="shrink-0">
+                          {t.seleccionado ? <CheckSquare className={`w-5 h-5 ${esIngreso ? 'text-emerald-400' : 'text-rose-400'}`}/> : <Square className="text-white/30 w-5 h-5"/>}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => actualizarTransaccionEscaneada(idx, { tipo: esIngreso ? 'egreso' : 'ingreso' })}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider shrink-0 transition-colors ${esIngreso ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}
+                        >
+                          {esIngreso ? <ArrowUpCircle className="w-3 h-3"/> : <ArrowDownCircle className="w-3 h-3"/>}
+                          {t.tipo}
+                        </button>
+                        {fechaCorta && <span className="text-[9px] text-white/30 font-bold ml-auto shrink-0">{fechaCorta}</span>}
+                      </div>
+
+                      <div className="px-4 pt-2 pb-1">
+                        <input
+                          type="text"
+                          value={t.descripcion}
+                          onChange={(e) => actualizarTransaccionEscaneada(idx, { descripcion: e.target.value })}
+                          className="w-full bg-transparent text-[15px] font-bold text-white outline-none min-w-0"
+                          placeholder="Descripción"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2 px-4 pb-4 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => actualizarTransaccionEscaneada(idx, { moneda: t.moneda === 'bs' ? 'usdt' : 'bs' })}
+                          title="Cambiar moneda"
+                          className="shrink-0 text-[11px] font-black text-white/50 hover:text-white bg-black/30 rounded-xl px-2.5 py-2.5 transition-colors"
+                        >
+                          {t.moneda === 'bs' ? 'Bs' : '$'}
+                        </button>
+                        <input
+                          type="number" step="0.01"
+                          value={t.monto || ''}
+                          onChange={(e) => actualizarTransaccionEscaneada(idx, { monto: e.target.value })}
+                          placeholder="0.00"
+                          className="flex-1 min-w-0 bg-black/30 rounded-xl px-3 py-2.5 text-base font-black text-white outline-none tabular-nums placeholder:text-white/20 placeholder:font-bold"
+                        />
+                        <div className="relative shrink-0">
+                          <select
+                            value={t.categoria}
+                            onChange={(e) => actualizarTransaccionEscaneada(idx, { categoria: e.target.value })}
+                            className="appearance-none bg-black/30 rounded-xl pl-3 pr-6 py-2.5 text-[10px] font-bold text-white/70 outline-none max-w-[104px] truncate cursor-pointer"
+                          >
+                            {categoriasList.map(c => <option key={c.id || c.valor} value={c.valor} className="bg-[#1a0f2e]">{c.label}</option>)}
+                          </select>
+                          <ChevronDown className="w-3 h-3 text-white/30 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={conUnSoloClick(confirmarTransaccionesEscaneadas)}
+                className="w-full bg-emerald-600 text-white font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-95 transition-transform"
+              >
+                Registrar {transaccionesEscaneadas.filter(t => t.seleccionado).length} movimiento{transaccionesEscaneadas.filter(t => t.seleccionado).length === 1 ? '' : 's'}
+              </button>
+            </div>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
 
       {/* ========================================================= */}
       {/* DRAWER: TÉRMINOS Y CONDICIONES DE INTELIGENCIA ARTIFICIAL */}
@@ -4333,20 +4591,20 @@ const getPatrimonioNeto = () => {
                   <h3 className="text-xl font-black text-white mb-6 text-center">Registrar Actividad</h3>
                   
                   <div className="flex flex-col gap-4">
-                    {/* OPCIÓN 1: ESCANEAR GASTO (Destacado Full Width) */}
+                    {/* OPCIÓN 1: CARGAR ESTADO DE CUENTA (Destacado Full Width) */}
                     <button
                       type="button"
-                      disabled={isScanning}
-                      onClick={() => { setIsFABMenuOpen(false); setTimeout(() => handleTryScan(), 150); }}
+                      disabled={isScanningEstadoCuenta}
+                      onClick={() => { setIsFABMenuOpen(false); setTimeout(() => handleTryScanEstadoCuenta(), 150); }}
                       className="flex items-center justify-between p-5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 cursor-pointer transition-all hover:bg-emerald-500/20 group disabled:opacity-50"
                     >
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                          <Camera className="w-6 h-6 text-emerald-400" />
+                          {isScanningEstadoCuenta ? <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" /> : <Landmark className="w-6 h-6 text-emerald-400" />}
                         </div>
                         <div className="text-left">
-                          <span className="block font-black text-emerald-400 uppercase tracking-widest text-sm">Escanear Gasto</span>
-                          <span className="text-[10px] text-emerald-400/60 font-bold">Usa la IA para registrar rápido</span>
+                          <span className="block font-black text-emerald-400 uppercase tracking-widest text-sm">Cargar Estado de Cuenta</span>
+                          <span className="text-[10px] text-emerald-400/60 font-bold">La IA detecta tus ingresos y egresos por ti</span>
                         </div>
                       </div>
                       <Sparkles className="w-5 h-5 text-emerald-500" />

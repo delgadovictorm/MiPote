@@ -15,7 +15,7 @@ export async function GET() {
 
     const [reqBcv, reqParalelo] = await Promise.allSettled([
       fetch("https://ve.dolarapi.com/v1/dolares/oficial", { cache: "no-store", headers: misHeaders }),
-      fetch("https://ve.dolarapi.com/v1/dolares/paralelo", { cache: "no-store", headers: misHeaders })
+      fetch("https://admin.somosgamerslatam.com/api/products/public/exchange-rate/VES", { cache: "no-store", headers: misHeaders })
     ]);
 
     if (reqBcv.status === "fulfilled" && reqBcv.value.ok) {
@@ -30,7 +30,7 @@ export async function GET() {
     if (reqParalelo.status === "fulfilled" && reqParalelo.value.ok) {
       try {
         const dataParalelo = await reqParalelo.value.json();
-        tasaUsdt = dataParalelo.promedio || dataParalelo.venta || 0;
+        tasaUsdt = dataParalelo.rate || 0;
       } catch (e) {
         console.error("Error procesando Paralelo");
       }

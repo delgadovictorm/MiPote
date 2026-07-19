@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { TrendingUp, Rocket, DollarSign, ShoppingCart, Wifi, Dog, Home, Gift, Edit3, ChevronLeft, Plus, ArrowRight, Tag, Settings2, X } from "lucide-react";
+import { ChevronLeft, Plus, ArrowRight, Settings2, X } from "lucide-react";
 import { TASAS_DISPONIBLES, getValorTasa } from "@/components/Dashboard/tasasConfig";
+import { sugerirEmoji, filtrarEmojisPorTexto, separarEmoji } from "@/lib/emojiSuggest";
 
 // Formatea un monto "crudo" (punto decimal, ej. "25000.5") al estilo venezolano mientras se escribe (ej. "25.000,5")
 const formatMontoDisplay = (raw: string) => {
@@ -51,6 +52,9 @@ export function TransactionDrawer({
   const [mounted, setMounted] = useState(false);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [nuevaCategoriaInput, setNuevaCategoriaInput] = useState("");
+  const [emojiElegido, setEmojiElegido] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [busquedaEmoji, setBusquedaEmoji] = useState("");
 
   useEffect(() => {
     setMounted(true);
@@ -70,6 +74,10 @@ export function TransactionDrawer({
         setCustomCategoria("");
         setMoneda("bs");
         setShowCategoryManager(false);
+        setNuevaCategoriaInput("");
+        setEmojiElegido("");
+        setShowEmojiPicker(false);
+        setBusquedaEmoji("");
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -78,20 +86,20 @@ export function TransactionDrawer({
 
   const categories = {
     ingreso: [
-      { id: "salario", label: "Sueldo", icon: <DollarSign size={18} /> },
-      { id: "inversiones", label: "Inversiones", icon: <TrendingUp size={18} /> },
-      { id: "ventas", label: "Ventas", icon: <ShoppingCart size={18} /> },
-      { id: "tigritos", label: "Tigritos", icon: <Rocket size={18} /> },
-      { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
+      { id: "salario", label: "Sueldo", emoji: "💰" },
+      { id: "inversiones", label: "Inversiones", emoji: "📈" },
+      { id: "ventas", label: "Ventas", emoji: "🛒" },
+      { id: "tigritos", label: "Tigritos", emoji: "🐯" },
+      { id: "otro", label: "Otro", emoji: "✍️" },
     ],
     egreso: [
-      { id: "comida", label: "Comida", icon: <ShoppingCart size={18} /> },
-      { id: "internet", label: "Internet", icon: <Wifi size={18} /> },
-      { id: "abono_pote", label: "Abonar a Pote 🍯", icon: <Plus size={18} /> },
-      { id: "mascotas", label: "Mascotas", icon: <Dog size={18} /> },
-      { id: "condominio", label: "Condominio", icon: <Home size={18} /> },
-      { id: "regalos", label: "Regalos", icon: <Gift size={18} /> },
-      { id: "otro", label: "Otro", icon: <Edit3 size={18} /> },
+      { id: "comida", label: "Comida", emoji: "🍔" },
+      { id: "internet", label: "Internet", emoji: "📶" },
+      { id: "abono_pote", label: "Abonar a Pote", emoji: "🍯" },
+      { id: "mascotas", label: "Mascotas", emoji: "🐾" },
+      { id: "condominio", label: "Condominio", emoji: "🏠" },
+      { id: "regalos", label: "Regalos", emoji: "🎁" },
+      { id: "otro", label: "Otro", emoji: "✍️" },
     ]
   };
 
@@ -102,9 +110,15 @@ export function TransactionDrawer({
     const defaults = categories[tipo as keyof typeof categories].filter(c => proteccion.includes(c.id) || !ocultas.has(c.id));
     const customs = (categoriasApi?.custom || [])
       .filter((c: any) => c.tipo === tipo)
-      .map((c: any) => ({ id: c.valor, label: c.label, icon: <Tag size={18} />, custom: true, dbId: c.id }));
+      .map((c: any) => {
+        const { nombre, emoji } = separarEmoji(c.label);
+        return { id: c.valor, label: nombre, emoji: emoji || "🏷️", custom: true, dbId: c.id };
+      });
     return [...defaults, ...customs];
   }, [tipo, categoriasApi]);
+
+  const emojisFiltrados = useMemo(() => filtrarEmojisPorTexto(busquedaEmoji), [busquedaEmoji]);
+  const emojiPreview = emojiElegido || sugerirEmoji(nuevaCategoriaInput) || "🏷️";
 
   const monedasForaneas = TASAS_DISPONIBLES.filter(t => t.kind === 'foreign_per_usd');
   const monedasForaneasActivas = monedasForaneas.filter(t => (activeRates || []).includes(t.id));
@@ -220,40 +234,85 @@ export function TransactionDrawer({
             </div>
 
             {showCategoryManager ? (
-              <div className="bg-[#1a1a1a] rounded-2xl border border-white/5 p-3 mb-6 space-y-1">
-                {categoriasMostradas.map((cat) => (
-                  <div key={cat.id} className="flex items-center justify-between px-2 py-2 border-b border-white/5 last:border-b-0">
-                    <span className="text-xs font-bold text-white/80">{cat.label}</span>
-                    {!proteccion.includes(cat.id) && (
-                      <button
-                        type="button"
-                        onClick={() => (cat as any).custom ? categoriasApi.eliminar((cat as any).dbId) : categoriasApi.ocultar(cat.id, tipo)}
-                        className="text-white/30 hover:text-rose-400 cursor-pointer p-1"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
+              <div className="bg-[#1a1a1a] rounded-2xl border border-white/5 p-4 mb-6">
+                <div className="space-y-1 mb-4">
+                  {categoriasMostradas.map((cat) => (
+                    <div key={cat.id} className="flex items-center justify-between px-2 py-2 border-b border-white/5 last:border-b-0">
+                      <span className="flex items-center gap-2 text-xs font-bold text-white/80">
+                        <span className="text-base leading-none">{cat.emoji}</span> {cat.label}
+                      </span>
+                      {!proteccion.includes(cat.id) && (
+                        <button
+                          type="button"
+                          onClick={() => (cat as any).custom ? categoriasApi.eliminar((cat as any).dbId) : categoriasApi.ocultar(cat.id, tipo)}
+                          className="text-white/30 hover:text-rose-400 cursor-pointer p-1"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* NUEVA CATEGORÍA: emoji sugerido automático + buscador manual */}
+                <div className="pt-3 border-t border-white/5">
+                  <p className="text-[9px] uppercase font-black text-white/30 mb-3 tracking-widest">Nueva categoría</p>
+                  <div className="flex items-center gap-3 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowEmojiPicker(v => !v)}
+                      title="Elegir otro emoji"
+                      className={`w-14 h-14 shrink-0 rounded-2xl bg-black/40 border flex items-center justify-center text-2xl transition-colors cursor-pointer ${showEmojiPicker ? 'border-purple-500' : 'border-white/10 hover:border-purple-500/50'}`}
+                    >
+                      {emojiPreview}
+                    </button>
+                    <input
+                      type="text"
+                      value={nuevaCategoriaInput}
+                      onChange={(e) => setNuevaCategoriaInput(e.target.value)}
+                      placeholder="Nombre (ej: Maquillaje)"
+                      className="flex-1 bg-black/40 border border-white/5 rounded-xl px-3 py-3 text-sm font-bold text-white outline-none focus:border-purple-500"
+                    />
                   </div>
-                ))}
-                <div className="flex gap-2 pt-2">
-                  <input
-                    type="text"
-                    value={nuevaCategoriaInput}
-                    onChange={(e) => setNuevaCategoriaInput(e.target.value)}
-                    placeholder="Nueva categoría..."
-                    className="flex-1 bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-purple-500"
-                  />
+
+                  {showEmojiPicker && (
+                    <div className="mb-3 animate-in fade-in zoom-in-95 duration-150">
+                      <input
+                        type="text"
+                        value={busquedaEmoji}
+                        onChange={(e) => setBusquedaEmoji(e.target.value)}
+                        placeholder="Buscar emoji (ej: comida, auto)..."
+                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none mb-2 focus:border-purple-500"
+                      />
+                      <div className="grid grid-cols-8 gap-1 max-h-32 overflow-y-auto bg-black/20 rounded-xl p-2">
+                        {emojisFiltrados.map((e, i) => (
+                          <button
+                            key={`${e}-${i}`}
+                            type="button"
+                            onClick={() => { setEmojiElegido(e); setShowEmojiPicker(false); setBusquedaEmoji(""); }}
+                            className="text-xl hover:bg-white/10 rounded-lg py-1 cursor-pointer"
+                          >
+                            {e}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => {
                       if (nuevaCategoriaInput.trim()) {
-                        categoriasApi.agregar(nuevaCategoriaInput.trim(), tipo);
+                        categoriasApi.agregar(`${nuevaCategoriaInput.trim()} ${emojiPreview}`, tipo);
                         setNuevaCategoriaInput("");
+                        setEmojiElegido("");
+                        setShowEmojiPicker(false);
+                        setBusquedaEmoji("");
                       }
                     }}
-                    className="bg-purple-600 hover:bg-purple-500 text-white px-3 rounded-xl cursor-pointer"
+                    className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3 rounded-xl cursor-pointer flex items-center justify-center gap-2 text-xs uppercase tracking-widest transition-colors"
                   >
-                    <Plus size={16} />
+                    <Plus size={16} /> Guardar categoría
                   </button>
                 </div>
               </div>
@@ -271,10 +330,20 @@ export function TransactionDrawer({
                       categoria === cat.id ? 'border-purple-500 bg-purple-500/10 text-purple-400' : 'border-white/5 bg-white/5 text-white/40 hover:bg-white/10'
                     }`}
                   >
-                    {cat.icon}
+                    <span className="text-2xl leading-none">{cat.emoji}</span>
                     <span className="text-[10px] font-bold uppercase pointer-events-none">{cat.label}</span>
                   </button>
                 ))}
+                {categoriasApi?.disponible !== false && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCategoryManager(true)}
+                    className="p-3 rounded-2xl border border-dashed border-white/15 flex flex-col items-center justify-center gap-2 text-white/30 hover:text-purple-400 hover:border-purple-500/40 transition-colors cursor-pointer"
+                  >
+                    <Plus size={20} />
+                    <span className="text-[9px] font-bold uppercase text-center leading-tight pointer-events-none">Nueva<br />categoría</span>
+                  </button>
+                )}
               </div>
             )}
 

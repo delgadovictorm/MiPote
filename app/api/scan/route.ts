@@ -11,6 +11,22 @@ function getPrompt(mode: string): string {
     const hoy = new Date().toISOString().slice(0, 10);
     return `Analiza esta captura de pantalla de la app Cashea que muestra una lista de cuotas pendientes por pagar. Para CADA cuota/compra que veas en la lista, extrae: 'articulo' (nombre del comercio o producto), 'monto_cuota' (número puro, sin símbolo de $), 'fecha_pago' (formato YYYY-MM-DD; las fechas en la imagen vienen como "día de mes" sin año, así que asume el año actual usando como referencia la fecha de hoy que es ${hoy}, y si el mes ya pasó respecto a hoy asume el año siguiente), 'cuota_actual' y 'cuota_total' (números, de "Cuota X de Y"). Responde SOLO un JSON puro con una clave 'items' que sea un arreglo de esos objetos, uno por cada cuota visible en la imagen.`;
   }
+  if (mode === 'estado_cuenta') {
+    const hoy = new Date().toISOString().slice(0, 10);
+    return `Analiza esta captura de pantalla de un estado de cuenta o historial de movimientos de un banco o billetera venezolana (ej. Bancamiga, Banesco, Mercantil, BNC, BDV, Pago Móvil). Cada app muestra el tipo de movimiento de forma distinta: algunas ponen el signo "+"/"-" junto al monto o lo pintan de verde/rojo; otras dejan el monto siempre en el mismo color y en su lugar usan un ÍCONO circular junto al movimiento (círculo verde con "+" = ingreso, círculo rojo/naranja con "−" = egreso).
+
+Para CADA movimiento visible, determina 'tipo' ('ingreso' o 'egreso') priorizando SIEMPRE la señal visual de ESA fila (signo, color del monto, o ícono del círculo) por encima del texto de la descripción. Es común que la MISMA descripción (ej. "TRANS.CTAS. A TERCEROS BANESCO") aparezca en distintas filas como ingreso en una y egreso en otra según el ícono/signo de cada una — nunca asumas el tipo solo por el texto del concepto, solo como último recurso si no hay ninguna señal visual de signo, color ni ícono.
+
+Para cada movimiento extrae:
+- 'tipo': 'ingreso' o 'egreso' (según la señal visual de esa fila, como se explicó arriba).
+- 'descripcion': el concepto o comercio del movimiento (ej. "Pago Móvil CCE", "Envío de SMS"), SIN incluir el número de referencia ni la fecha/hora.
+- 'monto': tipo numérico JSON puro (no string), siempre positivo y sin el signo. Usa punto como separador decimal y NO incluyas separador de miles, ej. 1442.69 en vez de "1.442,69".
+- 'moneda': 'bs' o 'usdt', según la moneda del estado de cuenta (casi siempre 'bs' en bancos venezolanos).
+- 'fecha': formato YYYY-MM-DD. Las fechas pueden venir como DD/MM/YY o DD/MM/YYYY; conviértelas. Si no aparece año usa como referencia hoy, ${hoy}. Si no hay fecha visible en absoluto usa null.
+- 'categoria_sugerida': una de salario, comida, mercado, internet, mascotas, cashea, otro. Usa 'salario' para depósitos o transferencias de ingreso recibidas, 'internet' para comisiones y cargos bancarios (envío de SMS, emisión de estado de cuenta, mantenimiento, etc) y 'otro' si ninguna aplica bien.
+
+Responde SOLO un JSON puro con una clave 'items' que sea un arreglo de esos objetos, uno por cada movimiento visible en la imagen.`;
+  }
   return PROMPTS[mode] || PROMPTS.factura;
 }
 
