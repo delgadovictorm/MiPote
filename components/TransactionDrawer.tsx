@@ -45,7 +45,9 @@ export function TransactionDrawer({
   usuario, setUsuario,
   espacios,
   potes,
-  destinoTransferencia, setDestinoTransferencia
+  destinoTransferencia, setDestinoTransferencia,
+  modoFinanzas, // 'fondo_comun' | 'divide_50_50' | 'proporcional' | 'hibrido' (solo aplica a espacioActivo.tipo === 'pote')
+  pagadoPor, setPagadoPor
 }: any) {
 
   const [isOpen, setIsOpen] = useState(false);
@@ -78,6 +80,7 @@ export function TransactionDrawer({
         setEmojiElegido("");
         setShowEmojiPicker(false);
         setBusquedaEmoji("");
+        setPagadoPor?.("");
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -165,10 +168,16 @@ export function TransactionDrawer({
 
     if (categoria === 'abono_pote' && !destinoTransferencia) return alert("Selecciona a qué Pote vas a mandar la plata");
 
+    const esPoteEspacio = espacioActivo?.tipo === 'pote';
+    const necesitaUsuario = espacioActivo?.tipo !== 'individual';
     const isValidDesc = (tipo === 'ingreso' || categoria === 'abono_pote') ? true : descripcion.trim() !== "";
-    const isValidUser = usuario.trim() !== "" || espacioActivo?.tipo === 'individual';
-    
-    if (monto && categoria && isValidDesc && isValidUser) {
+    const isValidUser = !necesitaUsuario || usuario.trim() !== "";
+    const necesitaPagador = esPoteEspacio && (modoFinanzas === 'divide_50_50' || modoFinanzas === 'proporcional' || !modoFinanzas) && usuario === 'Ambos';
+    const isValidPagador = !necesitaPagador || !!pagadoPor;
+
+    if (necesitaPagador && !isValidPagador) return alert("Falta decir quién puso la plata en este movimiento compartido");
+
+    if (monto && categoria && isValidDesc && isValidUser && isValidPagador) {
       onSubmit(e);
       setIsOpen(false);
     } else {
@@ -377,20 +386,48 @@ export function TransactionDrawer({
               </div>
             )}
 
-            {/* USER SELECT */}
+            {/* USER SELECT — incluso en 'fondo_comun' preguntamos quién fue, para poder mostrar
+                después cuánto puso/gastó cada quien y si fue una cuenta de Ambos o personal.
+                Lo único que NO existe ahí es un reparto matemático (todo sigue siendo un solo pote). */}
             {espacioActivo?.tipo !== 'individual' && (
               <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-white/5 mb-6">
                 <label className="text-[9px] uppercase font-black text-white/30 block mb-2 tracking-widest pointer-events-none">¿Quién realizó el movimiento?</label>
-                <select 
-                  value={usuario} 
-                  onChange={(e) => setUsuario(e.target.value)}
+                <select
+                  value={usuario}
+                  onChange={(e) => { setUsuario(e.target.value); if (e.target.value !== 'Ambos') setPagadoPor?.(""); }}
                   className="w-full bg-transparent text-white font-bold outline-none appearance-none cursor-pointer"
                   required
                 >
                   <option value="" className="bg-[#1a1a1a]">Seleccionar integrante...</option>
                   {participantes?.map((p: any) => <option key={p.id} value={p.nombre} className="bg-[#1a1a1a]">{p.nombre}</option>)}
-                  <option value="Ambos" className="bg-[#1a1a1a]">Ambos (Mitad y mitad)</option>
+                  {/* Híbrido: no existe gasto "compartido" suelto, solo billetera personal + aportes al fondo común */}
+                  {!(espacioActivo?.tipo === 'pote' && modoFinanzas === 'hibrido') && (
+                    <option value="Ambos" className="bg-[#1a1a1a]">
+                      {espacioActivo?.tipo === 'pote' && modoFinanzas === 'fondo_comun'
+                        ? 'Ambos (cuenta compartida)'
+                        : espacioActivo?.tipo === 'pote'
+                        ? 'Ambos (Mitad y mitad)'
+                        : 'Ambos'}
+                    </option>
+                  )}
                 </select>
+              </div>
+            )}
+
+            {/* ¿QUIÉN PUSO LA PLATA? — solo si es compartido y el modo lleva registro de deuda (50/50 o proporcional) */}
+            {espacioActivo?.tipo === 'pote' && usuario === 'Ambos' && (modoFinanzas === 'divide_50_50' || modoFinanzas === 'proporcional' || !modoFinanzas) && (
+              <div className="bg-[#1a1a1a] p-4 rounded-2xl border border-amber-500/20 mb-6 animate-in zoom-in-95">
+                <label className="text-[9px] uppercase font-black text-amber-400 block mb-2 tracking-widest pointer-events-none">¿Quién puso la plata?</label>
+                <select
+                  value={pagadoPor}
+                  onChange={(e) => setPagadoPor?.(e.target.value)}
+                  className="w-full bg-transparent text-white font-bold outline-none appearance-none cursor-pointer"
+                  required
+                >
+                  <option value="" className="bg-[#1a1a1a]">Seleccionar quién pagó...</option>
+                  {participantes?.map((p: any) => <option key={p.id} value={p.nombre} className="bg-[#1a1a1a]">{p.nombre}</option>)}
+                </select>
+                <p className="text-[9px] text-white/30 mt-2">Así sabemos quién le debe a quién.</p>
               </div>
             )}
 

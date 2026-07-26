@@ -38,6 +38,20 @@ const ASSETS_POTES = {
   lobo: "/pote-lobo.png",
 };
 
+// Cuando alguien crea un Pote en modo 'proporcional'/'hibrido' antes de que su pareja se una,
+// su lado del reparto se guarda bajo la clave "__pendiente__". En cuanto la pareja entra con el
+// código, le ponemos su nombre real para que los cálculos y la pantalla de Inicio ya la reconozcan.
+// Vive a nivel de módulo (no dentro de un componente) porque la usan tanto el flujo de auth
+// como el flujo de "unirse" desde dentro del dashboard.
+const resolverAportePendiente = async (espacioId: string, nombreNuevoParticipante: string) => {
+  const { data: config } = await supabase.from('pote_configuracion').select('*').eq('espacio_id', espacioId).maybeSingle();
+  if (!config || !config.aportes || !('__pendiente__' in config.aportes)) return;
+  const nuevosAportes = { ...config.aportes };
+  nuevosAportes[nombreNuevoParticipante] = nuevosAportes['__pendiente__'];
+  delete nuevosAportes['__pendiente__'];
+  await supabase.from('pote_configuracion').update({ aportes: nuevosAportes }).eq('espacio_id', espacioId);
+};
+
 const RECOMPENSAS_RACHA = {
   1: { 
     nombre: "Hábito Iniciado", 
@@ -590,8 +604,10 @@ const abrirCelebracionManual = () => {
      
 
         await supabase.from('espacio_miembros').insert([{ espacio_id: spaceFound.id, usuario_id: session.user.id, rol: 'miembro' }]);
-        await supabase.from('participantes').insert([{ nombre: (perfil?.nombre || session.user.email.split('@')[0]), espacio_id: spaceFound.id }]);
-        
+        const nombreQueEntra = perfil?.nombre || session.user.email.split('@')[0];
+        await supabase.from('participantes').insert([{ nombre: nombreQueEntra, espacio_id: spaceFound.id }]);
+        if (spaceFound.tipo === 'pote') await resolverAportePendiente(spaceFound.id, nombreQueEntra);
+
         await cargarDatosUsuario(session.user.id);
         setShowJoinModal(false);
         setJoinCode("");
@@ -602,7 +618,7 @@ const abrirCelebracionManual = () => {
     setLoadingAuth(false);
   };
 
-  const seleccionarModulo = async (tipoModulo: string, eId?: string, opts?: { nombre?: string; monto_objetivo?: number }) => {
+  const seleccionarModulo = async (tipoModulo: string, eId?: string, opts?: { nombre?: string; monto_objetivo?: number; modoFinanzas?: string; aportes?: Record<string, number> }) => {
     if (!session) {
       if (tipoModulo === 'individual') {
         setIsGuest(true);
@@ -634,6 +650,22 @@ const abrirCelebracionManual = () => {
         // Una Vaca es un plan con una sola meta: la reunimos desde el arranque para que la billetera se construya en función de ella.
         if (tipoModulo === 'vaca' && opts?.monto_objetivo && opts.monto_objetivo > 0) {
           await supabase.from('metas').insert([{ nombre: newSpace.nombre, monto_objetivo: opts.monto_objetivo, espacio_id: newSpace.id }]);
+        }
+        // Finanzas en pareja: guardamos cómo se van a repartir el dinero desde el arranque.
+        if (tipoModulo === 'pote' && opts?.modoFinanzas) {
+          let fondoComunMetaId: string | null = null;
+          if (opts.modoFinanzas === 'hibrido') {
+            const { data: fondoMeta } = await supabase.from('metas').insert([{
+              nombre: 'Fondo Común', monto_objetivo: 999999, espacio_id: newSpace.id,
+            }]).select().single();
+            fondoComunMetaId = fondoMeta?.id || null;
+          }
+          await supabase.from('pote_configuracion').insert([{
+            espacio_id: newSpace.id,
+            modo: opts.modoFinanzas,
+            aportes: opts.aportes || {},
+            fondo_comun_meta_id: fondoComunMetaId,
+          }]);
         }
         await cargarDatosUsuario(session.user.id);
         setEspacioActivo(newSpace);
@@ -1310,6 +1342,28 @@ const RECOMPENSAS_METAS = [
   const [isAddingPote, setIsAddingPote] = useState(false);
   const [isCreatingVaca, setIsCreatingVaca] = useState(false);
   const [nuevaVacaForm, setNuevaVacaForm] = useState({ nombre: "", monto_objetivo: "" });
+
+  // ======================================================================
+  // FINANZAS EN PAREJA: config de reparto de un Espacio tipo 'pote'
+  // ======================================================================
+  const [poteConfig, setPoteConfig] = useState<any>(null); // fila de pote_configuracion (o null si no está configurado)
+  const [pagadoPor, setPagadoPor] = useState(""); // quién puso la plata físicamente en un movimiento "Ambos"
+  const [isCreatingPote, setIsCreatingPote] = useState(false);
+  const [potePasoConfig, setPotePasoConfig] = useState<1 | 2>(1);
+  const [nuevoPoteForm, setNuevoPoteForm] = useState<{
+    nombre: string;
+    modo: 'fondo_comun' | 'divide_50_50' | 'proporcional' | 'hibrido' | null;
+    miPct: string;
+    miAporte: string;
+    espacioIdExistente: string | null; // si se está configurando un pote YA creado, en vez de crear uno nuevo
+  }>({ nombre: "", modo: null, miPct: "50", miAporte: "", espacioIdExistente: null });
+
+  const MODOS_FINANZAS_PAREJA = [
+    { id: 'fondo_comun' as const, titulo: 'Fondo común total', desc: 'Todo es de los dos. Un solo saldo combinado, sin llevar cuentas de quién puso qué.', Icono: Heart },
+    { id: 'divide_50_50' as const, titulo: 'Dividir gastos 50/50', desc: 'Cada quien con su billetera. Lo compartido se parte a la mitad y la app lleva quién le debe a quién.', Icono: Users },
+    { id: 'proporcional' as const, titulo: 'Proporcional a ingresos', desc: 'Como el 50/50, pero lo compartido se divide según cuánto gana cada quien (ej. 70/30).', Icono: PieChartIcon },
+    { id: 'hibrido' as const, titulo: 'Aportes + billetera personal', desc: 'Cada quien aporta un monto al fondo común (renta, mercado) y el resto es billetera personal.', Icono: Landmark },
+  ];
   const POTE_OPCIONES = espacioActivo?.tipo === 'vaca'
     ? ["La rumba 🪩", "Pa' la caña 🍻", "El viaje ✈️", "La nave 🚗", "Personalizado ✍️"]
     : ["La nave 🚗", "Los estrenos 👕", "El gustico 🍔", "El semestre 📚", "Teléfono 📱", "Viaje ✈️", "Hogar 🏠", "Personalizado ✍️"];
@@ -1728,8 +1782,15 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
         const { data: txData } = await supabase.from("transacciones_saas").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: false });
         if (txData) setTransactions(txData);
         
-        const { data: partData } = await supabase.from("participantes").select("*").eq("espacio_id", espacioActivo.id);
+        const { data: partData } = await supabase.from("participantes").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: true });
         if (partData) setParticipantes(partData);
+
+        if (espacioActivo.tipo === 'pote') {
+          const { data: configData } = await supabase.from("pote_configuracion").select("*").eq("espacio_id", espacioActivo.id).maybeSingle();
+          setPoteConfig(configData || null);
+        } else {
+          setPoteConfig(null);
+        }
 
         const { data: casheaData } = await supabase.from("cashea").select("*").eq("espacio_id", espacioActivo.id).order("fecha_pago", { ascending: true });
         if (casheaData) setCuotasCashea(casheaData);
@@ -2033,6 +2094,7 @@ const handleManualSubmit = async (e: React.FormEvent) => {
         monto_usd_paralelo,
         categoria: finalCategoria,
         usuario: usuario || "Tú",
+        pagado_por: usuario === 'Ambos' ? (pagadoPor || null) : null,
         tipo,
         espacio_id: espacioActivo.id,
         usuario_id: session.user.id,
@@ -2091,8 +2153,10 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     
 
     await supabase.from('espacio_miembros').insert([{ espacio_id: spaceFound.id, usuario_id: session.user.id, rol: 'miembro' }]);
-    await supabase.from('participantes').insert([{ nombre: (perfil?.nombre || session.user.email.split('@')[0]), espacio_id: spaceFound.id }]);
-    
+    const nombreQueEntraInterno = perfil?.nombre || session.user.email.split('@')[0];
+    await supabase.from('participantes').insert([{ nombre: nombreQueEntraInterno, espacio_id: spaceFound.id }]);
+    if (spaceFound.tipo === 'pote') await resolverAportePendiente(spaceFound.id, nombreQueEntraInterno);
+
     alert("✅ ¡Te has unido exitosamente!");
     window.location.reload();
   };
@@ -2110,6 +2174,25 @@ const handleManualSubmit = async (e: React.FormEvent) => {
       setEspacioActivo({...espacioActivo, nombre: newSpaceName});
       setIsEditingSpaceName(false);
     }
+  };
+
+  // Configura (o edita) el reparto de un Pote que YA existe — a diferencia de seleccionarModulo,
+  // que solo crea la config al momento de crear un Pote nuevo desde cero.
+  const guardarConfigPote = async (modo: string, aportes: Record<string, number>) => {
+    if (!espacioActivo || isGuest) return;
+    let fondoComunMetaId: string | null = poteConfig?.fondo_comun_meta_id || null;
+    if (modo === 'hibrido' && !fondoComunMetaId) {
+      const { data: fondoMeta } = await supabase.from('metas').insert([{
+        nombre: 'Fondo Común', monto_objetivo: 999999, espacio_id: espacioActivo.id,
+      }]).select().single();
+      fondoComunMetaId = fondoMeta?.id || null;
+    }
+    const { data: saved, error } = await supabase.from('pote_configuracion').upsert([{
+      espacio_id: espacioActivo.id, modo, aportes, fondo_comun_meta_id: fondoComunMetaId, updated_at: new Date().toISOString(),
+    }], { onConflict: 'espacio_id' }).select().single();
+    if (error) { alert("🚨 No se pudo guardar la configuración: " + error.message); return; }
+    setPoteConfig(saved);
+    fetchData();
   };
 
   const agregarRecordatorio = async (e: React.FormEvent) => {
@@ -2647,13 +2730,31 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     fetchData();
   };
 
+  // Modo de reparto del pote activo. Un pote sin fila en pote_configuracion (o de antes de
+  // esta función) se sigue comportando exactamente como siempre: split 50/50 en "Ambos".
+  const modoFinanzasPote: 'fondo_comun' | 'divide_50_50' | 'proporcional' | 'hibrido' =
+    espacioActivo?.tipo === 'pote' ? (poteConfig?.modo || 'divide_50_50') : 'divide_50_50';
+
+  // % (0-1) que le corresponde a `nombre` en un gasto/ingreso "Ambos" bajo modo proporcional.
+  // Si no hay config para ese nombre todavía (ej. la pareja no se ha unido), se reparte 50/50.
+  const getFraccionCompartida = (nombre?: string) => {
+    if (modoFinanzasPote !== 'proporcional' || !nombre) return 0.5;
+    const aportes = poteConfig?.aportes || {};
+    const pct = aportes[nombre.trim()];
+    return typeof pct === 'number' ? pct / 100 : 0.5;
+  };
+
   const getSaldosAislados = (userName?: string, incluirMetas: boolean = false) => {
     let bs = 0, usdt = 0, cash = 0;
     const extra: Record<string, number> = {};
+    // 'ALL' (o sin userName) siempre da el pote combinado completo, sin importar el modo —
+    // eso es lo que usa el saldo principal en modo 'fondo_comun'. Pedir el saldo de UNA persona
+    // puntual sí sigue distinguiendo su nombre de "Ambos", incluso en fondo_comun: la plata está
+    // junta, pero igual queremos poder ver cuánto puso/gastó cada quien para que quede transparente.
     transactions.forEach(tx => {
       // Si NO incluimos metas y la transacción es de una meta, la ignoramos
-      if (!incluirMetas && (tx.categoria.startsWith("pote_") || tx.categoria === 'emergencia')) return; 
-      
+      if (!incluirMetas && (tx.categoria.startsWith("pote_") || tx.categoria === 'emergencia')) return;
+
       let fraction = 0;
       const txUser = tx.usuario?.trim();
       const targetUser = userName?.trim();
@@ -2661,7 +2762,11 @@ const handleManualSubmit = async (e: React.FormEvent) => {
       if (!userName || userName === 'ALL' || espacioActivo?.tipo === 'individual') fraction = 1;
       else {
           if (txUser === targetUser || (txUser === 'Tú' && targetUser === (perfil?.nombre || session?.user?.email?.split('@')[0]))) fraction = 1;
-          else if (txUser === 'Ambos' || txUser === 'Todos (Div)') fraction = 1 / (espacioActivo?.tipo === 'vaca' ? Math.max(participantes.length, 1) : 2);
+          else if (txUser === 'Ambos' || txUser === 'Todos (Div)') {
+            fraction = espacioActivo?.tipo === 'vaca'
+              ? 1 / Math.max(participantes.length, 1)
+              : getFraccionCompartida(targetUser);
+          }
       }
 
       if (fraction > 0) {
@@ -2677,6 +2782,50 @@ const handleManualSubmit = async (e: React.FormEvent) => {
       }
     });
     return { bs, usdt, cash, extra };
+  };
+
+  // "Quién le debe a quién" en modos 'divide_50_50' y 'proporcional': recorre los movimientos
+  // marcados "Ambos" que traen pagado_por (quién puso la plata realmente) y calcula, por persona,
+  // cuánto pagó de más/de menos respecto a lo que le tocaba. Los "Ambos" de antes de este cambio
+  // no tienen pagado_por, así que simplemente no participan en la deuda (no se inventa nada).
+  const getDeuda = () => {
+    const balances: Record<string, number> = {};
+    if (espacioActivo?.tipo !== 'pote' || (modoFinanzasPote !== 'divide_50_50' && modoFinanzasPote !== 'proporcional')) {
+      return { balances, resumenTexto: null as string | null };
+    }
+
+    const nombres = participantes.map((p: any) => p.nombre?.trim()).filter(Boolean);
+    nombres.forEach((n: string) => { balances[n] = 0; });
+    const n = Math.max(nombres.length, 2);
+
+    transactions.forEach(tx => {
+      const txUser = tx.usuario?.trim();
+      const pagador = tx.pagado_por?.trim();
+      if (txUser !== 'Ambos' || !pagador) return;
+      if (tx.categoria.startsWith('pote_') || tx.categoria === 'emergencia' || tx.categoria === 'transferencia_salida' || tx.categoria === 'transferencia_entrada' || tx.categoria === 'cambio_p2p') return;
+
+      const monto = tx.monto_usd_paralelo || 0;
+      if (!monto) return;
+      const signo = tx.tipo === 'ingreso' ? -1 : 1; // egreso: a quien pagó le deben; ingreso: quien recibió debe repartir
+
+      nombres.forEach((nombre: string) => {
+        const shareDe = modoFinanzasPote === 'proporcional' ? getFraccionCompartida(nombre) : 1 / n;
+        const pagoFull = nombre === pagador ? monto : 0;
+        balances[nombre] = (balances[nombre] || 0) + signo * (pagoFull - monto * shareDe);
+      });
+    });
+
+    let resumenTexto: string | null = null;
+    const conDeuda = nombres.filter((nombre: string) => Math.abs(balances[nombre] || 0) > 0.5);
+    if (conDeuda.length === 0) {
+      resumenTexto = "Están a mano 🎉";
+    } else if (nombres.length === 2) {
+      const [a, b] = nombres;
+      if ((balances[a] || 0) > 0) resumenTexto = `${b} le debe $${Math.abs(balances[b] || 0).toFixed(2)} a ${a}`;
+      else resumenTexto = `${a} le debe $${Math.abs(balances[a] || 0).toFixed(2)} a ${b}`;
+    }
+
+    return { balances, resumenTexto };
   };
 
   // Liquidez real disponible para gastar (excluye lo guardado en metas/potes), en USD.
@@ -3307,13 +3456,24 @@ const getPatrimonioNeto = () => {
     }
 
     if (activeTab === 'inicio') {
+      // Fondo común total: un solo saldo combinado, no la billetera aislada de "quien mira la pantalla".
+      const esPoteFondoComun = espacioActivo?.tipo === 'pote' && modoFinanzasPote === 'fondo_comun';
+      const esPoteHibrido = espacioActivo?.tipo === 'pote' && modoFinanzasPote === 'hibrido';
+      const nombreParaMiSaldo = esPoteFondoComun ? 'ALL' : ((perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado");
+
       const patrimonioTotal = getPatrimonioNeto();
-      const saldoPrincipal = getSaldosAislados((perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado");
+      const saldoPrincipal = getSaldosAislados(nombreParaMiSaldo);
+      // En 'fondo_comun' la plata está junta, pero igual mostramos cuánto puso/gastó cada quien
+      // (transparencia), separando "cuenta de Ambos" de "cuenta personal" — solo que aquí es
+      // informativo, no una billetera aislada real como en los otros modos.
       const participantesVisibles = espacioActivo?.tipo !== 'individual' && participantes.length > 0;
-      const metasActivas = potes.length > 0;
+      const metasActivas = potes.filter((p: any) => p.id !== poteConfig?.fondo_comun_meta_id).length > 0;
+      const fondoComunMeta = esPoteHibrido ? potes.find((p: any) => p.id === poteConfig?.fondo_comun_meta_id) : null;
+      const fondoComunAhorrado = fondoComunMeta ? getPoteAhorrado(fondoComunMeta.id, fondoComunMeta.nombre) : 0;
+      const deudaInfo = getDeuda();
 
       // Churupito = liquidez real disponible para gastar (excluye lo que está guardado en metas/potes)
-      const liquidezTotal = getLiquidezTotal((perfil?.nombre || session?.user?.email?.split('@')[0]) || "Invitado");
+      const liquidezTotal = getLiquidezTotal(nombreParaMiSaldo);
 
       return (
         <div className="space-y-6">
@@ -3371,6 +3531,7 @@ const getPatrimonioNeto = () => {
                   
                {espacioActivo?.tipo === 'individual' ? (
                     // VISTA DE LISTA MINIMALISTA (Basado en tu diseño de iOS)
+
                     <div className="space-y-3 px-1 mt-2">
                       
                       {/* Fila 1: Dólares Digitales */}
@@ -3693,12 +3854,71 @@ const getPatrimonioNeto = () => {
           <input type="file" accept="image/*" ref={estadoCuentaInputRef} onChange={handleScanEstadoCuenta} className="hidden" />
 
           {/* ========================================================= */}
+          {/* FINANZAS EN PAREJA: banner de config pendiente / deuda / fondo común */}
+          {/* ========================================================= */}
+          {espacioActivo?.tipo === 'pote' && !poteConfig && !loading && (
+            <div className="px-2">
+              <button
+                onClick={() => {
+                  setNuevoPoteForm({ nombre: espacioActivo.nombre || "", modo: null, miPct: "50", miAporte: "", espacioIdExistente: espacioActivo.id });
+                  setPotePasoConfig(2);
+                  setIsCreatingPote(true);
+                }}
+                className="w-full flex items-center justify-between gap-3 bg-fuchsia-500/10 border border-fuchsia-500/30 p-4 rounded-3xl hover:bg-fuchsia-500/20 transition-colors"
+              >
+                <div className="flex items-center gap-3 text-left">
+                  <Heart className="w-5 h-5 text-fuchsia-400 shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold text-white">Configura cómo se reparten el dinero</p>
+                    <p className="text-[10px] text-white/40">Fondo común, 50/50, proporcional o aportes fijos</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-fuchsia-400 shrink-0" />
+              </button>
+            </div>
+          )}
+
+          {espacioActivo?.tipo === 'pote' && poteConfig && (modoFinanzasPote === 'divide_50_50' || modoFinanzasPote === 'proporcional') && deudaInfo.resumenTexto && (
+            <div className="px-2">
+              <div className="bg-[#1a0f2e] border border-amber-500/30 p-4 rounded-3xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0"><Landmark className="w-5 h-5 text-amber-400" /></div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Balance entre ustedes</p>
+                    <p className="text-sm font-black text-white">{deudaInfo.resumenTexto}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {esPoteHibrido && fondoComunMeta && (
+            <div className="px-2">
+              <div className="bg-gradient-to-br from-fuchsia-600 to-purple-700 p-5 rounded-[2rem] shadow-lg relative overflow-hidden">
+                <div className="absolute inset-0 bg-black/20" />
+                <div className="relative z-10 flex items-center justify-between">
+                  <div>
+                    <p className="text-white/80 text-[10px] uppercase font-bold tracking-widest mb-1">Fondo Común</p>
+                    <p className="text-3xl font-black text-white font-sans tabular-nums">$<AnimatedNum value={fondoComunAhorrado} format="usd" /></p>
+                  </div>
+                  <button
+                    onClick={() => { setMetaAccion({ id: fondoComunMeta.id, nombre: 'Fondo Común', ahorrado: fondoComunAhorrado, objetivo: fondoComunMeta.monto_objetivo, modo: 'abonar' }); setMetaAccionMonto(""); }}
+                    className="bg-white/15 hover:bg-white/25 text-white text-xs font-black uppercase tracking-widest px-4 py-2.5 rounded-full transition-colors active:scale-95"
+                  >
+                    Aportar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
           {/* INTEGRANTES DEL ESPACIO (VACA O POTE COMPARTIDO) */}
           {/* ========================================================= */}
           {participantesVisibles && (
             <div className="space-y-4 px-2">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Participantes</p>
+                <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">{esPoteHibrido ? 'Billeteras personales' : esPoteFondoComun ? 'Aportes y gastos por persona' : 'Participantes'}</p>
                 <span className="text-[10px] text-white/30">{participantes.length} miembro{participantes.length === 1 ? '' : 's'}</span>
               </div>
               <div className="space-y-3">
@@ -3706,6 +3926,7 @@ const getPatrimonioNeto = () => {
                   const saldoP = getSaldosAislados(p.nombre, true);
                   const totalP = saldoP.usdt + saldoP.cash + (rates.usdt > 0 ? saldoP.bs / rates.usdt : 0);
                   const estaEditando = editandoParticipanteId === p.id;
+                  const pctParticipante = modoFinanzasPote === 'proporcional' ? poteConfig?.aportes?.[p.nombre?.trim()] : null;
                   return (
                     <div key={p.id} className="border border-white/5 rounded-3xl p-4 flex items-center justify-between gap-3 hover:bg-white/5 transition-colors">
                       {estaEditando ? (
@@ -3727,6 +3948,9 @@ const getPatrimonioNeto = () => {
                           <div className="min-w-0">
                             <p className="text-sm font-bold text-white truncate flex items-center gap-1.5">
                               {p.nombre}
+                              {typeof pctParticipante === 'number' && (
+                                <span className="text-[9px] text-fuchsia-400 font-black bg-fuchsia-500/10 px-1.5 py-0.5 rounded">{pctParticipante}%</span>
+                              )}
                               <button
                                 onClick={() => { setEditandoParticipanteId(p.id); setEditandoParticipanteNombre(p.nombre); }}
                                 className="text-white/20 hover:text-purple-400 transition-colors"
@@ -3755,7 +3979,7 @@ const getPatrimonioNeto = () => {
                 <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Metas activas</p>
               </div>
               <div className="space-y-3">
-                {potes.map((pote) => {
+                {potes.filter((pote: any) => pote.id !== poteConfig?.fondo_comun_meta_id).map((pote) => {
                   const ahorrado = getPoteAhorrado(pote.id, pote.nombre);
                   const objetivo = Number(pote.monto_objetivo || 0);
                   const porcentaje = objetivo > 0 ? Math.min((ahorrado / objetivo) * 100, 100) : 0;
@@ -4070,7 +4294,9 @@ const getPatrimonioNeto = () => {
                 <button
                   onClick={() => {
                     setIsSpacesMenuOpen(false);
-                    onSelectModule('pote', 'NEW');
+                    setNuevoPoteForm({ nombre: "", modo: null, miPct: "50", miAporte: "", espacioIdExistente: null });
+                    setPotePasoConfig(1);
+                    setIsCreatingPote(true);
                   }}
                   className="relative flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/10 font-bold text-xs transition-colors active:scale-95"
                 >
@@ -4159,6 +4385,131 @@ const getPatrimonioNeto = () => {
                   Crear Vaca
                 </button>
               </form>
+            </div>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
+
+      {/* DRAWER: CREAR / CONFIGURAR POTE (FINANZAS EN PAREJA) */}
+      <Drawer.Root open={isCreatingPote} onOpenChange={setIsCreatingPote}>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
+          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[85vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-fuchsia-500">
+            <Drawer.Title className="sr-only">{nuevoPoteForm.espacioIdExistente ? 'Configurar reparto del Pote' : 'Crear Pote'}</Drawer.Title>
+            <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-24">
+              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+
+              {potePasoConfig === 1 ? (
+                <>
+                  <h3 className="text-xl font-black text-white mb-2 text-center">Nuevo Pote</h3>
+                  <p className="text-xs text-white/40 text-center mb-6">Para tu pareja o tu familia. Ponle un nombre para empezar.</p>
+                  <div className="mb-6">
+                    <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">Nombre del Pote</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Nosotros dos"
+                      value={nuevoPoteForm.nombre}
+                      onChange={(e) => setNuevoPoteForm({ ...nuevoPoteForm, nombre: e.target.value })}
+                      className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-fuchsia-500"
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { if (!nuevoPoteForm.nombre.trim()) return alert("Ponle un nombre al pote"); setPotePasoConfig(2); }}
+                    className="w-full bg-fuchsia-500 text-black font-black py-5 rounded-3xl uppercase tracking-widest text-sm shadow-[0_0_20px_rgba(217,70,239,0.3)] active:scale-95 transition-transform hover:bg-fuchsia-400"
+                  >
+                    Continuar
+                  </button>
+                </>
+              ) : (
+                <form onSubmit={conUnSoloClick(async (e: React.FormEvent) => {
+                  e.preventDefault();
+                  const { modo, miPct, miAporte, espacioIdExistente } = nuevoPoteForm;
+                  if (!modo) return alert("Elige cómo se van a organizar con el dinero");
+                  const miNombre = perfil?.nombre || session?.user?.email?.split('@')[0] || "Tú";
+                  let aportes: Record<string, number> = {};
+                  if (modo === 'proporcional') {
+                    const pct = Math.min(Math.max(parseFloat(miPct) || 50, 1), 99);
+                    aportes = { [miNombre]: pct, "__pendiente__": 100 - pct };
+                  } else if (modo === 'hibrido') {
+                    aportes = { [miNombre]: parseFloat(miAporte) || 0, "__pendiente__": 0 };
+                  }
+
+                  if (espacioIdExistente) {
+                    await guardarConfigPote(modo, aportes);
+                  } else {
+                    await onSelectModule('pote', 'NEW', { nombre: nuevoPoteForm.nombre.trim(), modoFinanzas: modo, aportes });
+                  }
+                  setIsCreatingPote(false);
+                })} className="flex flex-col gap-4">
+                  {!nuevoPoteForm.espacioIdExistente && (
+                    <button type="button" onClick={() => setPotePasoConfig(1)} className="flex items-center gap-1 text-white/40 hover:text-white text-xs font-bold mb-1 self-start">
+                      <ChevronLeft className="w-4 h-4" /> Atrás
+                    </button>
+                  )}
+                  <h3 className="text-xl font-black text-white text-center">¿Cómo quieren organizarse con el dinero?</h3>
+                  <p className="text-xs text-white/40 text-center mb-2">Pueden cambiarlo después si no queda como esperaban.</p>
+
+                  <div className="space-y-3">
+                    {MODOS_FINANZAS_PAREJA.map((m) => {
+                      const activo = nuevoPoteForm.modo === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setNuevoPoteForm({ ...nuevoPoteForm, modo: m.id })}
+                          className={`w-full text-left p-4 rounded-2xl border transition-colors flex items-start gap-3 ${activo ? 'border-fuchsia-500 bg-fuchsia-500/10' : 'border-white/10 bg-[#1a1a1a] hover:border-white/20'}`}
+                        >
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${activo ? 'bg-fuchsia-500/20' : 'bg-white/5'}`}>
+                            <m.Icono className={`w-5 h-5 ${activo ? 'text-fuchsia-400' : 'text-white/40'}`} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className={`text-sm font-black ${activo ? 'text-fuchsia-400' : 'text-white'}`}>{m.titulo}</p>
+                            <p className="text-[11px] text-white/40 leading-relaxed mt-0.5">{m.desc}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {nuevoPoteForm.modo === 'proporcional' && (
+                    <div className="bg-[#1a1a1a] border border-fuchsia-500/20 p-4 rounded-2xl animate-in zoom-in-95">
+                      <label className="text-[10px] uppercase text-fuchsia-400 font-bold tracking-widest block mb-2">¿Qué % aportas tú?</label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range" min="1" max="99" step="1"
+                          value={nuevoPoteForm.miPct}
+                          onChange={(e) => setNuevoPoteForm({ ...nuevoPoteForm, miPct: e.target.value })}
+                          className="flex-1 accent-fuchsia-500"
+                        />
+                        <span className="text-white font-black text-lg tabular-nums w-16 text-right">{nuevoPoteForm.miPct}%</span>
+                      </div>
+                      <p className="text-[10px] text-white/30 mt-2">Tu pareja quedaría en {100 - (parseFloat(nuevoPoteForm.miPct) || 50)}% — lo ajusta cuando se una con el código, si hace falta.</p>
+                    </div>
+                  )}
+
+                  {nuevoPoteForm.modo === 'hibrido' && (
+                    <div className="bg-[#1a1a1a] border border-fuchsia-500/20 p-4 rounded-2xl animate-in zoom-in-95">
+                      <label className="text-[10px] uppercase text-fuchsia-400 font-bold tracking-widest block mb-2">¿Cuánto aportas tú al mes al fondo común? ($)</label>
+                      <input
+                        type="number" min="0" step="0.01" placeholder="Ej: 100"
+                        value={nuevoPoteForm.miAporte}
+                        onChange={(e) => setNuevoPoteForm({ ...nuevoPoteForm, miAporte: e.target.value })}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-2xl font-black text-white font-sans tabular-nums outline-none focus:border-fuchsia-500"
+                      />
+                      <p className="text-[10px] text-white/30 mt-2">El resto de tu plata queda en tu billetera personal. Tu pareja configura su aporte cuando se une.</p>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="w-full bg-fuchsia-500 text-black font-black py-5 rounded-3xl uppercase tracking-widest text-sm shadow-[0_0_20px_rgba(217,70,239,0.3)] mt-2 active:scale-95 transition-transform hover:bg-fuchsia-400"
+                  >
+                    {nuevoPoteForm.espacioIdExistente ? 'Guardar configuración' : 'Crear Pote'}
+                  </button>
+                </form>
+              )}
             </div>
           </Drawer.Content>
         </Drawer.Portal>
@@ -4718,6 +5069,7 @@ const getPatrimonioNeto = () => {
             espacios={espacios} espacioActivo={espacioActivo} potes={potes}
             participantes={participantes} usuario={usuario} setUsuario={setUsuario}
             destinoTransferencia={destinoTransferencia} setDestinoTransferencia={setDestinoTransferencia}
+            modoFinanzas={modoFinanzasPote} pagadoPor={pagadoPor} setPagadoPor={setPagadoPor}
           >
             <button id="nuevo-registro-trigger" className="hidden">Gatillo Oculto</button>
           </TransactionDrawer>

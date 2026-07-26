@@ -20,6 +20,24 @@ export interface Espacio {
   created_at?: string;
 }
 
+// Cómo se organiza el dinero dentro de un Espacio de tipo 'pote' (pareja/familia).
+// Un pote sin fila en pote_configuracion se sigue tratando como 'divide_50_50' (comportamiento
+// histórico de "Ambos" repartido a la mitad), así que este tipo siempre incluye null.
+export type ModoFinanzasPareja = 'fondo_comun' | 'divide_50_50' | 'proporcional' | 'hibrido';
+
+export interface PoteConfiguracion {
+  espacio_id: string;
+  modo: ModoFinanzasPareja;
+  // proporcional: { [nombreParticipante]: porcentaje } (suman 100)
+  // hibrido: { [nombreParticipante]: aporteMensualUsd }
+  // Mientras la pareja no se une con el código, su lado se guarda bajo la clave "__pendiente__"
+  // y se renombra automáticamente al nombre real en cuanto entra al espacio.
+  aportes: Record<string, number>;
+  fondo_comun_meta_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Participante {
   id: string;
   nombre: string;
