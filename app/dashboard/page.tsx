@@ -4411,7 +4411,6 @@ const getPatrimonioNeto = () => {
                       value={nuevoPoteForm.nombre}
                       onChange={(e) => setNuevoPoteForm({ ...nuevoPoteForm, nombre: e.target.value })}
                       className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-sm font-bold text-white outline-none focus:border-fuchsia-500"
-                      autoFocus
                     />
                   </div>
                   <button
