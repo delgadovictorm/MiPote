@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Search, Tag, Loader2 } from "lucide-react";
+import { Search, Tag } from "lucide-react";
 
 interface ProductoPrecio {
   producto?: string;
@@ -19,20 +19,56 @@ interface ConsultorPreciosProps {
   onSeleccionarProducto: (nombre: string, precioUsd: number) => void;
 }
 
+const MENSAJES_ESPERA = [
+  "Comparando precios...",
+  "Consultando el súper...",
+  "Un momento más...",
+  "Casi listo...",
+];
+
+function useMensajeRotativo(activo: boolean) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (!activo) return;
+    const interval = setInterval(() => setI((v) => (v + 1) % MENSAJES_ESPERA.length), 2000);
+    return () => clearInterval(interval);
+  }, [activo]);
+  return MENSAJES_ESPERA[i];
+}
+
 export function ConsultorPrecios({ theme, onSeleccionarProducto }: ConsultorPreciosProps) {
-  const [categorias, setCategorias] = useState<{ nombre: string; productos: ProductoPrecio[] }[]>([]);
-  const [cargando, setCargando] = useState(true);
+  const [nombresCategorias, setNombresCategorias] = useState<string[] | null>(null);
+  const [datosPorCategoria, setDatosPorCategoria] = useState<Record<string, ProductoPrecio[]>>({});
+  const [categoriaCargando, setCategoriaCargando] = useState<string | null>(null);
+
   const [termino, setTermino] = useState("");
   const [buscando, setBuscando] = useState(false);
   const [resultadosBusqueda, setResultadosBusqueda] = useState<ProductoPrecio[] | null>(null);
 
+  const mensajeEspera = useMensajeRotativo(!!categoriaCargando);
+
+  // Pide las categorías UNA por UNA (no todas juntas) para que cada sección
+  // aparezca apenas está lista, en vez de dejar la pantalla en blanco hasta
+  // que la más lenta termine.
   useEffect(() => {
     let activo = true;
-    fetch("/api/precios")
-      .then((r) => r.json())
-      .then((data) => { if (activo) setCategorias(data.categorias || []); })
-      .catch(() => {})
-      .finally(() => { if (activo) setCargando(false); });
+    (async () => {
+      const res = await fetch("/api/precios").then((r) => r.json()).catch(() => null);
+      const nombres: string[] = res?.categoriasDisponibles || [];
+      if (!activo) return;
+      setNombresCategorias(nombres);
+
+      for (const nombre of nombres) {
+        if (!activo) return;
+        setCategoriaCargando(nombre);
+        const data = await fetch(`/api/precios?categoria=${encodeURIComponent(nombre)}`)
+          .then((r) => r.json())
+          .catch(() => ({ productos: [] }));
+        if (!activo) return;
+        setDatosPorCategoria((prev) => ({ ...prev, [nombre]: data.productos || [] }));
+      }
+      if (activo) setCategoriaCargando(null);
+    })();
     return () => { activo = false; };
   }, []);
 
@@ -66,7 +102,8 @@ export function ConsultorPrecios({ theme, onSeleccionarProducto }: ConsultorPrec
     );
   };
 
-  const sinDatos = !cargando && categorias.length === 0 && resultadosBusqueda === null;
+  const categoriasConDatos = (nombresCategorias || []).filter((n) => (datosPorCategoria[n]?.length || 0) > 0);
+  const terminadoSinResultados = nombresCategorias !== null && !categoriaCargando && categoriasConDatos.length === 0;
 
   return (
     <div className="bg-[#1C1C1E]/60 border border-white/5 rounded-3xl p-4 mb-4">
@@ -89,7 +126,7 @@ export function ConsultorPrecios({ theme, onSeleccionarProducto }: ConsultorPrec
       {resultadosBusqueda !== null ? (
         <div>
           {buscando ? (
-            <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-white/40" /></div>
+            <p className="text-center text-white/40 text-[11px] py-4">{mensajeEspera}</p>
           ) : resultadosBusqueda.length === 0 ? (
             <p className="text-center text-white/30 text-[11px] py-4">Sin resultados para "{termino}".</p>
           ) : (
@@ -98,20 +135,27 @@ export function ConsultorPrecios({ theme, onSeleccionarProducto }: ConsultorPrec
             </div>
           )}
         </div>
-      ) : cargando ? (
-        <div className="flex justify-center py-6"><Loader2 className={`w-5 h-5 animate-spin ${theme.text}`} /></div>
-      ) : sinDatos ? (
-        <p className="text-center text-white/30 text-[11px] py-4">Aún no hay precios cargados. Vuelve a intentar en unos minutos.</p>
       ) : (
         <div className="space-y-4">
-          {categorias.map((cat) => (
-            <div key={cat.nombre}>
-              <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold mb-2">{cat.nombre}</p>
+          {categoriasConDatos.map((nombre) => (
+            <div key={nombre}>
+              <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold mb-2">{nombre}</p>
               <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                {cat.productos.map((p, i) => renderTarjeta(p, `${cat.nombre}-${i}`))}
+                {datosPorCategoria[nombre].map((p, i) => renderTarjeta(p, `${nombre}-${i}`))}
               </div>
             </div>
           ))}
+
+          {categoriaCargando && (
+            <div className="text-center py-3">
+              <p className="text-[11px] font-bold text-white/60">Cargando {categoriaCargando}...</p>
+              <p className="text-[10px] text-white/30 mt-1">{mensajeEspera}</p>
+            </div>
+          )}
+
+          {terminadoSinResultados && (
+            <p className="text-center text-white/30 text-[11px] py-4">Aún no hay precios cargados. Vuelve a intentar en unos minutos.</p>
+          )}
         </div>
       )}
 

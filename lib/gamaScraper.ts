@@ -240,35 +240,16 @@ export async function seedCategoria(nombre: string, keywords: string[], limite: 
   return categorizados;
 }
 
-// Auto-siembra la primera vez que se pide el panel y todavía no hay nada
-// categorizado (ej. el cron diario aún no corrió, o es la primera vez que se
-// usa la feature). Solo hace el trabajo pesado UNA vez — de ahí en adelante
-// ya hay datos en caché y el cron diario se encarga de mantenerlos frescos.
-export async function asegurarCategoriasSembradas(tasaBcv: number, limitePorCategoria = 4) {
+export async function asegurarCatalogoSincronizado() {
   const { count } = await supabaseAdmin
     .from("precios_mercado_catalogo")
-    .select("id", { count: "exact", head: true })
-    .not("categoria_nombre", "is", null);
-
-  if (count && count > 0) return;
-
-  try {
+    .select("id", { count: "exact", head: true });
+  if (!count) {
     await syncCatalogoDesdeSitemap();
-  } catch (e) {
-    console.error("No se pudo sincronizar el catálogo de Gama:", e);
-    return;
-  }
-
-  for (const { nombre, keywords } of CATEGORIAS_PRINCIPALES) {
-    try {
-      await seedCategoria(nombre, keywords, limitePorCategoria, tasaBcv);
-    } catch (e) {
-      console.error(`No se pudo sembrar la categoría ${nombre}:`, e);
-    }
   }
 }
 
-export async function buscarEnCatalogo(termino: string, limite = 8) {
+export async function buscarEnCatalogo(termino: string, limite = 6) {
   const { data } = await supabaseAdmin
     .from("precios_mercado_catalogo")
     .select("codigo_producto, nombre_producto")
@@ -277,24 +258,47 @@ export async function buscarEnCatalogo(termino: string, limite = 8) {
   return data || [];
 }
 
-export async function getVistaPorCategorias(limitePorCategoria = 8) {
+export async function getProductosPorCategoria(nombre: string, limite = 6) {
+  const { data } = await supabaseAdmin
+    .from("precios_mercado")
+    .select("codigo_producto, nombre_producto, precio_ref, iva_ref, precio_total, url_producto, scraped_at")
+    .eq("categoria_nombre", nombre)
+    .order("scraped_at", { ascending: false })
+    .limit(limite * 3);
+
+  const vistos = new Set<string>();
+  const productos: any[] = [];
+  for (const fila of data || []) {
+    if (vistos.has(fila.codigo_producto)) continue;
+    vistos.add(fila.codigo_producto);
+    productos.push(fila);
+    if (productos.length >= limite) break;
+  }
+  return productos;
+}
+
+// Pensada para pedirse UNA categoría a la vez desde el front (en vez de las 6
+// juntas en un solo request gigante): siembra solo esa categoría si le faltan
+// productos (rápido, unos pocos fetches) y devuelve lo que haya. Así cada
+// sección del Consultor de precios carga independiente y no bloquea a las demás.
+export async function obtenerCategoriaConSiembra(nombre: string, tasaBcv: number, limite = 6) {
+  const categoria = CATEGORIAS_PRINCIPALES.find((c) => c.nombre === nombre);
+  if (!categoria) return [];
+
+  try {
+    await asegurarCatalogoSincronizado();
+    await seedCategoria(categoria.nombre, categoria.keywords, limite, tasaBcv);
+  } catch (e) {
+    console.error(`No se pudo sembrar la categoría ${nombre}:`, e);
+  }
+
+  return getProductosPorCategoria(nombre, limite);
+}
+
+export async function getVistaPorCategorias(limitePorCategoria = 6) {
   const resultado: { nombre: string; productos: any[] }[] = [];
   for (const { nombre } of CATEGORIAS_PRINCIPALES) {
-    const { data } = await supabaseAdmin
-      .from("precios_mercado")
-      .select("codigo_producto, nombre_producto, precio_ref, iva_ref, precio_total, url_producto, scraped_at")
-      .eq("categoria_nombre", nombre)
-      .order("scraped_at", { ascending: false })
-      .limit(limitePorCategoria * 3);
-
-    const vistos = new Set<string>();
-    const productos: any[] = [];
-    for (const fila of data || []) {
-      if (vistos.has(fila.codigo_producto)) continue;
-      vistos.add(fila.codigo_producto);
-      productos.push(fila);
-      if (productos.length >= limitePorCategoria) break;
-    }
+    const productos = await getProductosPorCategoria(nombre, limitePorCategoria);
     if (productos.length > 0) resultado.push({ nombre, productos });
   }
   return resultado;

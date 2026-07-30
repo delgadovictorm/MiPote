@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   resumen.seed = {};
   for (const { nombre, keywords } of CATEGORIAS_PRINCIPALES) {
     try {
-      resumen.seed[nombre] = await seedCategoria(nombre, keywords, 8, tasaBcv);
+      resumen.seed[nombre] = await seedCategoria(nombre, keywords, 6, tasaBcv);
     } catch (e: any) {
       resumen.seed[nombre] = `error: ${e.message}`;
     }

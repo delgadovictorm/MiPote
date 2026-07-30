@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { asegurarCategoriasSembradas, buscarEnCatalogo, fetchTasaBcv, getVistaPorCategorias, refrescarPrecio, syncCatalogoDesdeSitemap } from "@/lib/gamaScraper";
+import {
+  asegurarCatalogoSincronizado,
+  buscarEnCatalogo,
+  CATEGORIAS_PRINCIPALES,
+  fetchTasaBcv,
+  obtenerCategoriaConSiembra,
+  refrescarPrecio,
+} from "@/lib/gamaScraper";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 30;
+
+const LIMITE_PRODUCTOS = 6;
 
 async function tasaBcvConFallback(): Promise<number> {
   try {
@@ -18,28 +27,16 @@ async function tasaBcvConFallback(): Promise<number> {
   }
 }
 
-async function asegurarCatalogo() {
-  const { count } = await supabaseAdmin
-    .from("precios_mercado_catalogo")
-    .select("id", { count: "exact", head: true });
-  if (!count) {
-    try {
-      await syncCatalogoDesdeSitemap();
-    } catch (e) {
-      console.error("No se pudo sincronizar el catálogo de Gama:", e);
-    }
-  }
-}
-
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q")?.trim();
+    const categoria = searchParams.get("categoria")?.trim();
     const tasaBcv = await tasaBcvConFallback();
 
     if (q) {
-      await asegurarCatalogo();
-      const candidatos = await buscarEnCatalogo(q, 8);
+      await asegurarCatalogoSincronizado().catch((e) => console.error("No se pudo sincronizar el catálogo:", e));
+      const candidatos = await buscarEnCatalogo(q, LIMITE_PRODUCTOS);
 
       const resultados = [];
       for (const candidato of candidatos) {
@@ -60,15 +57,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ q, resultados, tasa_bcv: tasaBcv });
     }
 
-    // Primera vez que se pide el panel y aún no hay nada categorizado: sembramos
-    // en el momento (rápido, 4 por categoría) en vez de obligar a esperar al cron.
-    await asegurarCategoriasSembradas(tasaBcv, 4);
+    // Una sola categoría: mucho más rápido que sembrar las 6 de un jaque, así el
+    // panel puede pedir cada sección por separado y mostrarlas a medida que llegan.
+    if (categoria) {
+      const productos = await obtenerCategoriaConSiembra(categoria, tasaBcv, LIMITE_PRODUCTOS);
+      return NextResponse.json({ categoria, productos, tasa_bcv: tasaBcv });
+    }
 
-    const categorias = await getVistaPorCategorias(8);
-    return NextResponse.json({ categorias, tasa_bcv: tasaBcv, updated_at: new Date().toISOString() });
+    // Sin parámetros: solo la lista de nombres de categoría (barato, sin sembrar
+    // nada) para que el front sepa qué secciones pedir una por una.
+    return NextResponse.json({
+      categoriasDisponibles: CATEGORIAS_PRINCIPALES.map((c) => c.nombre),
+      tasa_bcv: tasaBcv,
+    });
   } catch (error: any) {
     // Nunca un 500 pelón: si algo se rompe, devolvemos vacío en vez de tumbar la pantalla.
     console.error("Error en /api/precios:", error);
-    return NextResponse.json({ categorias: [], resultados: [], tasa_bcv: 0, error: "No se pudo consultar precios en este momento" });
+    return NextResponse.json({ categoriasDisponibles: [], productos: [], resultados: [], tasa_bcv: 0, error: "No se pudo consultar precios en este momento" });
   }
 }
