@@ -2,8 +2,10 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ShoppingCart, Plus, Trash2, Camera, Loader2, Check, X } from "lucide-react";
+import { ChevronLeft, ShoppingCart, Plus, Trash2, Camera, Loader2, Check, X, Tag } from "lucide-react";
+import { Drawer } from "vaul";
 import { supabase } from "@/lib/supabase";
+import { ConsultorPrecios } from "./ConsultorPrecios";
 
 interface MercadoSessionProps {
   espacioActivo: any;
@@ -45,6 +47,7 @@ export function MercadoSession({
 
   const [montoRealInput, setMontoRealInput] = useState("");
   const [isScanningItem, setIsScanningItem] = useState(false);
+  const [isConsultorOpen, setIsConsultorOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Deslizar el dedo hacia abajo (cuando el contenido ya está arriba del todo) cierra el módulo,
@@ -488,6 +491,42 @@ export function MercadoSession({
           </div>
         )}
       </div>
+
+      {/* FAB Consultor de precios — mismo lugar que el "+" del resto de la app, pero con
+          ícono/color distinto para no confundirlo con "agregar transacción". */}
+      {fase === "activa" && (
+        <button
+          onClick={() => setIsConsultorOpen(true)}
+          className="fixed bottom-24 md:bottom-10 right-6 z-[60] w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 bg-amber-500 text-black"
+          style={{ boxShadow: "0 10px 25px -5px rgba(245, 158, 11, 0.5)" }}
+          title="Consultor de precios"
+        >
+          <Tag className="w-7 h-7" strokeWidth={2.5} />
+        </button>
+      )}
+
+      {/* z-index por encima del propio portal de MercadoSession (z-[99999]) y del menú
+          inferior (z-[100000]) — si no, este drawer quedaría invisible detrás de ambos. */}
+      <Drawer.Root open={isConsultorOpen} onOpenChange={setIsConsultorOpen}>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[100010] backdrop-blur-sm" />
+          <Drawer.Content className="bg-[#0d0714] flex flex-col rounded-t-[32px] h-[80vh] mt-24 fixed bottom-0 left-0 right-0 z-[100020] border-t border-amber-500">
+            <Drawer.Title className="sr-only">Consultor de precios</Drawer.Title>
+            <div className="p-6 flex-1 overflow-y-auto pb-12">
+              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+              <ConsultorPrecios
+                theme={theme}
+                onSeleccionarProducto={(nombre, precioUsd) => {
+                  setNombreInput(nombre);
+                  setPrecioInput(precioUsd.toFixed(2));
+                  setMonedaInput("usd");
+                  setIsConsultorOpen(false);
+                }}
+              />
+            </div>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
     </div>,
     document.body
   );

@@ -202,6 +202,46 @@ const MENSAJES_RACHA_DIARIA = [
 ];
 
 // ============================================================================
+// PANTALLA DE CARGA INICIAL (con mensajes rotativos para que no se sienta pegada)
+// ============================================================================
+const APP_LOADING_MESSAGES = [
+  "Preparando todo...",
+  "Despertando a los pollitos...",
+  "Cargando tus potes...",
+  "Sincronizando tus datos...",
+  "Ya casi está listo...",
+];
+
+function AppLoadingScreen() {
+  const [msgIndex, setMsgIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMsgIndex((i) => (i + 1) % APP_LOADING_MESSAGES.length);
+    }, 2200);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-[#0d0714] flex flex-col items-center justify-center gap-4 p-6" suppressHydrationWarning>
+      <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+      <AnimatePresence mode="wait">
+        <motion.p
+          key={msgIndex}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.3 }}
+          className="text-white/50 text-sm font-bold text-center"
+        >
+          {APP_LOADING_MESSAGES[msgIndex]}
+        </motion.p>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ============================================================================
 // APP PRINCIPAL
 // ============================================================================
 export default function MiPoteApp() {
@@ -685,7 +725,7 @@ const abrirCelebracionManual = () => {
     }
   };
 
-  if (loadingAuth) return ( <div className="min-h-screen bg-[#0d0714] flex items-center justify-center" suppressHydrationWarning><Loader2 className="w-8 h-8 text-purple-500 animate-spin"/></div> );
+  if (loadingAuth) return <AppLoadingScreen />;
 
   if (currentView === 'auth') {
     if (authStage === 'welcome') {
@@ -1359,9 +1399,9 @@ const RECOMPENSAS_METAS = [
   }>({ nombre: "", modo: null, miPct: "50", miAporte: "", espacioIdExistente: null });
 
   const MODOS_FINANZAS_PAREJA = [
-    { id: 'fondo_comun' as const, titulo: 'Fondo común total', desc: 'Todo es de los dos. Un solo saldo combinado, sin llevar cuentas de quién puso qué.', Icono: Heart },
-    { id: 'divide_50_50' as const, titulo: 'Dividir gastos 50/50', desc: 'Cada quien con su billetera. Lo compartido se parte a la mitad y la app lleva quién le debe a quién.', Icono: Users },
-    { id: 'proporcional' as const, titulo: 'Proporcional a ingresos', desc: 'Como el 50/50, pero lo compartido se divide según cuánto gana cada quien (ej. 70/30).', Icono: PieChartIcon },
+    { id: 'fondo_comun' as const, titulo: 'Empatados', desc: 'Todo es de los dos. Un solo saldo combinado, pero igual llevamos la cuenta de quién puso qué.', Icono: Heart },
+    { id: 'divide_50_50' as const, titulo: 'Dividir gastos miti/miti', desc: 'Cada quien con su billetera. Lo compartido se parte a la mitad y la app lleva quién le debe a quién.', Icono: Users },
+    { id: 'proporcional' as const, titulo: 'Proporcional a ingresos', desc: 'Como el miti/miti, pero lo compartido se divide según cuánto gana cada quien (ej. 70/30).', Icono: PieChartIcon },
     { id: 'hibrido' as const, titulo: 'Aportes + billetera personal', desc: 'Cada quien aporta un monto al fondo común (renta, mercado) y el resto es billetera personal.', Icono: Landmark },
   ];
   const POTE_OPCIONES = espacioActivo?.tipo === 'vaca'
@@ -1924,6 +1964,20 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
       return saldos.usdt + saldos.cash + (rates.usdt > 0 ? saldos.bs / rates.usdt : 0);
     }
     return transactions.filter(tx => tx.categoria === `pote_${poteId}`).reduce((acc, tx) => tx.tipo === "ingreso" ? acc + (tx.monto_usd_paralelo || 0) : acc - (tx.monto_usd_paralelo || 0), 0);
+  };
+
+  // Desglose de un pote/meta compartida: cuánto puso (o retiró) cada quien, aunque el saldo se vea junto.
+  const getPoteAhorradoPorPersona = (poteId: string): { nombre: string; monto: number }[] => {
+    const porPersona: Record<string, number> = {};
+    transactions.filter(tx => tx.categoria === `pote_${poteId}`).forEach(tx => {
+      const nombre = tx.usuario || "Tú";
+      const delta = tx.tipo === "ingreso" ? (tx.monto_usd_paralelo || 0) : -(tx.monto_usd_paralelo || 0);
+      porPersona[nombre] = (porPersona[nombre] || 0) + delta;
+    });
+    return Object.entries(porPersona)
+      .map(([nombre, monto]) => ({ nombre, monto }))
+      .filter(p => Math.abs(p.monto) > 0.005)
+      .sort((a, b) => b.monto - a.monto);
   };
 
 
@@ -3870,7 +3924,7 @@ const getPatrimonioNeto = () => {
                   <Heart className="w-5 h-5 text-fuchsia-400 shrink-0" />
                   <div>
                     <p className="text-sm font-bold text-white">Configura cómo se reparten el dinero</p>
-                    <p className="text-[10px] text-white/40">Fondo común, 50/50, proporcional o aportes fijos</p>
+                    <p className="text-[10px] text-white/40">Fondo común, miti/miti, proporcional o aportes fijos</p>
                   </div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-fuchsia-400 shrink-0" />
@@ -3908,6 +3962,19 @@ const getPatrimonioNeto = () => {
                     Aportar
                   </button>
                 </div>
+                {(() => {
+                  const desglose = getPoteAhorradoPorPersona(fondoComunMeta.id);
+                  if (desglose.length === 0) return null;
+                  return (
+                    <div className="relative z-10 flex flex-wrap gap-1.5 mt-4">
+                      {desglose.map((d) => (
+                        <span key={d.nombre} className="text-[9px] font-bold text-white/70 bg-black/20 px-2 py-0.5 rounded-full">
+                          {d.nombre}: ${d.monto.toFixed(2)}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -4002,6 +4069,19 @@ const getPatrimonioNeto = () => {
                         <p className="text-base font-bold text-white truncate">{pote.nombre}</p>
                         <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">Ahorrado ${ahorrado.toFixed(2)} de ${pote.monto_objetivo}</p>
                         <p className="text-[10px] text-emerald-400/70 mt-0.5 font-semibold">Falta ${Math.max(objetivo - ahorrado, 0).toFixed(2)}</p>
+                        {!esIndividual && participantes.length > 0 && (() => {
+                          const desglose = getPoteAhorradoPorPersona(pote.id);
+                          if (desglose.length === 0) return null;
+                          return (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {desglose.map((d) => (
+                                <span key={d.nombre} className="text-[9px] font-bold text-white/50 bg-white/5 px-2 py-0.5 rounded-full">
+                                  {d.nombre}: ${d.monto.toFixed(2)}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); if (confirm(`¿Eliminar la meta "${pote.nombre}"? Esto no borra las transacciones ya registradas.`)) eliminarPote(pote.id); }}
@@ -4694,11 +4774,22 @@ const getPatrimonioNeto = () => {
               <form onSubmit={conUnSoloClick(guardarPote)} className="space-y-5">
                 <div>
                   <label className="text-[10px] uppercase text-white/40 tracking-widest mb-2 block">Tipo</label>
-                  <select value={poteForm.tipo} onChange={(e) => setPoteForm({ ...poteForm, tipo: e.target.value })} className="w-full bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-emerald-500">
+                  <div className="grid grid-cols-2 gap-2">
                     {POTE_OPCIONES.map((opcion) => (
-                      <option key={opcion} value={opcion}>{opcion}</option>
+                      <button
+                        key={opcion}
+                        type="button"
+                        onClick={() => setPoteForm({ ...poteForm, tipo: opcion })}
+                        className={`p-3 rounded-2xl text-xs font-bold border text-left transition-colors active:scale-95 ${
+                          poteForm.tipo === opcion
+                            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                            : 'bg-[#1C1C1E] border-white/10 text-white/70 hover:border-white/20'
+                        }`}
+                      >
+                        {opcion}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
                 {poteForm.tipo === 'Personalizado ✍️' && (
                   <div>
@@ -4842,14 +4933,16 @@ const getPatrimonioNeto = () => {
         </Drawer.Portal>
       </Drawer.Root>
 
-      <nav className={`fixed bottom-0 left-0 right-0 bg-[#1a0f2e]/90 backdrop-blur-xl border-t ${theme.border} p-3 md:hidden z-40 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)]`}>
+      {/* z-index por encima del portal de MercadoSession (z-[99999]) para que el menú
+          siga visible y usable incluso con una sesión de Mercado abierta. */}
+      <nav className={`fixed bottom-0 left-0 right-0 bg-[#1a0f2e]/90 backdrop-blur-xl border-t ${theme.border} p-3 md:hidden z-[100000] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)]`}>
         <div className="flex justify-around items-center max-w-md mx-auto">
-          <NavButton icon={<Home />} label="Inicio" active={activeTab === 'inicio'} onClick={() => { onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
-          <NavButton dataTutorial="nav-presupuesto" icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
+          <NavButton icon={<Home />} label="Inicio" active={activeTab === 'inicio' && !isMercadoOpen} onClick={() => { setIsMercadoOpen(false); onChangeView('dashboard'); setActiveTab('inicio'); }} theme={theme} />
+          <NavButton dataTutorial="nav-presupuesto" icon={<CreditCard />} label="Presupuesto" active={activeTab === 'pagos' && !isMercadoOpen} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { setIsMercadoOpen(false); onChangeView('dashboard'); setActiveTab('pagos'); } }} theme={theme} />
 
           <div className="relative -top-5">
             {/* Botón Central sin sombra brillante */}
-            <button data-tutorial="nav-espacios" onClick={() => setIsSpacesMenuOpen(true)} className="bg-[#2563EB] text-white p-4 rounded-full active:scale-95 transition-transform border-4 border-[#0d0714]">
+            <button data-tutorial="nav-espacios" onClick={() => { setIsMercadoOpen(false); setIsSpacesMenuOpen(true); }} className="bg-[#2563EB] text-white p-4 rounded-full active:scale-95 transition-transform border-4 border-[#0d0714]">
                <Layers className="w-6 h-6" />
             </button>
           </div>
@@ -4857,7 +4950,7 @@ const getPatrimonioNeto = () => {
           <NavButton dataTutorial="nav-mercado" icon={<ShoppingCart />} label="Mercado" active={isMercadoOpen} onClick={() => { if(isGuest || !perfil?.is_pro) onTriggerPaywall?.(); else setIsMercadoOpen(true); }} theme={theme} pro={!isGuest && !perfil?.is_pro} />
 
           {espacioActivo?.tipo !== 'vaca' && (
-            <NavButton dataTutorial="nav-reserva" icon={<Shield />} label="Reserva" active={activeTab === 'emergencia'} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
+            <NavButton dataTutorial="nav-reserva" icon={<Shield />} label="Reserva" active={activeTab === 'emergencia' && !isMercadoOpen} onClick={() => { if(isGuest) onTriggerPaywall?.(); else { setIsMercadoOpen(false); onChangeView('dashboard'); setActiveTab('emergencia'); } }} theme={theme} />
           )}
         </div>
       </nav>
