@@ -1547,6 +1547,10 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
   const [categoriasCustom, setCategoriasCustom] = useState([] as any[]);
 
   const [casheaForm, setCasheaForm] = useState({ articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" });
+  // Hoja "¿Quién pagó esta cuota de Cashea?" — solo aplica en espacios compartidos.
+  const [casheaConfirm, setCasheaConfirm] = useState<any | null>(null);
+  const [casheaSplitModo, setCasheaSplitModo] = useState<"solo" | "mitad" | "personalizado">("solo");
+  const [casheaMontoPersonalizado, setCasheaMontoPersonalizado] = useState("");
   const [budgetForm, setBudgetForm] = useState({ categoria: "", monto_limite: "" });
   const [isScanningCashea, setIsScanningCashea] = useState(false);
   const [cuotasEscaneadas, setCuotasEscaneadas] = useState([] as any[]);
@@ -2590,28 +2594,91 @@ const handleManualSubmit = async (e: React.FormEvent) => {
     const nuevoEstado = !cuota.pagado;
     await supabase.from("cashea").update({ pagado: nuevoEstado }).eq("id", cuota.id);
     if (nuevoEstado) {
+      // En espacio compartido con más de un integrante, preguntamos cómo se reparte
+      // el pago en vez de asumir que fue todo de quien tenía la cuota asignada.
+      if (espacioActivo?.tipo !== 'individual' && participantes.length > 1) {
+        setCasheaSplitModo("solo");
+        setCasheaMontoPersonalizado("");
+        setCasheaConfirm(cuota);
+        return;
+      }
       const costo_bs = cuota.monto_cuota * rates.bcv;
       if (confirm(`¿Descontar Bs. ${costo_bs.toFixed(2)} (Equivalente a $${cuota.monto_cuota}) del balance en Bolívares de ${cuota.usuario} por el pago de Cashea?`)) {
         const costo_real_usdt = rates.usdt > 0 ? costo_bs / rates.usdt : cuota.monto_cuota;
-        
-        await supabase.from("transacciones_saas").insert([{ 
-          descripcion: `Pago Cashea: ${cuota.articulo}`, 
+
+        await supabase.from("transacciones_saas").insert([{
+          descripcion: `Pago Cashea: ${cuota.articulo}`,
           monto_original: costo_bs,       // <-- AHORA EL MONTO PRINCIPAL ES EN BS
           moneda_original: "bs",          // <-- AHORA DESCUENTA DE LA BILLETERA DE BOLÍVARES
-          monto_bs: costo_bs, 
-          monto_usd_bcv: cuota.monto_cuota, 
-          monto_usd_paralelo: costo_real_usdt, 
-          categoria: "cashea", 
-          usuario: cuota.usuario, 
-          tipo: "egreso", 
-          espacio_id: espacioActivo.id, 
-          usuario_id: session.user.id 
+          monto_bs: costo_bs,
+          monto_usd_bcv: cuota.monto_cuota,
+          monto_usd_paralelo: costo_real_usdt,
+          categoria: "cashea",
+          usuario: cuota.usuario,
+          tipo: "egreso",
+          espacio_id: espacioActivo.id,
+          usuario_id: session.user.id
         }]);
         triggerToast("egreso");
-      } else { 
-        await supabase.from("cashea").update({ pagado: false }).eq("id", cuota.id); 
+      } else {
+        await supabase.from("cashea").update({ pagado: false }).eq("id", cuota.id);
       }
     }
+    fetchData();
+  };
+
+  // Ejecuta el descuento de una cuota de Cashea ya confirmada en la hoja de reparto.
+  const confirmarPagoCashea = async () => {
+    const cuota = casheaConfirm;
+    if (!cuota) return;
+    const costo_bs = cuota.monto_cuota * rates.bcv;
+    const costo_real_usdt = rates.usdt > 0 ? costo_bs / rates.usdt : cuota.monto_cuota;
+
+    if (casheaSplitModo === "solo") {
+      await supabase.from("transacciones_saas").insert([{
+        descripcion: `Pago Cashea: ${cuota.articulo}`, monto_original: costo_bs, moneda_original: "bs",
+        monto_bs: costo_bs, monto_usd_bcv: cuota.monto_cuota, monto_usd_paralelo: costo_real_usdt,
+        categoria: "cashea", usuario: cuota.usuario, tipo: "egreso", espacio_id: espacioActivo.id, usuario_id: session.user.id,
+      }]);
+    } else if (casheaSplitModo === "mitad") {
+      await supabase.from("transacciones_saas").insert([{
+        descripcion: `Pago Cashea: ${cuota.articulo}`, monto_original: costo_bs, moneda_original: "bs",
+        monto_bs: costo_bs, monto_usd_bcv: cuota.monto_cuota, monto_usd_paralelo: costo_real_usdt,
+        categoria: "cashea", usuario: "Ambos", pagado_por: cuota.usuario, tipo: "egreso", espacio_id: espacioActivo.id, usuario_id: session.user.id,
+      }]);
+    } else {
+      // Personalizado: lo que cubre quien marcó la cuota sale a su nombre; el resto
+      // queda como "Ambos" (entre el resto de integrantes), ambos en la misma proporción bs/usd.
+      const cubierto = Math.min(Math.max(parseFloat(casheaMontoPersonalizado) || 0, 0), cuota.monto_cuota);
+      const resto = cuota.monto_cuota - cubierto;
+      const filas = [];
+      if (cubierto > 0) {
+        const bsCubierto = cubierto * rates.bcv;
+        filas.push({
+          descripcion: `Pago Cashea: ${cuota.articulo}`, monto_original: bsCubierto, moneda_original: "bs",
+          monto_bs: bsCubierto, monto_usd_bcv: cubierto, monto_usd_paralelo: rates.usdt > 0 ? bsCubierto / rates.usdt : cubierto,
+          categoria: "cashea", usuario: cuota.usuario, tipo: "egreso", espacio_id: espacioActivo.id, usuario_id: session.user.id,
+        });
+      }
+      if (resto > 0) {
+        const bsResto = resto * rates.bcv;
+        filas.push({
+          descripcion: `Pago Cashea: ${cuota.articulo}`, monto_original: bsResto, moneda_original: "bs",
+          monto_bs: bsResto, monto_usd_bcv: resto, monto_usd_paralelo: rates.usdt > 0 ? bsResto / rates.usdt : resto,
+          categoria: "cashea", usuario: "Ambos", tipo: "egreso", espacio_id: espacioActivo.id, usuario_id: session.user.id,
+        });
+      }
+      if (filas.length > 0) await supabase.from("transacciones_saas").insert(filas);
+    }
+
+    triggerToast("egreso");
+    setCasheaConfirm(null);
+    fetchData();
+  };
+
+  const cancelarPagoCashea = async () => {
+    if (casheaConfirm) await supabase.from("cashea").update({ pagado: false }).eq("id", casheaConfirm.id);
+    setCasheaConfirm(null);
     fetchData();
   };
 
@@ -3360,6 +3427,69 @@ const getPatrimonioNeto = () => {
               </Drawer.Portal>
             </Drawer.Root>
 
+            {/* DRAWER: ¿CÓMO SE PAGÓ ESTA CUOTA DE CASHEA? (solo espacios compartidos) */}
+            <Drawer.Root open={!!casheaConfirm} onOpenChange={(open: boolean) => { if (!open) cancelarPagoCashea(); }}>
+              <Drawer.Portal>
+                <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
+                <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[65vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-purple-500">
+                  <Drawer.Title className="sr-only">¿Cómo se pagó esta cuota?</Drawer.Title>
+                  <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-20">
+                    <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
+                    <h3 className="text-xl font-black text-white mb-1 text-center">¿Cómo se pagó esta cuota?</h3>
+                    <p className="text-center text-white/50 text-xs mb-6">
+                      {casheaConfirm?.articulo} · ${casheaConfirm?.monto_cuota} (Bs. {((casheaConfirm?.monto_cuota || 0) * rates.bcv).toFixed(2)})
+                    </p>
+
+                    <div className="flex flex-col gap-2 mb-4">
+                      {[
+                        { id: "solo", label: `La pagué yo solo/a`, sub: `Se descuenta todo a ${casheaConfirm?.usuario || "tu nombre"}` },
+                        { id: "mitad", label: "Me ayudó mi pareja — mitad y mitad", sub: "Se reparte 50/50 (o según tengan configurado)" },
+                        { id: "personalizado", label: "Monto personalizado", sub: "Tú dices cuánto cubres, el resto queda para el resto" },
+                      ].map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setCasheaSplitModo(opt.id as any)}
+                          className={`w-full text-left p-4 rounded-2xl border transition-colors ${casheaSplitModo === opt.id ? 'bg-purple-500/10 border-purple-500' : 'bg-black/40 border-white/10 hover:border-white/20'}`}
+                        >
+                          <p className="text-sm font-bold text-white">{opt.label}</p>
+                          <p className="text-[10px] text-white/40 mt-0.5">{opt.sub}</p>
+                        </button>
+                      ))}
+                    </div>
+
+                    {casheaSplitModo === "personalizado" && (
+                      <div className="mb-4">
+                        <label className="text-[10px] uppercase text-gray-400 font-bold tracking-widest block mb-2">
+                          ¿Cuánto cubres tú, {casheaConfirm?.usuario}? ($)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          max={casheaConfirm?.monto_cuota}
+                          placeholder="0.00"
+                          value={casheaMontoPersonalizado}
+                          onChange={(e) => setCasheaMontoPersonalizado(e.target.value)}
+                          className="w-full bg-[#1a1a1a] border border-[#333] p-4 rounded-xl text-2xl text-white font-sans tabular-nums tracking-tight font-black outline-none focus:border-purple-500"
+                        />
+                        <p className="text-[10px] text-white/30 mt-2">
+                          El resto (${Math.max((casheaConfirm?.monto_cuota || 0) - (parseFloat(casheaMontoPersonalizado) || 0), 0).toFixed(2)}) queda a nombre de "Ambos".
+                        </p>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={conUnSoloClick(confirmarPagoCashea)}
+                      className="w-full bg-purple-600 text-white font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_0_20px_rgba(168,85,247,0.3)] active:scale-95 transition-transform"
+                    >
+                      Confirmar pago
+                    </button>
+                  </div>
+                </Drawer.Content>
+              </Drawer.Portal>
+            </Drawer.Root>
+
             {/* DRAWER DE REVISIÓN: CUOTAS DETECTADAS POR IA EN LA CAPTURA DE CASHEA */}
             <Drawer.Root open={cuotasEscaneadas.length > 0} onOpenChange={(open) => !open && setCuotasEscaneadas([])}>
               <Drawer.Portal>
@@ -3760,21 +3890,68 @@ const getPatrimonioNeto = () => {
                         <p className="text-xl font-black text-emerald-400 font-sans">${patrimonioTotal.paralelo.toFixed(2)}</p>
                       </div>
 
-                      {participantes.map((p: any) => {
+                      {participantes.map((p: any, idx: number) => {
                         const saldoP = getSaldosAislados(p.nombre, true);
                         const totalP = saldoP.usdt + saldoP.cash + (rates.usdt > 0 ? saldoP.bs / rates.usdt : 0);
                         return (
-                          <div key={p.id} className="bg-[#1a1a1a] p-4 rounded-2xl flex justify-between items-center border border-white/5 transition-colors hover:border-purple-500/30">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center"><Users className="text-purple-400 w-5 h-5"/></div>
-                              <div>
-                                <p className="text-sm font-bold text-white">{p.nombre}</p>
-                                <p className="text-[9px] text-white/40 uppercase mt-0.5 tracking-wider">
-                                  USDT: ${saldoP.usdt.toFixed(2)} • BS: {saldoP.bs.toFixed(2)} • CASH: ${saldoP.cash.toFixed(2)}
+                          <div key={p.id} className={`space-y-2 ${idx > 0 ? 'pt-3 mt-1 border-t border-white/5' : ''}`}>
+                            <div className="flex items-center justify-between px-1">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full bg-purple-500/20 flex items-center justify-center"><Users className="text-purple-400 w-3.5 h-3.5"/></div>
+                                <p className="text-xs font-black text-white uppercase tracking-wide">{p.nombre}</p>
+                              </div>
+                              <p className="text-sm font-black text-white font-sans tabular-nums">${totalP.toFixed(2)}</p>
+                            </div>
+
+                            <div className="bg-[#1a1a1a] p-3.5 rounded-[1.25rem] flex justify-between items-center border border-white/5 transition-colors hover:border-purple-500/30">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+                                  <DollarSign className="text-purple-400 w-4 h-4" />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-white">Dólares Digitales</p>
+                                  <p className="text-[8px] text-white/40 uppercase tracking-widest mt-0.5">ZINLI, BINANCE, ETC.</p>
+                                </div>
+                              </div>
+                              <p className="text-base font-black text-white font-sans tabular-nums tracking-tight">
+                                $<AnimatedNum value={saldoP.usdt} format="usd" />
+                              </p>
+                            </div>
+
+                            <div className="bg-[#1a1a1a] p-3.5 rounded-[1.25rem] flex justify-between items-center border border-white/5 transition-colors hover:border-blue-500/30">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                                  <Wallet className="text-blue-400 w-4 h-4" />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-white">Bolívares</p>
+                                  <p className="text-[8px] text-white/40 uppercase tracking-widest mt-0.5">PAGO MÓVIL, BANCOS</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-base font-black text-white font-sans tabular-nums tracking-tight">
+                                  Bs. <AnimatedNum value={saldoP.bs} format="bs" />
+                                </p>
+                                <p className="text-[9px] text-blue-400 font-bold mt-0.5">
+                                  Eqv: $<AnimatedNum value={rates.bcv > 0 ? saldoP.bs / rates.bcv : 0} format="usd" />
                                 </p>
                               </div>
                             </div>
-                            <p className="text-xl font-black text-white font-sans">${totalP.toFixed(2)}</p>
+
+                            <div className="bg-[#1a1a1a] p-3.5 rounded-[1.25rem] flex justify-between items-center border border-white/5 transition-colors hover:border-amber-500/30">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
+                                  <CheckSquare className="text-amber-400 w-4 h-4" />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-white">Efectivo</p>
+                                  <p className="text-[8px] text-white/40 uppercase tracking-widest mt-0.5">CASH FÍSICO</p>
+                                </div>
+                              </div>
+                              <p className="text-base font-black text-white font-sans tabular-nums tracking-tight">
+                                $<AnimatedNum value={saldoP.cash} format="usd" />
+                              </p>
+                            </div>
                           </div>
                         )
                       })}
