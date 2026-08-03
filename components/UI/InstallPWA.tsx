@@ -68,10 +68,10 @@ export function InstallPWA() {
       {/* BANNER FLOTANTE MUY VISUAL */}
       <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:w-[380px] z-[900] bg-[#151518] border border-white/10 rounded-2xl shadow-2xl p-4 flex items-center gap-3 animate-in slide-in-from-bottom-6 fade-in duration-500">
         <div className="w-11 h-11 rounded-xl bg-purple-500/15 flex items-center justify-center shrink-0 overflow-hidden">
-          <img src="/pote.png" className="w-7 h-7 object-contain" alt="Mi Pote" />
+          <img src="/pote.png" className="w-7 h-7 object-contain" alt="Pote" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-white font-black text-sm leading-tight">Instala Mi Pote</p>
+          <p className="text-white font-black text-sm leading-tight">Instala Pote</p>
           <p className="text-white/50 text-[11px] leading-snug mt-0.5">Acceso directo y rápido, sin ocupar espacio.</p>
         </div>
         <button

@@ -16,7 +16,7 @@ const PASOS = [
     icon: Sparkles,
     color: "text-fuchsia-400",
     bg: "bg-fuchsia-500/10",
-    titulo: "¡Bienvenido a Mi Pote!",
+    titulo: "¡Bienvenido a Pote!",
     texto: "Un recorrido rápido para que sepas dónde está todo. Te voy a ir señalando cada función directo en la pantalla.",
   },
   {

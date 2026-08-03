@@ -10,7 +10,7 @@ export function LoadingScreen() {
         <div className="absolute inset-0 bg-purple-500/30 blur-[30px] rounded-full animate-pulse"></div>
         <img 
           src="/pote.png" 
-          alt="Mi Pote" 
+          alt="Pote"
           className="w-24 h-24 object-contain relative z-10 animate-bounce" 
         />
       </div>

@@ -233,7 +233,7 @@ export default function MiPoteAdmin() {
           <div className="flex items-center gap-3">
             <img src="/pote.png" className="w-8 md:w-10" alt="Logo" />
             <span className="font-black text-white text-lg uppercase italic tracking-tight leading-none">
-              Mi Pote <br className="hidden md:block"/>
+              Pote <br className="hidden md:block"/>
               <span className="text-[10px] text-purple-400 tracking-[0.2em] hidden md:inline">CONTROL</span>
             </span>
           </div>

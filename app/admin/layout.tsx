@@ -5,8 +5,8 @@ import type { Metadata } from "next";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Mi Pote Admin",
-  description: "Panel de control de suscripciones y usuarios de Mi Pote",
+  title: "Pote Admin",
+  description: "Panel de control de suscripciones y usuarios de Pote",
   manifest: "/admin-manifest.json",
   appleWebApp: {
     capable: true,

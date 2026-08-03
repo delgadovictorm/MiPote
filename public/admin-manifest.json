@@ -1,7 +1,7 @@
 {
-  "name": "Mi Pote Admin",
+  "name": "Pote Admin",
   "short_name": "Pote Admin",
-  "description": "Panel de control de suscripciones y usuarios de Mi Pote",
+  "description": "Panel de control de suscripciones y usuarios de Pote",
   "start_url": "/admin",
   "scope": "/admin",
   "display": "standalone",

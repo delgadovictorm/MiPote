@@ -14,13 +14,13 @@ const geistMono = Geist_Mono({
 
 // 1. AQUÍ SE AÑADE EL MANIFEST Y SE CAMBIA EL TÍTULO DE LA APP
 export const metadata: Metadata = {
-  title: "Mi Pote | Finanzas",
+  title: "Pote | Finanzas",
   description: "Control de finanzas compartidas y personales",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Mi Pote",
+    title: "Pote",
     // iOS no maneja bien transparencia en el ícono de la app instalada, por eso usamos
     // pote-512.png (fondo sólido) en vez de pote.png (que tiene canal alfa).
     startupImage: "/pote-512.png",

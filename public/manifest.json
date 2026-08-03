@@ -1,6 +1,6 @@
 {
-  "name": "Mi Pote",
-  "short_name": "Mi Pote",
+  "name": "Pote",
+  "short_name": "Pote",
   "description": "Control de finanzas compartidas y personales",
   "start_url": "/",
   "display": "standalone",

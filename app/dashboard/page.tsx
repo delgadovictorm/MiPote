@@ -738,7 +738,7 @@ const abrirCelebracionManual = () => {
               <div className="flex justify-center mb-10">
                  <div className="relative">
                     <div className="absolute inset-0 bg-fuchsia-500/30 blur-[40px] rounded-full animate-pulse"></div>
-                    <img src="/pote.png" alt="Mi Pote" className="w-40 h-40 object-contain relative z-10 drop-shadow-[0_0_35px_rgba(192,38,211,0.5)] hover:scale-105 transition-transform" />
+                    <img src="/pote.png" alt="Pote" className="w-40 h-40 object-contain relative z-10 drop-shadow-[0_0_35px_rgba(192,38,211,0.5)] hover:scale-105 transition-transform" />
                  </div>
               </div>
               <h1 className="text-[40px] md:text-5xl font-black text-white tracking-tighter mb-4 leading-tight">
@@ -999,7 +999,7 @@ const abrirCelebracionManual = () => {
         <div className="min-h-screen bg-[#0d0714] flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
            <div className="relative mb-8">
               <div className="absolute inset-0 bg-purple-500/30 blur-[30px] rounded-full animate-pulse"></div>
-              <img src="/pote.png" alt="Mi Pote" className="w-24 h-24 object-contain relative z-10 animate-bounce" />
+              <img src="/pote.png" alt="Pote" className="w-24 h-24 object-contain relative z-10 animate-bounce" />
            </div>
            <h2 className="text-2xl font-black text-white mb-2">Armando tu Pote...</h2>
            <p className="text-white/50 text-sm flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Ya casi estamos listos</p>
@@ -1080,7 +1080,7 @@ const abrirCelebracionManual = () => {
             {!session ? (
               <>
                 <div className="w-16 h-16 bg-amber-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-amber-500/20"><Sparkles className="w-8 h-8 text-amber-400" /></div>
-                <h3 className="text-xl font-black text-white mb-2">Desbloquea Mi Pote PRO</h3>
+                <h3 className="text-xl font-black text-white mb-2">Desbloquea Pote PRO</h3>
                 <p className="text-sm text-white/70 mb-6">Crea una cuenta para pagar tu suscripción ($2/mes) y desbloquear Potes en pareja/familia, Vacas entre amigos y Hacer Mercado.</p>
                 <button onClick={() => {setShowPaywall(false); setCurrentView('auth');}} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black py-3.5 rounded-xl shadow-lg mb-3 hover:scale-105 transition-transform">CREAR CUENTA GRATIS</button>
               </>
@@ -1093,7 +1093,7 @@ const abrirCelebracionManual = () => {
             ) : checkoutPaso === 1 ? (
               <div className="text-left">
                 <div className="flex items-center justify-between mb-5">
-                  <span className="bg-amber-500/15 text-amber-400 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest border border-amber-500/30">Mi Pote Pro</span>
+                  <span className="bg-amber-500/15 text-amber-400 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest border border-amber-500/30">Pote Pro</span>
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-black text-white">$2</span>
                     <span className="text-white/40 text-xs font-bold">/mes</span>
@@ -4648,14 +4648,13 @@ const getPatrimonioNeto = () => {
       </Drawer.Root>
 
       {/* DRAWER: CREAR / CONFIGURAR POTE (FINANZAS EN PAREJA) */}
-      <Drawer.Root open={isCreatingPote} onOpenChange={setIsCreatingPote}>
+      <Drawer.Root open={isCreatingPote} onOpenChange={setIsCreatingPote} repositionInputs={false}>
         <Drawer.Portal>
           <Drawer.Overlay className="fixed inset-0 bg-black/60 z-[200] backdrop-blur-sm" />
-          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[85vh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-fuchsia-500">
+          <Drawer.Content className="bg-[#121212] flex flex-col rounded-t-[32px] h-[85dvh] mt-24 fixed bottom-0 left-0 right-0 z-[250] border-t border-fuchsia-500">
             <Drawer.Title className="sr-only">{nuevoPoteForm.espacioIdExistente ? 'Configurar reparto del Pote' : 'Crear Pote'}</Drawer.Title>
-            <div className="p-6 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto pb-24">
-              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mb-6" />
-
+            <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-[#333] mt-6 mb-2" />
+            <div data-vaul-no-drag className="p-6 pt-2 bg-[#121212] rounded-t-[32px] flex-1 overflow-y-auto overscroll-contain pb-24">
               {potePasoConfig === 1 ? (
                 <>
                   <h3 className="text-xl font-black text-white mb-2 text-center">Nuevo Pote</h3>

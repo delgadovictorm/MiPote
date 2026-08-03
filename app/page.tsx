@@ -125,7 +125,7 @@ export default function LandingPage() {
       <nav className="fixed top-6 left-1/2 -translate-x-1/2 w-[90%] max-w-[1000px] z-50 bg-[#151518]/80 backdrop-blur-xl border border-white/10 rounded-full px-4 py-3 flex items-center justify-between shadow-2xl">
         <div className="flex items-center gap-3 pl-2">
           <img src="/pote.png" alt="Logo" className="w-8 h-8 object-contain drop-shadow-[0_0_10px_rgba(168,85,247,0.4)]" />
-          <span className="font-black text-lg uppercase italic tracking-tighter">Mi Pote</span>
+          <span className="font-black text-lg uppercase italic tracking-tighter">Pote</span>
         </div>
         <div className="hidden md:flex items-center gap-8 text-xs font-bold text-white/60 uppercase tracking-widest">
           <a href="#caracteristicas" className="hover:text-purple-400 transition-colors">Características</a>
@@ -168,7 +168,7 @@ export default function LandingPage() {
           </h1>
           
           <p className="text-lg md:text-xl text-white/60 max-w-3xl mx-auto mb-10 font-medium leading-relaxed">
-            Mi Pote no es una App aburrida de finanzas, es la app diseñada para la locura multimoneda de Venezuela. Organiza tu dinero, tus potes en pareja y las vacas con tus panas.
+            Pote no es una App aburrida de finanzas, es la app diseñada para la locura multimoneda de Venezuela. Organiza tu dinero, tus potes en pareja y las vacas con tus panas.
           </p>
           
           <div className="flex flex-col md:flex-row items-center justify-center gap-6 mb-16">
@@ -207,7 +207,7 @@ export default function LandingPage() {
               <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex gap-4 items-start backdrop-blur-sm hover:bg-white/10 transition-colors">
                 <Target className="text-emerald-400 shrink-0 mt-1" />
                 <div>
-                  <h4 className="font-black uppercase text-sm mb-1">Mi Pote</h4>
+                  <h4 className="font-black uppercase text-sm mb-1">Pote</h4>
                   <p className="text-white/40 text-xs leading-relaxed">El espacio para metas compartidas. Ideal para parejas. Comparte un código y ambos podrán registrar aportes para "la nave", "el viaje" o los gastos de la casa.</p>
                 </div>
               </div>
@@ -234,7 +234,7 @@ export default function LandingPage() {
               <div className="w-full h-full bg-[#0d0714] p-4 pt-10 flex flex-col gap-4 relative">
                 {/* Header App */}
                 <div className="flex justify-between items-center text-white">
-                  <div className="flex items-center gap-2"><img src="/pote.png" className="w-6 h-6"/> <span className="font-black text-xs">Mi Pote</span></div>
+                  <div className="flex items-center gap-2"><img src="/pote.png" className="w-6 h-6"/> <span className="font-black text-xs">Pote</span></div>
                   <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center"><Bell size={12} className="text-purple-400"/></div>
                 </div>
 
@@ -437,15 +437,15 @@ export default function LandingPage() {
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-4xl font-black uppercase italic mb-4">Preguntas Frecuentes</h2>
-            <p className="text-white/50">Resolvemos tus dudas más comunes sobre Mi Pote</p>
+            <p className="text-white/50">Resolvemos tus dudas más comunes sobre Pote</p>
           </div>
 
           <div className="space-y-3">
             {[
-              { q: "¿Qué es Mi Pote?", a: "Es una app financiera adaptada a Venezuela. Te permite registrar gastos en bolívares, pero visualizar tu patrimonio real en dólares usando las tasas BCV y Paralelo actualizadas. Además, te permite compartir cuentas con tu pareja o amigos." },
+              { q: "¿Qué es Pote?", a: "Es una app financiera adaptada a Venezuela. Te permite registrar gastos en bolívares, pero visualizar tu patrimonio real en dólares usando las tasas BCV y Paralelo actualizadas. Además, te permite compartir cuentas con tu pareja o amigos." },
               { q: "¿Cómo funcionan los Potes compartidos?", a: "Es sencillo. Un usuario crea el Pote y la aplicación genera un código único de 6 dígitos. La otra persona simplemente ingresa ese código al registrarse y ¡listo!, ambos verán el mismo balance en tiempo real." },
-              { q: "¿Se conecta directamente a mi cuenta bancaria?", a: "No. Por seguridad y privacidad, Mi Pote funciona como un registro manual (pero inteligente). Tú anotas lo que gastas y nosotros hacemos toda la matemática compleja por ti." },
-              { q: "¿Es realmente gratis?", a: "Sí, durante nuestro periodo de Beta y desarrollo activo, todas las funciones de 'Mi Billetera' y 'Mi Pote' (para parejas) están abiertas al público sin costo." }
+              { q: "¿Se conecta directamente a mi cuenta bancaria?", a: "No. Por seguridad y privacidad, Pote funciona como un registro manual (pero inteligente). Tú anotas lo que gastas y nosotros hacemos toda la matemática compleja por ti." },
+              { q: "¿Es realmente gratis?", a: "Sí, durante nuestro periodo de Beta y desarrollo activo, todas las funciones de 'Mi Billetera' y 'Pote' (para parejas) están abiertas al público sin costo." }
             ].map((faq, idx) => (
               <div key={idx} className={`border ${faqOpen === idx ? 'border-purple-500 bg-[#1a0f2e]' : 'border-white/5 bg-[#151518] hover:bg-white/5'} rounded-2xl transition-all overflow-hidden`}>
                 <button 
@@ -468,7 +468,7 @@ export default function LandingPage() {
       {/* 🏁 FOOTER */}
       <footer className="py-12 border-t border-white/5 text-center relative z-10 bg-[#09090b]">
         <div className="flex justify-center mb-4 opacity-30 grayscale"><img src="/pote.png" className="w-8"/></div>
-        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white/30">© 2026 Mi Pote venezuela</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white/30">© 2026 Pote venezuela</p>
       </footer>
     </div>
   );

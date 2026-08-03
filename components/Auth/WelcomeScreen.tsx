@@ -21,7 +21,7 @@ export function WelcomeScreen({ onRegister, onLogin, onGuest }: WelcomeScreenPro
             <div className="absolute inset-0 bg-fuchsia-500/30 blur-[40px] rounded-full animate-pulse"></div>
             <img 
               src="/pote.png" 
-              alt="Mi Pote" 
+              alt="Pote"
               className="w-40 h-40 object-contain relative z-10 drop-shadow-[0_0_35px_rgba(192,38,211,0.5)] hover:scale-105 transition-transform" 
             />
           </div>
