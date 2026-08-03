@@ -255,7 +255,7 @@ export default function MiPoteApp() {
   const [showStreakCelebration, setShowStreakCelebration] = useState(false);
   const [celebrationData, setCelebrationData] = useState(null as any);
   
-  const [authStage, setAuthStage] = useState('welcome' as 'welcome'|'login'|'reg1'|'reg2'|'loading'|'forgot'|'reset');
+  const [authStage, setAuthStage] = useState('welcome' as 'welcome'|'login'|'reg1'|'reg2'|'loading'|'forgot'|'reset'|'completar');
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -338,19 +338,28 @@ const abrirCelebracionManual = () => {
 
   
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) {
-        setIsGuest(false);
-        cargarDatosUsuario(session.user.id).then(() => setCurrentView('dashboard'));
-      } else {
-        setLoadingAuth(false);
-        setCurrentView('auth');
-      }
-    });
+    // Un link de "recuperar contraseña" trae type=recovery en el hash (o query, según el flujo).
+    // Si no lo detectamos acá, el getSession() de abajo ve una sesión temporal válida y nos
+    // manda derechito al dashboard sin dejar al usuario poner su contraseña nueva.
+    const esLinkDeRecuperacion = typeof window !== 'undefined' &&
+      (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery'));
+
+    if (!esLinkDeRecuperacion) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        if (session) {
+          setIsGuest(false);
+          cargarDatosUsuario(session.user.id).then(irADashboardOCompletarPerfil);
+        } else {
+          setLoadingAuth(false);
+          setCurrentView('auth');
+        }
+      });
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        setSession(session);
         setLoadingAuth(false);
         setCurrentView('auth');
         setAuthStage('reset');
@@ -361,7 +370,7 @@ const abrirCelebracionManual = () => {
         // Si veníamos del Modo Invitado, hay que apagarlo: si no, la vista sigue
         // leyendo transacciones/potes de localStorage en vez de los datos reales del usuario.
         setIsGuest(false);
-        cargarDatosUsuario(session.user.id).then(() => setCurrentView('dashboard'));
+        cargarDatosUsuario(session.user.id).then(irADashboardOCompletarPerfil);
       } else {
         setLoadingAuth(false);
         setCurrentView('auth');
@@ -386,8 +395,16 @@ const abrirCelebracionManual = () => {
     let { data: perfilBd } = await supabase.from('perfiles').select('*').eq('id', userId).single();
     if (!perfilBd) {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: newPerfil } = await supabase.from('perfiles').insert([{ id: userId, is_pro: false, estado_pago: 'gratis', email: user?.email }]).select().single();
+      // Si vino de Google, ya tenemos su nombre real en los metadatos; se lo ahorramos al formulario.
+      const nombreGoogle = user?.user_metadata?.full_name || user?.user_metadata?.name || null;
+      const { data: newPerfil } = await supabase.from('perfiles').insert([{ id: userId, is_pro: false, estado_pago: 'gratis', email: user?.email, nombre: nombreGoogle }]).select().single();
       perfilBd = newPerfil;
+
+      // El registro con correo crea de una vez la billetera individual (ver handleRegisterUser);
+      // los que entran por Google se saltan ese formulario, así que la creamos acá para que no
+      // lleguen a un dashboard sin ningún espacio.
+      const { data: newSpace } = await supabase.from('espacios').insert([{ nombre: 'Mi Billetera', tipo: 'individual', creador_id: userId }]).select().single();
+      if (newSpace) await supabase.from('espacio_miembros').insert([{ espacio_id: newSpace.id, usuario_id: userId, rol: 'admin' }]);
     }
 
     // --- MOTOR DE RACHAS FINANCIERAS ---
@@ -478,11 +495,37 @@ const abrirCelebracionManual = () => {
     } else {
       setEspacios([]);
     }
-    
+
     setLoadingAuth(false);
+    return perfilBd;
   };
 
   const generarCodigo = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+
+  // Los usuarios que entran por Google no pasan por el formulario de registro (reg2), así que
+  // no tenemos su teléfono ni estado — datos que necesitamos para segmentar usuarios. Si faltan,
+  // los mandamos a completarlos antes de dejarlos entrar al dashboard.
+  const irADashboardOCompletarPerfil = (perfilCargado: any) => {
+    if (!perfilCargado?.telefono || !perfilCargado?.estado) {
+      setRegNombre(perfilCargado?.nombre || "");
+      setCurrentView('auth');
+      setAuthStage('completar');
+    } else {
+      setCurrentView('dashboard');
+    }
+  };
+
+  const handleCompletarPerfil = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    if (!telefono || !regNombre || !regEstado || !regMunicipio) { setAuthError("Completa todos los campos"); return; }
+    setLoadingAuth(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoadingAuth(false); return; }
+    await supabase.from('perfiles').update({ telefono, nombre: regNombre, estado: regEstado, municipio: regMunicipio }).eq('id', user.id);
+    await cargarDatosUsuario(user.id);
+    setCurrentView('dashboard');
+  };
 
   const handleLoginUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -490,6 +533,17 @@ const abrirCelebracionManual = () => {
     setLoadingAuth(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setAuthError(error.message); setLoadingAuth(false); }
+  };
+
+  const handleGoogleLogin = async () => {
+    setAuthError("");
+    // Esto navega fuera de la app hacia Google; cuando vuelva a /dashboard con la sesión en
+    // el hash de la URL, el listener onAuthStateChange de arriba se encarga de cargar todo.
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/dashboard` },
+    });
+    if (error) setAuthError(error.message);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -511,11 +565,20 @@ const abrirCelebracionManual = () => {
     if (newPassword.length < 6) { setAuthError("La contraseña debe tener al menos 6 caracteres."); return; }
     setResettingPassword(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setResettingPassword(false);
-    if (error) { setAuthError(error.message); return; }
+    if (error) { setAuthError(error.message); setResettingPassword(false); return; }
     setNewPassword("");
+    // La sesión de recuperación nunca pasó por cargarDatosUsuario (ese paso se salta a propósito
+    // para los links de recuperación), así que hay que cargar perfil/espacios antes de ir al dashboard.
+    const { data: { user } } = await supabase.auth.getUser();
+    setResettingPassword(false);
     alert("✅ Contraseña actualizada con éxito.");
-    setCurrentView('dashboard');
+    if (user) {
+      setIsGuest(false);
+      const perfilCargado = await cargarDatosUsuario(user.id);
+      irADashboardOCompletarPerfil(perfilCargado);
+    } else {
+      setCurrentView('dashboard');
+    }
   };
 
   const handleRegisterUser = async (e: React.FormEvent) => {
@@ -752,6 +815,19 @@ const abrirCelebracionManual = () => {
                 <button onClick={() => setAuthStage('reg1')} className="w-full bg-white text-black font-black py-4 rounded-2xl text-base shadow-[0_0_20px_rgba(255,255,255,0.2)] active:scale-95 transition-all">Comenzar ahora</button>
                 <button onClick={() => setAuthStage('login')} className="w-full bg-[#1a0f2e] border border-white/10 text-white font-bold py-4 rounded-2xl text-base hover:bg-white/5 active:scale-95 transition-all">Ya tengo cuenta</button>
               </div>
+
+              <div className="flex items-center gap-3 my-6">
+                <div className="flex-1 h-px bg-white/10" />
+                <span className="text-white/30 text-[10px] font-bold uppercase tracking-widest">o</span>
+                <div className="flex-1 h-px bg-white/10" />
+              </div>
+
+              {authError && <p className="text-rose-400 text-xs text-center bg-rose-500/10 p-3 rounded-xl border border-rose-500/20 mb-4">{authError}</p>}
+              <button onClick={handleGoogleLogin} className="w-full bg-white text-black font-bold py-4 rounded-2xl text-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
+                <svg className="w-5 h-5" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+                Continuar con Google
+              </button>
+
               <button onClick={() => { setIsGuest(true); setCurrentView('dashboard'); setEspacioActivo({ id: 'guest', nombre: 'Mi Billetera', tipo: 'individual' }); }} className="mt-8 text-emerald-400 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 mx-auto active:scale-95 transition-transform">
                 <Sparkles className="w-4 h-4"/> Entrar como Invitado
               </button>
@@ -796,6 +872,16 @@ const abrirCelebracionManual = () => {
                   </button>
                 </div>
               </form>
+
+              <div className="flex items-center gap-3 my-6">
+                <div className="flex-1 h-px bg-white/10" />
+                <span className="text-white/30 text-[10px] font-bold uppercase tracking-widest">o</span>
+                <div className="flex-1 h-px bg-white/10" />
+              </div>
+              <button onClick={handleGoogleLogin} className="w-full bg-white text-black font-bold py-4 rounded-2xl text-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
+                <svg className="w-5 h-5" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+                Continuar con Google
+              </button>
            </div>
         </div>
        );
@@ -863,6 +949,75 @@ const abrirCelebracionManual = () => {
                 <div className="pt-8">
                   <button type="submit" disabled={resettingPassword} className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(147,51,234,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50">
                     {resettingPassword ? "Guardando..." : "Guardar contraseña"} <ChevronRight className="w-4 h-4"/>
+                  </button>
+                </div>
+              </form>
+           </div>
+        </div>
+      );
+    }
+
+    if (authStage === 'completar') {
+      return (
+        <div className="min-h-screen bg-[#0d0714] flex flex-col p-6 animate-in slide-in-from-right duration-300">
+           <div className="w-full max-w-md mx-auto flex-1 flex flex-col pt-10">
+              <h2 className="text-3xl font-black text-white mb-2">Un último paso</h2>
+              <p className="text-white/50 text-sm mb-10">Necesitamos estos datos para terminar de armar tu cuenta.</p>
+
+              <form onSubmit={conUnSoloClick(handleCompletarPerfil)} className="space-y-5 flex-1">
+                {authError && <p className="text-rose-400 text-xs text-center bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">{authError}</p>}
+                <div>
+                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Nombre o Apodo</label>
+                  <div className="relative">
+                    <UserPlus className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input type="text" placeholder="Ej: Pedro Peréz" value={regNombre} onChange={e => setRegNombre(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">WhatsApp (Teléfono)</label>
+                  <div className="relative">
+                    <Phone className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input type="tel" placeholder="Ej: 04121234567" value={telefono} onChange={e => setTelefono(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors" required />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Estado</label>
+                  <div className="relative">
+                    <MapPin className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <select
+                      value={regEstado}
+                      onChange={e => { setRegEstado(e.target.value); setRegMunicipio(""); }}
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors appearance-none cursor-pointer"
+                      required
+                    >
+                      <option value="" className="bg-[#1a0f2e]">Selecciona tu estado...</option>
+                      {ESTADOS_VENEZUELA.map(e => (
+                        <option key={e.estado} value={e.estado} className="bg-[#1a0f2e]">{e.estado}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-white/50 uppercase font-bold tracking-widest pl-1 mb-2 block">Municipio</label>
+                  <div className="relative">
+                    <MapPin className="w-5 h-5 text-purple-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <select
+                      value={regMunicipio}
+                      onChange={e => setRegMunicipio(e.target.value)}
+                      disabled={!regEstado}
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-white outline-none focus:border-purple-500 transition-colors appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      required
+                    >
+                      <option value="" className="bg-[#1a0f2e]">{regEstado ? "Selecciona tu municipio..." : "Primero elige un estado"}</option>
+                      {ESTADOS_VENEZUELA.find(e => e.estado === regEstado)?.municipios.map(m => (
+                        <option key={m} value={m} className="bg-[#1a0f2e]">{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="pt-8">
+                  <button type="submit" className="w-full bg-emerald-500 text-black font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                    Finalizar <Check className="w-4 h-4"/>
                   </button>
                 </div>
               </form>
