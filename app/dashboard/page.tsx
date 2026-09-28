@@ -271,6 +271,7 @@ export default function MiPoteApp() {
   const [espacios, setEspacios] = useState([] as any[]);
   const [espacioActivo, setEspacioActivo] = useState(null as any);
   const [isGuest, setIsGuest] = useState(false);
+  const provisionandoBilleteraRef = React.useRef(new Map<string, Promise<void>>());
   const [showPaywall, setShowPaywall] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
 
@@ -349,7 +350,13 @@ const abrirCelebracionManual = () => {
         setSession(session);
         if (session) {
           setIsGuest(false);
-          cargarDatosUsuario(session.user.id).then(irADashboardOCompletarPerfil);
+          cargarDatosUsuario(session.user.id).then(irADashboardOCompletarPerfil).catch((error) => {
+            console.error("Error preparando la cuenta:", error);
+            setAuthError("No pudimos preparar tu billetera. Cierra sesión e inténtalo de nuevo.");
+            setCurrentView('auth');
+            setAuthStage('login');
+            setLoadingAuth(false);
+          });
         } else {
           setLoadingAuth(false);
           setCurrentView('auth');
@@ -370,7 +377,13 @@ const abrirCelebracionManual = () => {
         // Si veníamos del Modo Invitado, hay que apagarlo: si no, la vista sigue
         // leyendo transacciones/potes de localStorage en vez de los datos reales del usuario.
         setIsGuest(false);
-        cargarDatosUsuario(session.user.id).then(irADashboardOCompletarPerfil);
+        cargarDatosUsuario(session.user.id).then(irADashboardOCompletarPerfil).catch((error) => {
+          console.error("Error preparando la cuenta:", error);
+          setAuthError("No pudimos preparar tu billetera. Cierra sesión e inténtalo de nuevo.");
+          setCurrentView('auth');
+          setAuthStage('login');
+          setLoadingAuth(false);
+        });
       } else {
         setLoadingAuth(false);
         setCurrentView('auth');
@@ -392,20 +405,111 @@ const abrirCelebracionManual = () => {
     // Supabase revalida la sesión (ej. al reabrir la app), y poner perfil en null por un
     // instante hacía que la UI creyera brevemente que el usuario ya no era PRO.
 
-    let { data: perfilBd } = await supabase.from('perfiles').select('*').eq('id', userId).single();
-    if (!perfilBd) {
-      const { data: { user } } = await supabase.auth.getUser();
-      // Si vino de Google, ya tenemos su nombre real en los metadatos; se lo ahorramos al formulario.
-      const nombreGoogle = user?.user_metadata?.full_name || user?.user_metadata?.name || null;
-      const { data: newPerfil } = await supabase.from('perfiles').insert([{ id: userId, is_pro: false, estado_pago: 'gratis', email: user?.email, nombre: nombreGoogle }]).select().single();
-      perfilBd = newPerfil;
+    const { data: perfilInicial, error: busquedaPerfilError } = await supabase
+      .from('perfiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+    if (busquedaPerfilError) throw busquedaPerfilError;
 
-      // El registro con correo crea de una vez la billetera individual (ver handleRegisterUser);
-      // los que entran por Google se saltan ese formulario, así que la creamos acá para que no
-      // lleguen a un dashboard sin ningún espacio.
-      const { data: newSpace } = await supabase.from('espacios').insert([{ nombre: 'Mi Billetera', tipo: 'individual', creador_id: userId }]).select().single();
-      if (newSpace) await supabase.from('espacio_miembros').insert([{ espacio_id: newSpace.id, usuario_id: userId, rol: 'admin' }]);
+    let perfilBd = perfilInicial;
+    const { data: { user } } = await supabase.auth.getUser();
+    const metadatos = user?.user_metadata || {};
+    if (!perfilBd) {
+      const { data: nuevoPerfil, error: creacionPerfilError } = await supabase.from('perfiles').insert([{
+        id: userId,
+        is_pro: false,
+        estado_pago: 'gratis',
+        email: user?.email,
+        nombre: metadatos.nombre || metadatos.full_name || metadatos.name || null,
+        telefono: metadatos.telefono || null,
+        estado: metadatos.estado || null,
+        municipio: metadatos.municipio || null,
+      }]).select().single();
+
+      if (creacionPerfilError) {
+        // getSession() y INITIAL_SESSION pueden cargar el mismo perfil al mismo tiempo.
+        const { data: perfilConcurrente, error: recargaPerfilError } = await supabase
+          .from('perfiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+        if (recargaPerfilError || !perfilConcurrente) throw creacionPerfilError;
+        perfilBd = perfilConcurrente;
+      } else {
+        perfilBd = nuevoPerfil;
+      }
+    } else {
+      // Los triggers pueden crear el perfil antes de que carguemos Google o de que el usuario
+      // confirme su correo. Completa solamente campos vacíos para no pisar datos existentes.
+      const nombreMetadata = metadatos.nombre || metadatos.full_name || metadatos.name;
+      const datosFaltantes: Record<string, string> = {};
+      if (!perfilBd.nombre && nombreMetadata) datosFaltantes.nombre = nombreMetadata;
+      if (!perfilBd.telefono && metadatos.telefono) datosFaltantes.telefono = metadatos.telefono;
+      if (!perfilBd.estado && metadatos.estado) datosFaltantes.estado = metadatos.estado;
+      if (!perfilBd.municipio && metadatos.municipio) datosFaltantes.municipio = metadatos.municipio;
+      if (Object.keys(datosFaltantes).length > 0) {
+        const { error: actualizarPerfilError } = await supabase.from('perfiles').update(datosFaltantes).eq('id', userId);
+        if (actualizarPerfilError) throw actualizarPerfilError;
+        perfilBd = { ...perfilBd, ...datosFaltantes };
+      }
     }
+
+    if (!perfilBd) throw new Error("No se pudo cargar ni crear el perfil del usuario.");
+
+    // La billetera debe existir aunque el perfil ya haya sido creado por un trigger de Supabase.
+    // El Map evita que getSession() y INITIAL_SESSION creen dos billeteras simultáneamente.
+    let provisionamiento = provisionandoBilleteraRef.current.get(userId);
+    if (!provisionamiento) {
+      provisionamiento = (async () => {
+        const { data: billeteraExistente, error: busquedaError } = await supabase
+          .from('espacios')
+          .select('id')
+          .eq('creador_id', userId)
+          .eq('tipo', 'individual')
+          .limit(1)
+          .maybeSingle();
+        if (busquedaError) throw busquedaError;
+
+        let billetera = billeteraExistente;
+        if (!billetera) {
+          const { data: nuevaBilletera, error: creacionError } = await supabase
+            .from('espacios')
+            .insert([{ nombre: 'Mi Billetera', tipo: 'individual', creador_id: userId }])
+            .select('id')
+            .single();
+          if (creacionError) throw creacionError;
+          billetera = nuevaBilletera;
+        }
+
+        const { data: membresia, error: membresiaError } = await supabase
+          .from('espacio_miembros')
+          .select('espacio_id')
+          .eq('espacio_id', billetera.id)
+          .eq('usuario_id', userId)
+          .maybeSingle();
+        if (membresiaError) throw membresiaError;
+
+        if (!membresia) {
+          const { error: altaMembresiaError } = await supabase
+            .from('espacio_miembros')
+            .insert([{ espacio_id: billetera.id, usuario_id: userId, rol: 'admin' }]);
+          if (altaMembresiaError) {
+            // Una sesión duplicada pudo crear la membresía al mismo tiempo; solo fallamos si
+            // sigue sin existir al volver a consultarla.
+            const { data: membresiaRecuperada, error: recuperacionError } = await supabase
+              .from('espacio_miembros')
+              .select('espacio_id')
+              .eq('espacio_id', billetera.id)
+              .eq('usuario_id', userId)
+              .maybeSingle();
+            if (recuperacionError || !membresiaRecuperada) throw altaMembresiaError;
+          }
+        }
+      })().finally(() => provisionandoBilleteraRef.current.delete(userId));
+      provisionandoBilleteraRef.current.set(userId, provisionamiento);
+    }
+    await provisionamiento;
 
     // --- MOTOR DE RACHAS FINANCIERAS ---
     const hoyStr = new Date().toISOString().slice(0, 10);
@@ -588,21 +692,50 @@ const abrirCelebracionManual = () => {
 
     setAuthStage('loading');
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { nombre: regNombre, telefono, estado: regEstado, municipio: regMunicipio } },
+    });
     if (error) {
       setAuthError(error.message);
       setAuthStage('reg2');
       return;
     }
 
-    if (data.user) {
-      await supabase.from('perfiles').insert([{ id: data.user.id, email: data.user.email, telefono: telefono, nombre: regNombre, estado: regEstado, municipio: regMunicipio, is_pro: false, estado_pago: 'gratis' }]);
-      const { data: newSpace } = await supabase.from('espacios').insert([{ nombre: 'Mi Billetera', tipo: 'individual', creador_id: data.user.id }]).select().single();
-      if (newSpace) await supabase.from('espacio_miembros').insert([{ espacio_id: newSpace.id, usuario_id: data.user.id, rol: 'admin' }]);
-      
-      setTimeout(() => {
-         setCurrentView('dashboard');
-      }, 2000);
+    if (data.user && data.session) {
+      const { error: perfilError } = await supabase.from('perfiles').upsert([{
+        id: data.user.id,
+        email: data.user.email,
+        telefono,
+        nombre: regNombre,
+        estado: regEstado,
+        municipio: regMunicipio,
+        is_pro: false,
+        estado_pago: 'gratis',
+      }], { onConflict: 'id' });
+      if (perfilError) {
+        setAuthError("Tu cuenta se creó, pero no pudimos guardar tu perfil: " + perfilError.message);
+        setAuthStage('reg2');
+        setLoadingAuth(false);
+        return;
+      }
+
+      setSession(data.session);
+      setIsGuest(false);
+      try {
+        const perfilCargado = await cargarDatosUsuario(data.user.id);
+        irADashboardOCompletarPerfil(perfilCargado);
+      } catch (error: any) {
+        console.error("Error preparando billetera tras el registro:", error);
+        setAuthError("Tu cuenta se creó, pero no pudimos preparar tu billetera. Inicia sesión para volver a intentarlo.");
+        setAuthStage('login');
+        setLoadingAuth(false);
+      }
+    } else if (data.user) {
+      setAuthError("Tu cuenta se creó. Confirma tu correo y luego inicia sesión; prepararemos tu billetera automáticamente.");
+      setAuthStage('login');
+      setLoadingAuth(false);
     }
   };
 
@@ -1978,8 +2111,13 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
         setTransactions(JSON.parse(localStorage.getItem('mipote_guest_tx') || '[]'));
         setPotes(JSON.parse(localStorage.getItem('mipote_guest_potes') || '[]'));
       } else if (espacioActivo) {
-        const { data: txData } = await supabase.from("transacciones_saas").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: false });
-        if (txData) setTransactions(txData);
+        const { data: txData, error: txError } = await supabase.from("transacciones_saas").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: false });
+        if (txError) {
+          console.error("Error cargando transacciones:", txError);
+          alert("🚨 No se pudieron cargar tus registros: " + txError.message);
+        } else if (txData) {
+          setTransactions(txData);
+        }
         
         const { data: partData } = await supabase.from("participantes").select("*").eq("espacio_id", espacioActivo.id).order("created_at", { ascending: true });
         if (partData) setParticipantes(partData);
@@ -2235,10 +2373,13 @@ const handleManualSubmit = async (e: React.FormEvent) => {
       if (!destinoTransferencia) return alert("Selecciona el espacio destino");
       const destSpace = espacios.find((sp:any) => sp.id === destinoTransferencia);
       if (!isGuest) {
-        await supabase.from("transacciones_saas").insert([{ descripcion: `Transferencia a: ${destSpace?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
-        await supabase.from("transacciones_saas").insert([{ descripcion: `Transferencia recibida de: Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_entrada', usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: destinoTransferencia, usuario_id: session.user.id }]);
+        if (!session?.user?.id || !espacioActivo?.id) return alert("Tu sesión o espacio no están disponibles. Vuelve a iniciar sesión.");
+        const { error: salidaError } = await supabase.from("transacciones_saas").insert([{ descripcion: `Transferencia a: ${destSpace?.nombre}`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_salida', usuario: usuario || "Tú", tipo: 'egreso', espacio_id: espacioActivo.id, usuario_id: session.user.id }]);
+        if (salidaError) return alert("🚨 No se pudo guardar la transferencia: " + salidaError.message);
+        const { error: entradaError } = await supabase.from("transacciones_saas").insert([{ descripcion: `Transferencia recibida de: Billetera`, monto_original: valorMonto, moneda_original: moneda, monto_bs, monto_usd_bcv, monto_usd_paralelo, categoria: 'transferencia_entrada', usuario: usuario || "Tú", tipo: 'ingreso', espacio_id: destinoTransferencia, usuario_id: session.user.id }]);
+        if (entradaError) return alert("🚨 La salida se guardó, pero no se pudo registrar la entrada: " + entradaError.message);
       }
-      fetchData(); triggerToast("egreso", "¡Transferencia enviada con éxito! 💸"); 
+      await fetchData(); triggerToast("egreso", "¡Transferencia enviada con éxito! 💸"); 
       setCustomCategoria(""); return;
     }
 
@@ -2298,7 +2439,12 @@ const handleManualSubmit = async (e: React.FormEvent) => {
       triggerToast(tipo, msjAlertaEspecial || undefined);
     } else {
       // 🎯 AQUÍ ES EL CAMBIO EXACTO: Insert general para gastos comunes de la calle
-      const { error } = await supabase.from("transacciones_saas").insert([{
+      if (!session?.user?.id || !espacioActivo?.id) {
+        alert("Tu sesión o espacio no están disponibles. Vuelve a iniciar sesión.");
+        return;
+      }
+
+      const { data: createdTransaction, error } = await supabase.from("transacciones_saas").insert([{
         descripcion: descFinal,
         monto_original: valorMonto,
         moneda_original: moneda,
@@ -2313,13 +2459,14 @@ const handleManualSubmit = async (e: React.FormEvent) => {
         usuario_id: session.user.id,
         comercio: comercio || null,          // <-- Guardamos el comercio extraído por la IA
         metadatos: metadatosFactura || null  // <-- Guardamos el JSON completo con productos e IVA
-      }]);
+      }]).select().single();
 
       if (error) alert("🚨 Error: " + error.message);
       else {
         // Si no alcanzaba la liquidez, descontamos automáticamente de las metas que cubrieron la diferencia.
         for (const r of retirosDeMetas) await retirarMeta(r.poteId, r.monto, 'usdt');
-        fetchData(); triggerToast(tipo, msjAlertaEspecial || undefined);
+        if (createdTransaction) setTransactions(prev => [createdTransaction, ...prev]);
+        await fetchData(); triggerToast(tipo, msjAlertaEspecial || undefined);
       }
     }
     setCustomCategoria("");
