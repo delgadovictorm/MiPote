@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { ArrowLeft, Calculator, Camera, Loader2, Plus, X } from 'lucide-react';
+import { ArrowLeft, Calculator, Camera, Check, Copy, Loader2, Plus, X } from 'lucide-react';
 import { TASAS_DISPONIBLES, calcularResultadoTasa, getValorTasa, type MonedaOrigen } from './tasasConfig';
 
 export function CalculadoraTab({ rates, activeRates, setActiveRates, theme, triggerToast, onBack, puedeEscanear, registrarEscaneo, onTriggerPaywall, onRegistrarGasto }: any) {
@@ -7,7 +7,19 @@ export function CalculadoraTab({ rates, activeRates, setActiveRates, theme, trig
   const [monedaOrigen, setMonedaOrigen] = useState<MonedaOrigen>('usd');
   const [isScanning, setIsScanning] = useState(false);
   const [showAddTasa, setShowAddTasa] = useState(false);
+  const [copiedResultKey, setCopiedResultKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const copiarResultado = async (texto: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiedResultKey(key);
+      window.setTimeout(() => setCopiedResultKey((current) => current === key ? null : current), 1500);
+    } catch (error) {
+      console.error('No se pudo copiar el monto:', error);
+      triggerToast?.('gasto', 'No se pudo copiar el monto. Revisa los permisos del navegador.');
+    }
+  };
 
   // Formateador exacto para Venezuela (Ej: 1.234,50)
   const formatVE = (num: number) => {
@@ -181,6 +193,10 @@ export function CalculadoraTab({ rates, activeRates, setActiveRates, theme, trig
           const prefijo = def.kind === 'foreign_per_usd'
             ? `${def.badge} `
             : (monedaOrigen === 'bs' ? (nativo === 'eur' ? '€ ' : '$ ') : 'Bs. ');
+          const resultadoFormateado = def.kind === 'foreign_per_usd'
+            ? resultado.toLocaleString(def.locale, { maximumFractionDigits: 0 })
+            : formatVE(resultado);
+          const claveResultado = `${id}:resultado`;
 
           // Equivalente en Bs. solo hace falta para las monedas extranjeras (COP/MXN), que siempre
           // muestran su valor propio arriba y el ancla en Bs abajo como referencia.
@@ -203,14 +219,37 @@ export function CalculadoraTab({ rates, activeRates, setActiveRates, theme, trig
                 <p className={`text-[10px] ${def.classes.text} font-bold uppercase tracking-widest mb-1`}>
                   {def.label}
                 </p>
-                <p className="text-2xl font-black text-white font-sans tabular-nums tracking-tight">
-                  {prefijo}
-                  {def.kind === 'foreign_per_usd' ? resultado.toLocaleString(def.locale, { maximumFractionDigits: 0 }) : formatVE(resultado)}
-                </p>
-                {mostrarEquivalenteBs && (
-                  <p className="text-[10px] text-white/40 font-sans tabular-nums mt-0.5">
-                    ≈ Bs. {formatVE(equivalenteBs)}
+                <div className="flex items-center gap-2">
+                  <p className="text-2xl font-black text-white font-sans tabular-nums tracking-tight">
+                    {prefijo}{resultadoFormateado}
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => copiarResultado(`${prefijo}${resultadoFormateado}`, claveResultado)}
+                    disabled={numValue <= 0}
+                    aria-label={`Copiar resultado de ${def.label}`}
+                    title={copiedResultKey === claveResultado ? 'Copiado' : 'Copiar monto'}
+                    className="p-1.5 rounded-lg text-white/35 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {copiedResultKey === claveResultado ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+                {mostrarEquivalenteBs && (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <p className="text-[10px] text-white/40 font-sans tabular-nums">
+                      ≈ Bs. {formatVE(equivalenteBs)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => copiarResultado(`Bs. ${formatVE(equivalenteBs)}`, `${id}:bs`)}
+                      disabled={numValue <= 0}
+                      aria-label={`Copiar equivalente en bolívares de ${def.label}`}
+                      title={copiedResultKey === `${id}:bs` ? 'Copiado' : 'Copiar equivalente en Bs'}
+                      className="p-1 rounded text-white/30 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {copiedResultKey === `${id}:bs` ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="text-right pr-4">

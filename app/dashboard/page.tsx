@@ -1857,6 +1857,7 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
   const [miniSimMoneda, setMiniSimMoneda] = useState('usd' as 'usd'|'bs');
   const [miniSimTasa, setMiniSimTasa] = useState('paralelo' as 'bcv'|'paralelo'|'eur');
   const [miniSimMonto, setMiniSimMonto] = useState("");
+  const [miniSimCopied, setMiniSimCopied] = useState(false);
 
   const [monto, setMonto] = useState("");
   const [moneda, setMoneda] = useState("bs");
@@ -1895,6 +1896,16 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
   const miniSimSimbolo = miniSimMonedaResultado === 'eur' ? '€' : (miniSimMonedaResultado === 'usd' ? '$' : 'Bs');
   // Símbolo del lado de entrada: si el origen es Bs siempre "Bs"; si no, "€" en la pestaña Euro y "$" en las demás
   const miniSimSimboloOrigen = miniSimMoneda === 'bs' ? 'Bs' : (miniSimTasa === 'eur' ? '€' : '$');
+
+  const copiarMiniSimResultado = async () => {
+    try {
+      await navigator.clipboard.writeText(`${miniSimSimbolo} ${formatMiniNum(miniSimResultado, miniSimMonedaResultado)}`);
+      setMiniSimCopied(true);
+      window.setTimeout(() => setMiniSimCopied(false), 1500);
+    } catch (error) {
+      console.error('No se pudo copiar el resultado de la calculadora:', error);
+    }
+  };
 
   const handleSwapMiniSim = () => {
     setMiniSimMonto(miniSimResultado > 0 ? miniSimResultado.toFixed(0) : "");
@@ -2288,7 +2299,7 @@ const [metadatosFactura, setMetadatosFactura] = useState(null as any);
 
     try {
       // 1. Compresión de imagen (¡Se mantiene igual!)
-      const base64Image = await new Promise((resolve, reject) => {
+      const base64Image = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const img = new Image();
@@ -4312,9 +4323,19 @@ const getPatrimonioNeto = () => {
                 <span className={`text-[9px] ${theme.text} opacity-70 font-bold uppercase block mb-0.5`}>
                   {miniSimMoneda === 'usd' ? 'Pagas en Bs' : `Recibes en ${miniSimTasa === 'eur' ? '€' : '$'}`}
                 </span>
-                <div className="flex items-center gap-1">
-                  <span className={`text-lg font-black ${theme.text} opacity-50`}>{miniSimSimbolo}</span>
-                  <span className={`text-lg font-black ${theme.text} tabular-nums`}>{formatMiniNum(miniSimResultado, miniSimMonedaResultado)}</span>
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className={`text-lg font-black ${theme.text} opacity-50 shrink-0`}>{miniSimSimbolo}</span>
+                  <span className={`text-lg font-black ${theme.text} tabular-nums truncate`}>{formatMiniNum(miniSimResultado, miniSimMonedaResultado)}</span>
+                  <button
+                    type="button"
+                    onClick={copiarMiniSimResultado}
+                    disabled={miniSimNum <= 0}
+                    aria-label="Copiar monto convertido"
+                    title={miniSimCopied ? 'Copiado' : 'Copiar monto'}
+                    className="p-1 rounded-lg text-white/35 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    {miniSimCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
               </div>
             </div>

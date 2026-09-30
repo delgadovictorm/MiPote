@@ -134,17 +134,29 @@ export default function MiPoteAdmin() {
     if (!error) traerTodo();
   };
 
-  // Convierte un teléfono venezolano local (04121234567) al formato internacional que espera wa.me (584121234567)
+  // Normaliza el teléfono entregado al registrarse al formato internacional que espera wa.me.
   const formatearTelefonoWa = (telefono?: string) => {
     if (!telefono) return null;
-    const digitos = telefono.replace(/\D/g, '');
+    const entrada = telefono.trim();
+    let digitos = entrada.replace(/\D/g, '');
     if (!digitos) return null;
-    if (digitos.startsWith('58')) return digitos;
-    if (digitos.startsWith('0')) return `58${digitos.slice(1)}`;
-    return `58${digitos}`;
+
+    // Conserva números con prefijo internacional explícito; los demás se asumen venezolanos.
+    const prefijoInternacional = entrada.startsWith('+') || entrada.startsWith('00');
+    if (digitos.startsWith('00')) digitos = digitos.slice(2);
+    else if (digitos.startsWith('0') && !prefijoInternacional) digitos = digitos.slice(1);
+
+    const numero = prefijoInternacional || digitos.startsWith('58') ? digitos : `58${digitos}`;
+    return /^\d{8,15}$/.test(numero) ? numero : null;
   };
 
   const contactarWhatsApp = (u: any) => {
+    const numero = formatearTelefonoWa(u.telefono);
+    if (!numero) {
+      alert("Este usuario no tiene un número de WhatsApp válido registrado en su perfil.");
+      return;
+    }
+
     const dias = u.vence_el ? Math.ceil((new Date(u.vence_el).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
     const estaVencido = dias < 0;
 
@@ -159,11 +171,8 @@ export default function MiPoteAdmin() {
       mensaje += "Notamos que tu acceso PRO no está activo. Si ya realizaste el pago cuéntanos para verificarlo. 😊";
     }
 
-    const numero = formatearTelefonoWa(u.telefono);
-    const url = numero
-      ? `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`
-      : `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
-    window.open(url, '_blank');
+    const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const kpis = useMemo(() => {

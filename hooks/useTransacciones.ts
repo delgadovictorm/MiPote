@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 export function useTransacciones(espacioId?: string) {
-  const [transactions, setTransactions] = useState([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -16,7 +16,7 @@ export function useTransacciones(espacioId?: string) {
         .order('created_at', { ascending: false });
 
       if (!error) {
-        setTransactions(data);
+        setTransactions(data || []);
       }
       setLoading(false);
     };

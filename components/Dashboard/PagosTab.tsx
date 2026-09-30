@@ -8,31 +8,33 @@ import { Drawer } from "vaul";
 import type { Espacio } from "@/types";
 
 interface PagosTabProps {
-  espacioActivo: Espacio | null;
-  session: any;
-  transactions: any[];
-  transaccionesFiltradas: any[];
-  cuotasCashea: any[];
-  presupuestos: any[];
-  gastosFijos: any[];
+  espacioActivo?: Espacio | null;
+  session?: any;
+  perfil?: any;
+  rates?: any;
+  transactions?: any[];
+  transaccionesFiltradas?: any[];
+  cuotasCashea?: any[];
+  presupuestos?: any[];
+  gastosFijos?: any[];
   categoriasList?: any[];
-  theme: any;
-  mesActual: string;
-  filtroHistorial: string;
-  filterOptions: string[];
-  nombresParticipantes: string[];
-  isAddingCashea: boolean;
-  setIsAddingCashea: (value: boolean) => void;
-  isAddingFijo: boolean;
-  setIsAddingFijo: (value: boolean) => void;
-  isEditingBudget: boolean;
-  setIsEditingBudget: (value: boolean) => void;
-  casheaForm: any;
-  setCasheaForm: (value: any) => void;
-  budgetForm: any;
-  setBudgetForm: (value: any) => void;
-  fijoForm: any;
-  setFijoForm: (value: any) => void;
+  theme?: any;
+  mesActual?: string;
+  filtroHistorial?: string;
+  filterOptions?: string[];
+  nombresParticipantes?: string[];
+  isAddingCashea?: boolean;
+  setIsAddingCashea?: (value: boolean) => void;
+  isAddingFijo?: boolean;
+  setIsAddingFijo?: (value: boolean) => void;
+  isEditingBudget?: boolean;
+  setIsEditingBudget?: (value: boolean) => void;
+  casheaForm?: any;
+  setCasheaForm?: (value: any) => void;
+  budgetForm?: any;
+  setBudgetForm?: (value: any) => void;
+  fijoForm?: any;
+  setFijoForm?: (value: any) => void;
   onAgregarCashea?: (e: React.FormEvent) => Promise<void>;
   onAgregarGastoFijo?: (e: React.FormEvent) => Promise<void>;
   onAgregarPresupuesto?: (e: React.FormEvent) => Promise<void>;
@@ -40,8 +42,8 @@ interface PagosTabProps {
   onToggleGastoFijo?: (id: string) => void;
   onEliminarGastoFijo?: (id: string) => void;
   onEliminarTransaccion?: (id: string) => void;
-  onSetMesActual: (mes: string) => void;
-  onSetFiltroHistorial: (filtro: string) => void;
+  onSetMesActual?: (mes: string) => void;
+  onSetFiltroHistorial?: (filtro: string) => void;
   triggerToast?: (msg: string, type?: string) => void;
 }
 
@@ -59,29 +61,29 @@ const DEFAULT_CATEGORIES = [
 export function PagosTab({  session,
   espacioActivo,
   perfil,
-  transactions,
-  transaccionesFiltradas,
-  cuotasCashea,
-  presupuestos,
-  gastosFijos,
-  categoriasList,
-  theme,
-  mesActual,
-  filtroHistorial,
-  filterOptions,
-  nombresParticipantes,
-  isAddingCashea,
-  setIsAddingCashea,
-  isAddingFijo,
-  setIsAddingFijo,
-  isEditingBudget,
-  setIsEditingBudget,
-  casheaForm,
-  setCasheaForm,
-  budgetForm,
-  setBudgetForm,
-  fijoForm,
-  setFijoForm,
+  transactions = [],
+  transaccionesFiltradas = transactions,
+  cuotasCashea = [],
+  presupuestos = [],
+  gastosFijos = [],
+  categoriasList = DEFAULT_CATEGORIES,
+  theme = { primary: "bg-purple-600", text: "text-purple-400", border: "border-white/10", lightBg: "bg-purple-500/10", stroke: "#9333ea" },
+  mesActual = new Date().toISOString().slice(0, 7),
+  filtroHistorial = "Todos",
+  filterOptions = ["Todos"],
+  nombresParticipantes = [],
+  isAddingCashea = false,
+  setIsAddingCashea = () => {},
+  isAddingFijo = false,
+  setIsAddingFijo = () => {},
+  isEditingBudget = false,
+  setIsEditingBudget = () => {},
+  casheaForm = { articulo: "", monto_cuota: "", fecha_pago: "", usuario: "" },
+  setCasheaForm = () => {},
+  budgetForm = { categoria: "", monto_limite: "" },
+  setBudgetForm = () => {},
+  fijoForm = { descripcion: "", monto: "", dia_pago: "1" },
+  setFijoForm = () => {},
   onAgregarCashea,
   onAgregarGastoFijo,
   onAgregarPresupuesto,
@@ -211,7 +213,7 @@ export function PagosTab({  session,
               >
                 <div
                   className="flex items-center gap-2.5 md:gap-3 cursor-pointer"
-                  onClick={() => onToggleGastoFijo(gf.id)}
+                  onClick={() => onToggleGastoFijo?.(gf.id)}
                 >
                   {gf.pagado ? (
                     <CheckSquare className="text-emerald-400 w-5 h-5" />
@@ -336,7 +338,7 @@ export function PagosTab({  session,
               <input
                 type="month"
                 value={mesActual}
-                onChange={(e) => onSetMesActual(e.target.value)}
+                onChange={(e) => onSetMesActual?.(e.target.value)}
                 className={`bg-black/50 border ${theme.border} rounded-lg p-1 text-white outline-none text-[10px]`}
               />
               <button
@@ -354,7 +356,7 @@ export function PagosTab({  session,
               {filterOptions.map((filtro) => (
                 <button
                   key={filtro}
-                  onClick={() => onSetFiltroHistorial(filtro)}
+                  onClick={() => onSetFiltroHistorial?.(filtro)}
                   className={`flex-1 text-[10px] font-bold py-1.5 px-2 rounded-lg transition-colors ${
                     filtroHistorial === filtro
                       ? `${theme.primary} text-white`
@@ -379,7 +381,7 @@ export function PagosTab({  session,
                   cy="50%"
                   labelLine={false}
                   label={({ name, percent }) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
+                    `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
                   }
                   outerRadius={60}
                   fill="#8884d8"
@@ -390,7 +392,7 @@ export function PagosTab({  session,
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value) => `$${value.toFixed(2)}`}
+                  formatter={(value) => `$${Number(value ?? 0).toFixed(2)}`}
                   contentStyle={{
                     background: "#121212",
                     border: `1px solid ${theme.border}`,
@@ -454,7 +456,7 @@ export function PagosTab({  session,
                     )}
                   </div>
                   <button
-                    onClick={() => onEliminarTransaccion(tx.id)}
+                    onClick={() => onEliminarTransaccion?.(tx.id)}
                     className="p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-rose-500"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
